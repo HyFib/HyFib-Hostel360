@@ -31,6 +31,13 @@ STAFF_ROLES = frozenset(
 	}
 )
 PORTAL_ROLES = frozenset({STUDENT_ROLE, PARENT_ROLE})
+# Staff who may be assigned to and act on grievances. Auditors only observe.
+GRIEVANCE_HANDLER_ROLES = STAFF_ROLES - {AUDITOR_ROLE}
+
+# Frappe's own administrative roles. They are not managed in ROLES (desk access and other
+# attributes belong to Frappe), but two-factor authentication is forced on for them so the
+# Administrator account and System Managers cannot sign in with a password alone.
+TWO_FACTOR_CORE_ROLES = ("System Manager", "Administrator")
 
 # name, desk_access, two_factor_auth, description
 ROLES = (

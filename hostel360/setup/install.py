@@ -7,7 +7,7 @@ records) and is safe to run on every deploy.
 
 import frappe
 
-from hostel360.setup.roles import ROLES
+from hostel360.setup.roles import ROLES, TWO_FACTOR_CORE_ROLES
 
 # Each module exposes an idempotent ``install_defaults()``.
 MODULE_SETUP_HOOKS = (
@@ -139,6 +139,10 @@ def sync_roles() -> None:
 				"is_custom": 0,
 			}
 		).insert(ignore_permissions=True)
+
+	for role_name in TWO_FACTOR_CORE_ROLES:
+		if frappe.db.exists("Role", role_name):
+			frappe.db.set_value("Role", role_name, "two_factor_auth", 1, update_modified=False)
 
 
 def enforce_log_retention() -> None:
