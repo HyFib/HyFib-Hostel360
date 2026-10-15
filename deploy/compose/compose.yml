@@ -23,6 +23,11 @@
 # short-queue workers 448 MB each, long-queue worker 640 MB, scheduler 256 MB, websocket
 # 256 MB), Redis 1.2 GB, ClamAV 1.75 GB, WAF 384 MB, frontend 192 MB, PHP-FPM 768 MB.
 # Limits are ceilings, not reservations; typical use is well below them.
+#
+# Job queues: "alerts" carries HyFib operations alert deliveries only, so a page never
+# waits behind thousands of fee or mess-bill notifications on "short". The configurator
+# defines it (workers.alerts in common_site_config.json, hostel360_alert_queue in the site
+# config) before any worker starts, and every worker lists it first.
 
 name: hostel360
 
@@ -92,6 +97,9 @@ services:
       CLAMD_HOST: clamav
       CLAMD_PORT: "3310"
       MAX_FILE_SIZE: "10485760"
+      # Dedicated queue for operations alert deliveries (see "Job queues" above)
+      ALERT_QUEUE: alerts
+      ALERT_QUEUE_TIMEOUT: "300"
     depends_on:
       mariadb:
         condition: service_healthy
@@ -137,7 +145,7 @@ services:
 
   queue-short:
     <<: *app
-    command: ["worker", "short,default"]
+    command: ["worker", "alerts,short,default"]
     networks:
       - internal
       - edge
@@ -150,7 +158,7 @@ services:
 
   queue-long:
     <<: *app
-    command: ["worker", "long,default,short"]
+    command: ["worker", "alerts,long,default,short"]
     networks:
       - internal
       - edge

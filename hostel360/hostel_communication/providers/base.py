@@ -247,6 +247,10 @@ def raise_provider_alert(provider: str, count: int, threshold: int, error: str |
 			),
 			details={"provider": provider, "consecutive_failures": count, "last_error": truncate(error, 300)},
 		)
+	except frappe.QueryDeadlockError:
+		# raise_alert had to write in this job's own transaction, and InnoDB has rolled all of
+		# it back. Carrying on would commit only the work that follows.
+		raise
 	except Exception:
 		frappe.log_error(title="Hostel360: could not raise messaging alert", message=frappe.get_traceback())
 	finally:
@@ -261,5 +265,8 @@ def resolve_provider_alert(provider: str) -> None:
 		return
 	try:
 		resolve_alert(_alert_key(provider), notes=f"{provider} is delivering messages again.", source="App")
+	except frappe.QueryDeadlockError:
+		# As in raise_provider_alert: the transaction is gone, so the job must fail.
+		raise
 	except Exception:
 		frappe.log_error(title="Hostel360: could not resolve messaging alert", message=frappe.get_traceback())

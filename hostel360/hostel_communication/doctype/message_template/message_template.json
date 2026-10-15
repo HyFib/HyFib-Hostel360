@@ -2,12 +2,13 @@
  "actions": [],
  "autoname": "format:{event}-{channel}",
  "creation": "2026-10-15 12:00:00.000000",
- "description": "Wording for each event and channel. Templates are rendered with Jinja.",
+ "description": "Wording for each event, channel and language (English and Tamil). Templates are rendered with Jinja.",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "event",
   "channel",
+  "language",
   "enabled",
   "column_break_header",
   "event_label",
@@ -29,7 +30,7 @@
    "fieldname": "event",
    "fieldtype": "Select",
    "label": "Event",
-   "options": "\notp_login\nstudent_validated\nroom_allotted\nfee_due_published\nfee_reminder\npayment_received\nmess_bill_published\nmenu_published\nmess_reduction_submitted\nmess_reduction_decided\nleave_submitted\nleave_parent_approval_required\nleave_warden_approval_required\nleave_decided\nleave_overdue\ngrievance_received\ngrievance_assigned\ngrievance_updated\ngrievance_escalated\ngrievance_resolved\nbonafide_decided\nsupport_ticket_update\nmess_low_stock",
+   "options": "\notp_login\nstudent_validated\nroom_allotted\nfee_due_published\nfee_reminder\npayment_received\nmess_bill_published\nmenu_published\nmess_reduction_submitted\nmess_reduction_decided\nleave_submitted\nleave_parent_approval_required\nleave_warden_approval_required\nleave_decided\nleave_overdue\nleave_checked_out\nleave_returned\ngrievance_received\ngrievance_assigned\ngrievance_updated\ngrievance_escalated\ngrievance_resolved\nbonafide_requested\nbonafide_decided\nsupport_ticket_update\nmess_low_stock",
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
@@ -45,6 +46,19 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "set_only_once": 1
+  },
+  {
+   "fieldname": "language",
+   "fieldtype": "Select",
+   "label": "Language",
+   "options": "en\nta",
+   "default": "en",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "set_only_once": 1,
+   "description": "en = English, ta = Tamil. The English template decides whether this event is sent on this channel at all. Recipients whose account language is Tamil get the Tamil template while it is enabled (and, for SMS, registered); everyone else gets the English one."
   },
   {
    "fieldname": "enabled",
@@ -85,7 +99,7 @@
    "label": "Body",
    "options": "Jinja",
    "reqd": 1,
-   "description": "Jinja template. Helpers: rupees(amount), format_inr(amount), fdate(date), fdatetime(datetime), short(text, length). SMS: keep under 160 characters, plain English, and register the same wording on the DLT portal."
+   "description": "Jinja template. Helpers: rupees(amount), format_inr(amount), fdate(date), fdatetime(datetime), short(text, length), label(value) (a status or category in this template's language). English SMS: keep under 160 characters in plain English and register the same wording on the DLT portal. Tamil SMS are sent as Unicode, 70 characters a part."
   },
   {
    "fieldname": "available_variables",
@@ -152,7 +166,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-15 15:30:00.000000",
+ "modified": "2026-10-15 21:45:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Communication",
  "name": "Message Template",

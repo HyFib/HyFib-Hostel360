@@ -180,6 +180,10 @@ def create_invoice(
 
 	``items`` is a list of ``{fee_head, amount, description?}``. Used by fee structures, the
 	monthly mess bill run, fines and the legacy data migration.
+
+	The invoice is filed under the student's current (or last) hostel. ``hostel`` files it under
+	another one instead; only server code that knows better passes it (the mess bill run bills
+	the hostel whose mess the student ate in).
 	"""
 	if invoice_type not in INVOICE_TYPES:
 		frappe.throw(_("Invoice type must be one of {0}.").format(", ".join(INVOICE_TYPES)))
@@ -202,6 +206,7 @@ def create_invoice(
 	)
 	if hostel:
 		doc.hostel = hostel
+		doc.flags.keep_hostel = True
 
 	for item in items:
 		item = frappe._dict(item)

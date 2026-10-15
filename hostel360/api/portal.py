@@ -3,13 +3,18 @@
 Portal users hold no DocType permissions, so this module is the only way a student or a
 parent reaches hostel data. Every endpoint follows the same steps:
 
-1. resolve the caller with ``require_portal_identity`` (guests and desk users are refused);
-2. pick the student the call is about: a student always acts for themselves, a parent for
+1. resolve the caller: guests and desk users are refused, and a portal user whose record may
+   not sign in now (not validated, rejected, closed, unlinked, portal switched off) is
+   refused with that reason (``PortalAccessClosed``), exactly as sign-in would be;
+2. except for the session itself, the privacy notice and the language switch, require that
+   the caller has accepted the current privacy notice before any personal data is read or
+   written;
+3. pick the student the call is about: a student always acts for themselves, a parent for
    one of their linked wards (``student`` selects which);
-3. unless the endpoint is one a new resident needs before validation (session, privacy
-   notice, profile, notifications), require that the student is validated by the hostel
-   office and that the caller has accepted the current privacy notice;
-4. hand over to the module service that owns the business rule.
+4. unless the endpoint is the student's own profile, require that the student is validated
+   by the hostel office and is an Active resident (fees stay open to every validated
+   student);
+5. hand over to the module service that owns the business rule.
 
 Read-only lists that are not covered by a service query DocTypes directly, always filtered
 on the resolved student and always with an explicit field list.
@@ -38,6 +43,14 @@ from frappe.utils import (
 	strip_html,
 )
 
+from hostel360.security.files import (
+	PORTAL_EXTENSIONS,
+	PORTAL_MAX_BYTES,
+	content_matches,
+	file_extension,
+	mark_portal_upload,
+	sanitize_file_name,
+)
 from hostel360.setup.roles import PORTAL_ROLES
 from hostel360.utils.context import require_portal_identity
 from hostel360.utils.validation import mask_mobile
@@ -57,7 +70,6 @@ PAYMENT = "Hostel Payment"
 TRANSACTION = "Hostel Payment Transaction"
 NOTIFICATION_LOG = "Notification Log"
 
-PORTAL_SWITCHES = {STUDENT: "student_portal_enabled", PARENT: "parent_portal_enabled"}
 PORTAL_HOME = "/hostel"
 PHOTO_ENDPOINT = "/api/method/hostel360.api.portal.download_photo"
 ATTACHMENT_ENDPOINT = "/api/method/hostel360.api.portal.download_grievance_attachment"
@@ -65,7 +77,6 @@ ATTACHMENT_ENDPOINT = "/api/method/hostel360.api.portal.download_grievance_attac
 # Full portal features need a validated student whose record is Active (design 4.2, TR 3.1).
 ACTIVE = "Active"
 VALIDATED = "Validated"
-CLOSED_STUDENT_STATUSES = ("Vacated", "Alumni")
 
 # Languages the portal is offered in; server messages follow the user's choice (User.language).
 PORTAL_LANGUAGES = ("en", "ta")
@@ -110,12 +121,8 @@ DASHBOARD_NOTIFICATIONS = 5
 # them to the SPA so its pre-upload checks agree as well.
 UPLOAD_PURPOSES = ("grievance",)
 UPLOAD_FOLDER = "Home/Attachments"
-try:
-	from hostel360.security.files import PORTAL_EXTENSIONS as UPLOAD_EXTENSIONS
-	from hostel360.security.files import PORTAL_MAX_BYTES as UPLOAD_MAX_BYTES
-except ImportError:
-	UPLOAD_EXTENSIONS = frozenset({"pdf", "jpg", "jpeg", "png", "webp"})
-	UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+UPLOAD_EXTENSIONS = PORTAL_EXTENSIONS
+UPLOAD_MAX_BYTES = PORTAL_MAX_BYTES
 ATTACHMENT_INLINE_EXTENSIONS = frozenset({"pdf", "jpg", "jpeg", "png", "webp"})
 # Uploads not attached to a grievance within a day are removed by delete_stale_uploads().
 UNATTACHED_UPLOADS_PER_DAY = 20
@@ -228,68 +235,26 @@ def check_rate_limit(action: str, user: str | None = None) -> None:
 
 def _identity(kind: str | None = None) -> frappe._dict:
 	"""The portal identity of the session user, with their own Student or Guardian record."""
+	user = frappe.session.user
+	# The sign-in rule, asked again on every call and before the record is resolved: a session
+	# opened before the record was rejected, closed, unlinked or un-validated (or before the
+	# portal was switched off) stops working with the reason, not a bare permission error.
+	if _is_portal_user(user):
+		from hostel360.auth.events import portal_login_blocked_reason
+
+		reason = portal_login_blocked_reason(user)
+		if reason:
+			frappe.throw(reason, PortalAccessClosed, title=_("Portal access"))
+
 	identity = require_portal_identity()
 	if kind and identity.kind != kind:
 		if kind == PARENT:
 			frappe.throw(_("This is available to parents and guardians only."), frappe.PermissionError)
 		frappe.throw(_("This is available to students only."), frappe.PermissionError)
 
-	identity.user = frappe.session.user
-	# The same rule as sign-in, asked again on every call: a session opened before the record
-	# was rejected, closed or switched off must stop working, with the reason shown.
-	reason = _access_blocked_reason(identity)
-	if reason:
-		frappe.throw(reason, PortalAccessClosed, title=_("Portal access"))
-
+	identity.user = user
 	identity.record = _caller_record(identity)
 	return identity
-
-
-def _access_blocked_reason(identity) -> str | None:
-	"""Why the caller may not use the portal now (the sign-in rule of hostel360.auth), or None."""
-	try:
-		from hostel360.auth.events import portal_login_blocked_reason
-	except ImportError:
-		return _local_access_blocked_reason(identity)
-	return portal_login_blocked_reason(identity.user)
-
-
-def _local_access_blocked_reason(identity) -> str | None:
-	"""The sign-in rule (TR 3.1, 4.1), for when the auth module is being reinstalled."""
-	if not _portal_enabled(PORTAL_SWITCHES[identity.kind]):
-		if identity.kind == STUDENT:
-			return _("The student portal is not available right now. Please try again later.")
-		return _("The parent portal is not available right now. Please try again later.")
-
-	if identity.kind == STUDENT:
-		row = frappe.db.get_value(STUDENT_DOCTYPE, identity.student, ["status", "validation_status"], as_dict=True)
-		if not row:
-			return _("Your portal account is not linked to a hostel record. Please contact the hostel office.")
-		if row.validation_status == "Rejected" or row.status in CLOSED_STUDENT_STATUSES:
-			return _("Portal access for this hostel record has been closed. Please contact the hostel office.")
-		if row.validation_status != VALIDATED:
-			return _(
-				"Your hostel registration has not been validated by the hostel office yet. "
-				"You can sign in once it has been validated."
-			)
-		return None
-
-	if frappe.db.get_value(GUARDIAN_DOCTYPE, identity.guardian, "validation_status") == "Rejected":
-		return _("Portal access for this parent record has been closed. Please contact the hostel office.")
-	open_wards = frappe.db.count(
-		STUDENT_DOCTYPE,
-		{
-			"name": ("in", identity.wards or [""]),
-			"validation_status": VALIDATED,
-			"status": ("not in", CLOSED_STUDENT_STATUSES),
-		},
-	)
-	if not open_wards:
-		return _(
-			"The parent portal opens once your ward's hostel registration has been validated "
-			"by the hostel office."
-		)
-	return None
 
 
 def _caller_record(identity) -> frappe._dict:
@@ -339,8 +304,13 @@ def _portal(
 	does not say which ward, a read uses the first one, but a write must name the student so a
 	request is never filed for the wrong child. ``dues`` marks the fee endpoints, which stay
 	open for a validated student who is not Active (see ``_assert_full_access``).
+
+	The privacy notice is accepted before anything about a student is read or written, even
+	where ``full_access`` is off (profile and photo): the first-run order is consent, then
+	confirming the details.
 	"""
 	identity = _identity(kind)
+	_require_consent(identity)
 	selected = _select_student(identity, student, write)
 	if full_access:
 		_assert_full_access(identity, selected, dues=dues)
@@ -400,12 +370,7 @@ def _assert_full_access(identity, student: str, *, dues: bool = False) -> None:
 	ward who has since left) still sees and pays their dues: ``dues`` opens just that. Leave,
 	mess, grievances and certificates are for Active residents only.
 	"""
-	if _consent_required(identity.record):
-		frappe.throw(
-			_("Please read and accept the privacy notice to continue."),
-			PortalConsentRequired,
-			title=_("Privacy notice"),
-		)
+	_require_consent(identity)
 
 	row = frappe.db.get_value(STUDENT_DOCTYPE, student, ["full_name", "validation_status", "status"], as_dict=True)
 	status = row.validation_status if row else None
@@ -438,6 +403,16 @@ def _assert_full_access(identity, student: str, *, dues: bool = False) -> None:
 	frappe.throw(message, PortalValidationPending, title=_("Registration not validated yet"))
 
 
+def _require_consent(identity) -> None:
+	"""Refuse until the caller has accepted the current privacy notice (DPDP Act 2023)."""
+	if _consent_required(identity.record):
+		frappe.throw(
+			_("Please read and accept the privacy notice to continue."),
+			PortalConsentRequired,
+			title=_("Privacy notice"),
+		)
+
+
 def _consent_required(record) -> bool:
 	current = _privacy_notice_version()
 	if not current:
@@ -448,16 +423,6 @@ def _consent_required(record) -> bool:
 def _privacy_notice_version() -> str:
 	# Read the stored value exactly as record_privacy_consent() does, so the two always agree.
 	return (frappe.db.get_single_value("Hostel Settings", "privacy_notice_version") or "").strip()
-
-
-def _portal_enabled(fieldname: str) -> bool:
-	"""Hostel Settings portal switch; one that was never saved counts as on (as at sign-in)."""
-	try:
-		from hostel360.auth.otp import portal_enabled
-	except ImportError:
-		value = frappe.db.get_singles_dict("Hostel Settings").get(fieldname)
-		return value in (None, "") or cint(value) == 1
-	return portal_enabled(fieldname)
 
 
 # ============================================================================ input checks
@@ -615,13 +580,16 @@ def get_session() -> dict:
 	identity = _identity()
 	record = identity.record
 	notice_version = _privacy_notice_version()
+	# Online payment can differ per ward (test mode is open to designated test payers only),
+	# so each ward card says whether it may be paid online and the setting says "any ward".
+	payable = _optional("payment settings", _online_payment_by_ward, identity) or {}
 
 	return {
 		"user": identity.user,
 		"kind": identity.kind,
 		"display_name": record.display_name,
 		"mobile_masked": mask_mobile(record.mobile_number),
-		"wards": _ward_cards(identity.wards),
+		"wards": _ward_cards(identity.wards, payable),
 		"validation_status": record.validation_status,
 		"profile_confirmed": bool(cint(record.profile_confirmed)),
 		"consent_required": _consent_required(record),
@@ -631,11 +599,11 @@ def get_session() -> dict:
 		# The language server messages are written in for this user; the SPA aligns it with
 		# the language chosen on the device (see set_language).
 		"language": frappe.get_cached_value("User", identity.user, "language") or None,
-		"settings": _session_settings(),
+		"settings": _session_settings(payment_enabled=any(payable.values())),
 	}
 
 
-def _ward_cards(wards: list[str]) -> list[dict]:
+def _ward_cards(wards: list[str], payable: dict | None = None) -> list[dict]:
 	if not wards:
 		return []
 	rows = {
@@ -679,6 +647,7 @@ def _ward_cards(wards: list[str]) -> list[dict]:
 				"bed_label": beds.get(row.current_bed),
 				"status": row.status,
 				"validation_status": row.validation_status,
+				"payment_enabled": bool((payable or {}).get(row.name)),
 			}
 		)
 	return cards
@@ -703,10 +672,10 @@ def photo_url(student: str, photo: str | None) -> str | None:
 	return photo
 
 
-def _session_settings() -> dict:
+def _session_settings(payment_enabled: bool = False) -> dict:
 	settings = get_branding()
 	settings.update(
-		payment_enabled=_optional("payment settings", _payment_enabled) or False,
+		payment_enabled=bool(payment_enabled),
 		mess_reduction_min_days=_optional("mess settings", _mess_reduction_min_days),
 		mess_day_cutoff_hour=_mess_day_cutoff_hour(),
 		leave_requires_parent_approval=bool(_optional("leave settings", _leave_requires_parent_approval)),
@@ -752,10 +721,20 @@ def get_branding() -> dict:
 	return values
 
 
-def _payment_enabled() -> bool:
+def _online_payment_by_ward(identity) -> dict:
+	"""{student: True when the caller may pay that student's dues online}, the same rule get_fees uses."""
+	from hostel360.hostel_fees.services import online_payment_available
 	from hostel360.hostel_fees.utils import get_payment_settings
 
-	return bool(cint(get_payment_settings().get("enabled")))
+	settings = get_payment_settings()
+	return {ward: bool(online_payment_available(ward, identity.user, settings)) for ward in identity.wards or []}
+
+
+def _payment_test_mode() -> bool:
+	"""The gateway is using test credentials: no real money moves and receipts are marked as tests."""
+	from hostel360.hostel_fees.utils import get_payment_settings
+
+	return bool(cint(get_payment_settings().get("test_mode")))
 
 
 def _mess_reduction_min_days() -> int:
@@ -966,6 +945,7 @@ def _fee_totals(student: str) -> dict:
 		"overdue": summary.get("overdue"),
 		"overdue_count": summary.get("overdue_count"),
 		"next_due_date": summary.get("next_due_date"),
+		"payment_enabled": bool(summary.get("payment_enabled")),
 	}
 
 
@@ -1007,11 +987,17 @@ def _pending_counts(ctx) -> dict:
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_fees(student: str | None = None) -> dict:
-	"""Invoices with their items, totals due and the payments made."""
+	"""Invoices with their items, totals due and the payments made.
+
+	``payment_test_mode`` is set while online payment is offered with test credentials, so the
+	app can say that no real money will be taken.
+	"""
 	from hostel360.hostel_fees.services import get_fee_summary
 
 	ctx = _portal(student, dues=True)
-	return get_fee_summary(ctx.student)
+	summary = get_fee_summary(ctx.student)
+	summary["payment_test_mode"] = bool(summary.get("payment_enabled")) and _payment_test_mode()
+	return summary
 
 
 @frappe.whitelist(methods=["POST"])
@@ -1046,7 +1032,8 @@ def verify_payment(
 		"razorpay_order_id": _text(razorpay_order_id, _("Order ID"), 64, required=True, multiline=False),
 		"razorpay_signature": _text(razorpay_signature, _("Signature"), 256, required=True, multiline=False),
 	}
-	return confirm_checkout(ctx.name, payload)
+	# "Failed" here means this attempt failed: the order stays open and paying again reuses it.
+	return _with_test_flag(confirm_checkout(ctx.name, payload), ctx.name)
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -1064,8 +1051,15 @@ def get_payment_status(transaction: str) -> dict:
 	if status in OPEN_TRANSACTION_STATUSES and _settles_by_redirect(gateway):
 		from hostel360.hostel_fees.services import confirm_checkout
 
-		return confirm_checkout(ctx.name, {})
-	return _transaction_outcome(ctx.name)
+		return _with_test_flag(confirm_checkout(ctx.name, {}), ctx.name)
+	return _with_test_flag(_transaction_outcome(ctx.name), ctx.name)
+
+
+def _with_test_flag(outcome: dict, transaction: str) -> dict:
+	"""Say whether the payment was made with test credentials (its receipt is a test receipt)."""
+	outcome = dict(outcome or {})
+	outcome["test_mode"] = cint(frappe.db.get_value(TRANSACTION, transaction, "test_mode"))
+	return outcome
 
 
 def _settles_by_redirect(gateway: str | None) -> bool:
@@ -1242,12 +1236,7 @@ def cancel_leave(name: str) -> dict:
 def pending_leave_approvals() -> list[dict]:
 	"""Leave requests of the parent's wards that are waiting for this parent's decision."""
 	identity = _identity(PARENT)
-	if _consent_required(identity.record):
-		frappe.throw(
-			_("Please read and accept the privacy notice to continue."),
-			PortalConsentRequired,
-			title=_("Privacy notice"),
-		)
+	_require_consent(identity)
 	return _pending_approvals_for(identity)
 
 
@@ -1524,6 +1513,9 @@ def upload_attachment(purpose: str = "grievance", student: str | None = None) ->
 			"folder": UPLOAD_FOLDER,
 		}
 	)
+	# The portal's own checks, quota and rate limit have run: the File policy accepts this
+	# portal user's upload because of this mark, whatever URL the request came in on.
+	mark_portal_upload(doc)
 	doc.insert(ignore_permissions=True)
 	return {"file_url": doc.file_url, "file_name": doc.file_name, "file_size": doc.file_size}
 
@@ -1544,17 +1536,8 @@ def _checked_upload(upload) -> tuple[str, bytes]:
 	if isinstance(content, str):
 		content = content.encode()
 
-	try:
-		from hostel360.security import files as file_policy
-	except ImportError:
-		file_policy = None
-
-	if file_policy:
-		file_name = file_policy.sanitize_file_name(upload.filename)
-		extension = file_policy.file_extension(file_name)
-	else:
-		file_name = _basic_file_name(upload.filename)
-		extension = file_name.rpartition(".")[2].lower() if "." in file_name else ""
+	file_name = sanitize_file_name(upload.filename)
+	extension = file_extension(file_name)
 
 	if extension not in UPLOAD_EXTENSIONS:
 		frappe.throw(
@@ -1569,8 +1552,7 @@ def _checked_upload(upload) -> tuple[str, bytes]:
 			title=_("Upload Not Allowed"),
 		)
 
-	matches = file_policy.content_matches(extension, content) if file_policy else _basic_content_matches(extension, content)
-	if not matches:
+	if not content_matches(extension, content):
 		frappe.throw(
 			_(
 				"This file does not look like a valid {0} file. It may be damaged or renamed. "
@@ -1579,25 +1561,6 @@ def _checked_upload(upload) -> tuple[str, bytes]:
 			title=_("Upload Not Allowed"),
 		)
 	return file_name, content
-
-
-def _basic_file_name(name: str | None) -> str:
-	name = (name or "").replace("\\", "/").rsplit("/", 1)[-1]
-	stem, dot, extension = name.rpartition(".")
-	if not dot:
-		stem, extension = name, ""
-	stem = re.sub(r"[^\w\- ]+", "_", CONTROL_CHARS.sub("", stem)).strip(" _-")[:100] or "file"
-	extension = re.sub(r"[^A-Za-z0-9]", "", extension).lower()[:10]
-	return f"{stem}.{extension}" if extension else stem
-
-
-def _basic_content_matches(extension: str, content: bytes) -> bool:
-	if extension == "pdf":
-		return b"%PDF-" in content[:1024]
-	is_png = content.startswith(b"\x89PNG\r\n\x1a\n")
-	is_jpeg = content.startswith(b"\xff\xd8\xff")
-	is_webp = content[:4] == b"RIFF" and content[8:12] == b"WEBP"
-	return is_png or is_jpeg or is_webp
 
 
 def _check_upload_quota(user: str) -> None:
@@ -1728,8 +1691,9 @@ def download_bonafide(name: str) -> None:
 
 @frappe.whitelist(methods=["GET", "POST"])
 def list_notifications(limit: int = 20, start: int = 0) -> list[dict]:
-	"""The caller's in-app notifications, newest first."""
+	"""The caller's in-app notifications, newest first (they name the student and their requests)."""
 	identity = _identity()
+	_require_consent(identity)
 	limit = min(max(cint(limit), 1), NOTIFICATION_PAGE_MAX)
 	return _notification_rows(identity.user, limit, max(cint(start), 0), wards=identity.wards)
 
@@ -1739,6 +1703,7 @@ def list_notifications(limit: int = 20, start: int = 0) -> list[dict]:
 def mark_notifications_read(names: list[str] | str | None = None) -> dict:
 	"""Mark the given notifications (or all of them) as read. Only the caller's own are touched."""
 	identity = _identity()
+	_require_consent(identity)
 	selected = _name_list(names, _("Notifications"), MAX_NOTIFICATION_NAMES)
 
 	log = frappe.qb.DocType(NOTIFICATION_LOG)

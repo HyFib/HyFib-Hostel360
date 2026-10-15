@@ -15,6 +15,7 @@ from hostel360.hostel_operations.tests.helpers import (
 	clear_settings_cache,
 	configure_settings,
 )
+from hostel360.setup.roles import AUDITOR_ROLE, OPERATIONS_ROLE, STUDENT_ROLE, WARDEN_ROLE
 
 RAISER = "warden.ticket-test@example.com"
 
@@ -37,6 +38,21 @@ def ensure_user(email: str) -> str:
 	if not frappe.db.exists("User", email):
 		frappe.get_doc(
 			{"doctype": "User", "email": email, "first_name": "Ticket", "send_welcome_email": 0, "user_type": "System User"}
+		).insert(ignore_permissions=True)
+	return email
+
+
+def ensure_user_with_role(email: str, role: str, user_type: str = "System User") -> str:
+	if not frappe.db.exists("User", email):
+		frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": "Picker",
+				"send_welcome_email": 0,
+				"user_type": user_type,
+				"roles": [{"role": role}],
+			}
 		).insert(ignore_permissions=True)
 	return email
 
@@ -196,6 +212,32 @@ class TestSupportTicket(IntegrationTestCase):
 		with self.set_user(RAISER):
 			support.close_ticket(ticket)
 		self.assertEqual(frappe.db.get_value("Support Ticket", ticket.name, "status"), "Closed")
+
+	def test_only_ticket_assigners_can_list_the_helpdesk_team(self):
+		suffix = frappe.generate_hash(length=6)
+		helpdesk = ensure_user_with_role(f"ops.picker-{suffix}@example.com", OPERATIONS_ROLE)
+		system_manager = ensure_user_with_role(f"sysmgr.picker-{suffix}@example.com", "System Manager")
+		warden = ensure_user_with_role(f"warden.picker-{suffix}@example.com", WARDEN_ROLE)
+		auditor = ensure_user_with_role(f"auditor.picker-{suffix}@example.com", AUDITOR_ROLE)
+		student = ensure_user_with_role(f"student.picker-{suffix}@example.com", STUDENT_ROLE, "Website User")
+		search = {
+			"doctype": "User",
+			"txt": "picker",
+			"searchfield": "name",
+			"start": 0,
+			"page_len": 50,
+			"filters": {},
+		}
+
+		for outsider in (student, warden, auditor, RAISER):
+			with self.set_user(outsider):
+				self.assertRaises(frappe.PermissionError, support.operations_user_query, **search)
+
+		for assigner in (helpdesk, system_manager, "Administrator"):
+			with self.set_user(assigner):
+				found = [row[0] for row in support.operations_user_query(**search)]
+			self.assertIn(helpdesk, found)
+			self.assertNotIn(warden, found, "only HyFib Operations users are offered")
 
 	def test_sla_compliance(self):
 		start = now_datetime()

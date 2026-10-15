@@ -13,7 +13,8 @@ Hostel360 production environment for ACGCET Hostels:
 | `terraform/oci/` | OCI infrastructure: network, Bastion, VM, volume, load balancer, bucket, IAM, Vault, alarms, logs, optional OCI WAF |
 | `ansible/` | Server configuration: hardening, firewall, Docker, storage, malware scanning, stack, backups, monitoring, audit |
 | `host/` | Host scripts (`bin/h360-*`), systemd units and timers, example configuration |
-| `monitoring/` | External uptime monitor (Mumbai) and the OCI alarm runbook |
+| `monitoring/` | External uptime monitor (Mumbai) with its ingest relay, the OCI alarm runbook and the security incident runbook |
+| `EXIT.md` | End of contract (TR 22): export, deletion, server decommission, cloud clean-up, CERT-In log hold |
 | `dev/` | Local development stack (not used in production) |
 
 ---
@@ -33,7 +34,7 @@ Hostel360 production environment for ACGCET Hostels:
  │ waf  nginx + ModSecurity + OWASP CRS 4 (PL1, anomaly 5), headers, rate limits │
  │   ├── frontend (nginx) ── backend (gunicorn 6×4) · websocket (socket.io)      │
  │   └── php-fpm (/integration/, pool of 300 workers, on demand)                 │
- │ queue-short ×2 · queue-long · scheduler · configurator (one-shot)             │
+ │ queue-short ×2 · queue-long (alerts queue first) · scheduler · configurator   │
  │ mariadb 11.8 · redis-cache · redis-queue · clamav (clamd + freshclam)         │
  └──────────────────────────────────────────────────────────────────────────────┘
  /srv/hostel360 = 400 GB block volume (VPU 10): MariaDB, sites, Redis AOF, ClamAV, logs
@@ -52,8 +53,8 @@ Region: application in **ap-hyderabad-1**, backups in **ap-mumbai-1**; all data 
 | frontend | Hostel360 image (`frontend` role) | internal | 192 MB |
 | backend | Hostel360 image (`backend`, gunicorn gthread 6 workers × 4 threads) | internal, edge | 2 GB |
 | websocket | Hostel360 image (`websocket`) | internal | 256 MB |
-| queue-short ×2 | Hostel360 image (`worker short,default`) | internal, edge | 448 MB each |
-| queue-long | Hostel360 image (`worker long,default,short`) | internal, edge | 640 MB |
+| queue-short ×2 | Hostel360 image (`worker alerts,short,default`) | internal, edge | 448 MB each |
+| queue-long | Hostel360 image (`worker alerts,long,default,short`) | internal, edge | 640 MB |
 | scheduler | Hostel360 image (`scheduler`) | internal | 256 MB |
 | configurator | Hostel360 image (`configure`, one-shot) | internal | 512 MB |
 | mariadb | `mariadb:11.8.9-noble` (buffer pool 6 GB) | internal | 7 GB |
@@ -63,12 +64,23 @@ Region: application in **ap-hyderabad-1**, backups in **ap-mumbai-1**; all data 
 | php-fpm | `php:8.3.35-fpm-alpine3.23` | php | 768 MB |
 
 - **edge**: the only network with a route out (SMS/WhatsApp/e-mail/Razorpay/PayU APIs,
-  ClamAV mirrors) and the published WAF ports.
+  ClamAV mirrors) and the published WAF ports. Outbound connections are listed under
+  *Outbound connections* in section 2.
 - **internal** (`internal: true`): application and data tier; MariaDB and Redis are
   reachable only here. The WAF is also on it under the portal host name (`SITE_NAME`, a
   network alias) and listens there on 443 and 80 as well - see *Print PDFs* below.
 - **php** (`internal: true`): WAF and PHP-FPM only, so the PHP pages can never reach the
   database, Redis or the application.
+
+**Job queues.** Besides Frappe's `short`, `default` and `long`, the stack has an `alerts`
+queue for HyFib operations alert deliveries only, so a page never waits behind thousands of
+fee or mess-bill notifications. The configurator defines it before any worker starts
+(`workers.alerts` with a 300 s timeout in `common_site_config.json`, and
+`hostel360_alert_queue: alerts` in the site's config), and every worker lists it first. A
+worker started with a queue the configuration does not define leaves it out with a warning
+instead of failing; the application then sends alerts straight from the request that raised
+them. When upgrading a server to this layout, deploy the new image with `h360-deploy` (which
+runs the new configurator first) before applying a playbook that brings the new compose file.
 
 Memory plan (bid): database 6–7 GB, application workers 4 GB, Redis 1 GB, the rest for
 ClamAV, WAF, PHP-FPM and the OS. Limits are ceilings; normal use is well below. A 4 GB swap
@@ -146,6 +158,26 @@ to leave the host through the NAT gateway and come back through the load balance
 the public name does not resolve from the server (staging, before the DNS change) every PDF
 failed with `HostNotFoundError`. These two ports are not published; the host firewall and
 the load balancer are unchanged.
+
+**Outbound connections.** The server's network security group allows outbound TCP 80, 443,
+465 and 587 and NTP to any address (`app_egress_tcp_ports`); ufw allows outgoing traffic; and
+the backend and every worker container sit on the `edge` network, so they reach the services
+below without per-host rules. The scheduler, frontend, websocket, MariaDB and Redis cannot
+leave the host at all.
+
+| Destination | From | Why |
+|---|---|---|
+| `info.payu.in` (live), `test.payu.in` (test mode), HTTPS | backend, workers | PayU Verify Payment API: every PayU return and webhook, and the 15-minute reconciliation (workers) |
+| `api.razorpay.com`, HTTPS | backend, workers | orders, payment checks, refunds, reconciliation |
+| SMS gateway (MSG91: `control.msg91.com`) and `graph.facebook.com`, HTTPS | workers, backend | SMS (DLT) and WhatsApp messages, sign-in codes |
+| the outgoing mail server, 465/587 | workers | e-mail notifications, monthly report |
+| `database.clamav.net` (freshclam), HTTPS | clamav | malware signatures |
+| OCI services (Object Storage, Registry, Monitoring, Notifications) | host | backups, image pulls, metrics, alert fallback; through the service gateway |
+
+Check from the containers after go-live (any HTTP status shows the connection works):
+`docker exec hostel360-queue-long-1 curl -s -o /dev/null -w '%{http_code}\n' https://info.payu.in/merchant/postservice.php?form=2`
+(and `https://test.payu.in/...` while in test mode). If the NSG egress list is ever narrowed,
+PayU's and Razorpay's API hosts must stay reachable from the backend and the workers.
 
 **WAF tuning.** Set `WAF_RULE_ENGINE=DetectionOnly` in `/etc/hostel360/stack.env` (or
 `h360_waf_rule_engine` in Ansible) to log without blocking while a new exclusion is being
@@ -240,7 +272,9 @@ Administrator password in `/etc/hostel360/secrets/site_admin_password`, writes t
 secret and an OCI notification token into Ops Alert Settings, adds the campus egress
 addresses to Messaging Settings > Trusted Networks, and prints the `alarm_https_endpoint` to
 add to `terraform.tfvars` (then `terraform apply` again so OCI alarms also arrive in
-Hostel360 as Ops Alerts).
+Hostel360 as Ops Alerts). It also defines the `alerts` job queue for the site (through the
+configurator, see *Job queues*). The settings people have to supply are collected in the
+go-live checklist (3.7).
 
 ### 3.5 First sign-in and two-factor enrolment
 
@@ -289,6 +323,30 @@ sudo h360-agent && sudo journalctl -t h360-agent -n 20
 sudo h360-backup && sudo h360-restore-test
 ```
 
+### 3.7 Go-live checklist
+
+Nothing below has a safe default: each item is a fact only ACGCET or HyFib can supply, and
+the portal must not open to students until every line is ticked. The health checks raise a
+Warning alert for the two Ops Alert Settings items while they are empty.
+
+| # | Item | Where | Who supplies it |
+|---|---|---|---|
+| 1 | Campus egress addresses (public address or range of the hostel and college gateway) | `h360_campus_egress_cidrs` (3.3); check Messaging Settings > Trusted Networks | ACGCET network administrator |
+| 2 | **Report Recipients**: e-mail addresses of the institution officials who receive the Monthly Performance Report | Ops Alert Settings > Report Recipients | ACGCET |
+| 3 | **Escalation level 2** (HyFib technical lead): e-mail and mobile | Ops Alert Settings > Escalation Levels, level 2 | HyFib |
+| 4 | Security incident contacts: the deputy incident owner (normally the level 2 lead) and the ACGCET official to inform within six hours | [monitoring/security-incident-runbook.md](monitoring/security-incident-runbook.md), contacts table | HyFib, ACGCET |
+| 5 | SMS on the DLT portal: Principal Entity ID, the approved header (sender ID), and a DLT content template ID (plus the MSG91 flow ID with MSG91) for every enabled SMS template, including the operations alert template | Messaging Settings; Message Template > DLT Template ID / MSG91 Flow Template ID | ACGCET (the registered entity), HyFib |
+| 6 | WhatsApp: Business account, phone number ID, a permanent system-user token, and every WhatsApp template approved in WhatsApp Manager under the name and language entered in Hostel360 (alert template too) | Messaging Settings; Message Template > WhatsApp Template Name | ACGCET's Meta business account, HyFib |
+| 7 | Messaging Settings > Test Mode switched **off** once 5 and 6 are approved, after a test send to a HyFib number on each channel | Messaging Settings | HyFib |
+| 8 | Payment gateway keys of ACGCET's merchant account: Razorpay key ID, key secret and webhook secret, or PayU merchant key and salt; **Test Mode off** for live collection | Hostel Payment Settings | ACGCET (merchant), HyFib enters them |
+| 9 | Razorpay webhook: URL `https://<site>/api/method/hostel360.api.payments.razorpay_webhook`, events `payment.captured`, `payment.failed`, `order.paid` and `refund.processed`, same secret as in Payment Settings | Razorpay Dashboard > Webhooks | ACGCET's Razorpay account |
+| 10 | PayU: payment webhook (successful and failed payments) to `https://<site>/api/method/hostel360.api.payments.payu_webhook`; the return URL `https://<site>/api/method/hostel360.api.payments.payu_return` is sent with every payment and needs no dashboard setting. The settings form shows both | PayU Dashboard > Webhooks | ACGCET's PayU account |
+| 11 | One real payment of a small amount end to end (receipt issued, webhook received, reconciliation clean) and refunded | portal, Hostel Payment Transaction | HyFib with ACGCET |
+| 12 | Outbound HTTPS from the backend and workers to the gateway's API (*Outbound connections*, section 2) | server | HyFib |
+| 13 | Heartbeat URL (Uptime Kuma push) in Ops Alert Settings; the Kuma ingest relay sending `uptime_external` samples | [monitoring/README.md](monitoring/README.md) | HyFib |
+| 14 | Restic password escrowed with ACGCET (sealed envelope or their vault); ACGCET officials in the `acgcet-backup-readers` group | *Backups and restore* | HyFib, ACGCET |
+| 15 | Outgoing e-mail account working (3.5) and every desk user enrolled in two-factor authentication | desk | HyFib |
+
 ---
 
 ## 4. Operations
@@ -318,7 +376,7 @@ restores the dump, returns to the previous tag and raises a critical Ops Alert.
 | restic repository check (5% of the data) and prune | Sundays | — |
 | Restore test into a throwaway MariaDB, compared with live | 2nd of each month, 03:00 IST | reported as "Restore Test" |
 | OCI volume backups (data + boot) | daily incremental 02:30 IST, weekly and monthly full | 7 days, 4 weeks, 6 months |
-| Pre-deploy / pre-restore snapshots | each deployment or restore | local dumps: last 5; volume backups: 14 days |
+| Pre-deploy / pre-restore snapshots | each deployment or restore | local dumps: last 5; volume backups: 14 days (`H360_SNAPSHOT_KEEP_DAYS`), set on each backup as its OCI retention period, so it expires even if the server and its prune timer are gone |
 
 Every run is reported to Hostel360 as an Ops Backup Record; failures raise critical alerts.
 The restic password must be escrowed with ACGCET (sealed envelope or their own vault):
@@ -341,16 +399,28 @@ Terraform and Ansible ≈ 1 h, restore ≈ 1 h for the expected data size).
 |---|---|---|
 | Application health checks | database, Redis, queues, scheduler, backups age, certificate, disk, errors | Ops Alert → escalation matrix |
 | `h360-agent` (every 5 min) | CPU, memory, swap, load, disk and inodes, container health and restarts, fail2ban bans, WAF blocks, ClamAV signature age, maldet monitor, internal certificate, NTP sync, pending reboot | HMAC-signed ingest → Ops Alert / metrics |
-| `h360-uptime-probe` (every min) | public liveness URL through DNS, LB, WAF | `uptime_probe` samples → monthly availability; outage alert after 3 failures |
+| `h360-uptime-probe` (every min) | public liveness URL through DNS, LB, WAF | `uptime_probe` samples → monthly availability; one outage alert after 3 failed minutes, repeated hourly while it lasts |
 | `h360-maldet-hook` | malware found by maldet | critical security alert per scan |
 | `h360-backup`, `h360-restore-test`, `h360-snapshot` | results | Ops Backup Records, alerts on failure |
 | OCI Monitoring | CPU, memory, metrics absent, instance accessibility, LB unhealthy backends, LB 5xx | Notifications topic: e-mail, PagerDuty, Slack, Hostel360 |
-| Uptime Kuma (Mumbai) | the portal from outside Hyderabad, application dead-man switch | its own channels |
+| Uptime Kuma (Mumbai) | the portal from outside Hyderabad, application dead-man switch | its own channels; readiness results relayed to Hostel360 as `uptime_external` samples, which the availability figure prefers (they see VM and region outages the on-host probe cannot) |
 
 When the application cannot accept a host alert, `h360-ingest` keeps it in
-`/var/spool/hostel360/ingest` (retried for 24 h) and publishes critical alerts directly to
-the OCI Notifications topic. Ingest messages are signed:
-`X-H360-Signature = hex(HMAC-SHA256(ingest_secret, "<timestamp>.<body>"))`.
+`/var/spool/hostel360/ingest` (retried for 24 h, at most 2,000 messages) and publishes
+critical alerts directly to the OCI Notifications topic. Uptime probe samples are kept for
+35 days instead, so a long outage still reaches the monthly report as measured downtime.
+Ingest messages are signed:
+`X-H360-Signature = hex(HMAC-SHA256(ingest_secret, "<timestamp>.<body>"))`, and each carries
+a `message_id` (a random UUID given when the message is first created, kept on every retry),
+so a retry of a message the server did commit is answered 409 and not recorded twice. 2xx and
+409 count as delivered; 400, 413 and 422 are dropped for good (the reason is in the Error
+Log); anything else is retried.
+
+**Security incidents** (malware, intrusion, data exposure, targeted attacks) follow
+[monitoring/security-incident-runbook.md](monitoring/security-incident-runbook.md): declare
+the incident in Hostel360 (Ops Alert > Declare Security Incident), preserve evidence, and
+report to CERT-In and ACGCET within six hours of detection. OCI alarms have their own
+[runbook](monitoring/oci-alarm-runbook.md).
 
 ### Everyday commands
 
@@ -361,6 +431,7 @@ sudo h360-waf-ban list | ban <ip> | unban <ip>
 sudo fail2ban-client status
 sudo h360-2fa-enrol <user> | --reset <user>          # authenticator app enrolment (3.5)
 sudo h360-site-init --trusted-networks               # campus addresses into Messaging Settings
+sudo h360-snapshot --reason <why> [--keep-days N]     # ad-hoc volume backup (evidence: --keep-days 180)
 sudo maldet --report list
 sudo docker compose -p hostel360 --env-file /etc/hostel360/stack.env \
      -f /opt/hostel360/deploy/compose/compose.yml exec backend bench --site <site> console
@@ -377,6 +448,12 @@ sudo docker compose -p hostel360 --env-file /etc/hostel360/stack.env \
 | `/etc/hostel360/waf/tls/` | internal certificate for LB re-encryption | Ansible |
 | `/etc/hostel360/waf/lists/` | `denylist.conf` (fail2ban), `rate-exempt.conf` (campus egress addresses and `h360_waf_rate_exempt_cidrs`) | Ansible |
 
+### End of contract
+
+The exit (TR 22: export, deletion in the application, server decommission with
+`h360-decommission`, cloud clean-up with `terraform/oci/exit-purge.sh`, and the CERT-In log
+hold) is described step by step in [EXIT.md](EXIT.md).
+
 ---
 
 ## 5. Validation
@@ -387,7 +464,7 @@ The checks used for this directory, runnable on any machine with Docker:
 docker compose -f deploy/compose/compose.yml --env-file deploy/compose/.env.example config --quiet
 docker run --rm -v "$PWD":/mnt -w /mnt koalaman/shellcheck:v0.11.0 -x \
     deploy/host/bin/h360-* deploy/docker/entrypoint.sh deploy/docker/build.sh deploy/docker/bin/* \
-    deploy/tests/*/run.sh tests/load/run.sh
+    deploy/terraform/oci/exit-purge.sh deploy/tests/*/run.sh tests/load/run.sh
 cd deploy/terraform/oci && docker run --rm -v "$PWD":/w -w /w hashicorp/terraform:1.16.6 fmt -check -recursive
 cd deploy/terraform/oci && docker run --rm -v "$PWD":/w -w /w -e TF_DATA_DIR=/tmp/tf --entrypoint sh \
     hashicorp/terraform:1.16.6 -c 'terraform init -backend=false -input=false >/dev/null && terraform validate'
@@ -411,6 +488,9 @@ docker build -t hostel360-deploy-checks:1 -f deploy/tests/Containerfile deploy/t
 deploy/tests/waf/run.sh        # CSP and PayU at the WAF, CRS still blocking, in-stack 443/80 for PDFs
 deploy/tests/ansible/run.sh    # campus egress checks and their WAF, fail2ban and stack.env outputs
 deploy/tests/fail2ban/run.sh   # h360-auth counts failed sign-ins only, never throttled requests
+deploy/tests/host/run.sh       # h360-ingest (message_id, retries, spool limits), uptime probe, Kuma relay,
+                               # h360-decommission against a stand-in server
+deploy/tests/exit/run.sh       # exit-purge.sh: order of the deletions, confirmations, log hold
 ```
 
 Capacity (TR 15) is measured with the k6 load test in `tests/load/` against the staging stack;
@@ -426,4 +506,5 @@ see `tests/load/README.md` and the results kept in `tests/load/results/`.
 | 6.5 | 300 PHP workers | PHP-FPM pool `pm = ondemand`, `pm.max_children = 300` |
 | 6.6 | Location: India | Hyderabad (primary), Mumbai (backups) |
 | TR 15 | 1,500 concurrent users | k6 load test `tests/load/` (1,500 portal + 40 desk users, p95 < 800 ms, < 1 % errors, ~150 req/s) run on staging; results in `tests/load/results/` |
-| Security | Firewall, WAF, malware scanning, HTTPS, encrypted backups, CERT-In log retention and NTP | section 2 |
+| TR 22 | Exit: data handed over, then deleted everywhere, with a certificate | [EXIT.md](EXIT.md): application purge, `h360-decommission`, `terraform/oci/exit-purge.sh`, CERT-In log hold |
+| Security | Firewall, WAF, malware scanning, HTTPS, encrypted backups, CERT-In log retention and NTP, incident reporting within six hours | section 2, [security incident runbook](monitoring/security-incident-runbook.md) |

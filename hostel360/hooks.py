@@ -149,6 +149,10 @@ doc_events = {
 	"Hostel Fee Invoice": {
 		"on_submit": "hostel360.hostel_mess.billing.sync_amended_invoice",
 	},
+	# No "share with everyone" and no shares to portal accounts on Hostel360 or personal records
+	"DocShare": {
+		"validate": "hostel360.security.sharing.validate_doc_share",
+	},
 }
 
 # Scheduled Tasks

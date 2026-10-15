@@ -77,9 +77,10 @@ def for_guardians(guardians: list[str]) -> list[dict]:
 	"""Recipients for specific guardians (for example only those allowed to approve leave)."""
 	if not guardians:
 		return []
+	# A guardian whose link to the student was rejected is not told about the student.
 	rows = frappe.get_all(
 		"Hostel Guardian",
-		filters={"name": ["in", list(guardians)]},
+		filters={"name": ["in", list(guardians)], "validation_status": ["!=", "Rejected"]},
 		fields=["user", "mobile_number", "email", "guardian_name"],
 		ignore_permissions=True,
 	)
@@ -123,6 +124,8 @@ def leave_context(doc) -> dict:
 		"status": doc.status,
 		"parent_remarks": doc.parent_remarks or "",
 		"warden_remarks": doc.warden_remarks or "",
+		"checked_out_on": cstr(doc.checked_out_on),
+		"returned_on": cstr(doc.returned_on),
 		"portal_link": portal_link("leave"),
 		"desk_link": desk_link(doc.doctype, doc.name),
 	}
@@ -153,7 +156,9 @@ def bonafide_context(doc) -> dict:
 		"request": doc.name,
 		"student": doc.student,
 		"student_name": doc.student_name,
+		"hostel": doc.hostel,
 		"purpose": doc.purpose,
+		"purpose_details": doc.purpose_details or "",
 		"status": doc.status,
 		"certificate_number": doc.certificate_number or "",
 		"issue_date": cstr(doc.issue_date),

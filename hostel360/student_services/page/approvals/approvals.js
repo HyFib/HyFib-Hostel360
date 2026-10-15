@@ -231,7 +231,10 @@ class Hostel360Approvals {
 				row.total_estimated_amount !== undefined
 					? this.line(__("Estimated amount"), format_currency(row.total_estimated_amount))
 					: "",
-				this.line(__("Raised by"), row.owner ? frappe.user.full_name(row.owner) : ""),
+				this.line(
+					__("Raised by"),
+					row.requested_by || row.owner ? frappe.user.full_name(row.requested_by || row.owner) : ""
+				),
 				this.line(__("Remarks"), row.remarks),
 			],
 		};

@@ -12,6 +12,12 @@ WhatsApp bodies mirror the template to be submitted in WhatsApp Manager, with th
 E-mail and in-app messages may use conditionals; their values are HTML-escaped before
 rendering. Some variables have aliases because modules describe the same thing
 differently (see ``events.EVENT_CONTEXT``).
+
+Every template also ships in Tamil (``default_templates_ta``). The Tamil e-mail and in-app
+templates are enabled out of the box. The Tamil SMS and WhatsApp templates start disabled:
+Tamil SMS travel as Unicode (70 characters a part) and, like Tamil WhatsApp templates, must
+be registered before an operator will deliver them. Until an administrator registers and
+enables one, Tamil readers get the English SMS or WhatsApp message.
 """
 
 from hostel360.hostel_communication import events as ev
@@ -44,6 +50,20 @@ _STAFF_FOOTER = (
 	"the hostel office. This is an automated message.</p>"
 )
 
+# Footers for templates in other languages: {language: (portal footer, staff footer)}.
+_FOOTERS = {
+	ev.TAMIL: (
+		'<p style="margin-top:24px">நன்றி,<br>{{ institution_short_name }} விடுதி அலுவலகம்</p>\n'
+		'<p style="font-size:12px;color:#6b7280">உதவி தேவையா? {{ support_phone }} என்ற எண்ணில் '
+		"அழைக்கவும் அல்லது {{ support_email }} க்கு எழுதவும். இது விடுதி இணையதளத்திலிருந்து தானாக "
+		"அனுப்பப்பட்ட செய்தி.</p>",
+		'<p style="margin-top:24px">Hostel360</p>\n'
+		'<p style="font-size:12px;color:#6b7280">விடுதி அலுவலகத்தில் உங்கள் பொறுப்பின் காரணமாக இந்தச் '
+		"செய்தி உங்களுக்கு அனுப்பப்பட்டது. இது தானாக அனுப்பப்பட்ட செய்தி.</p>",
+	),
+}
+_GREETINGS = {ev.TAMIL: "அன்புள்ள"}
+
 
 def _rows(*pairs) -> str:
 	cells = "".join(
@@ -61,14 +81,24 @@ def _quote(expression: str) -> str:
 	)
 
 
-def _email(*paragraphs, action: str | None = None, greeting: str = "Student", staff: bool = False) -> str:
-	parts = ['<p>Dear {{ recipient_name or "%s" }},</p>' % greeting]
+def _email(
+	*paragraphs,
+	action: str | None = None,
+	greeting: str = "Student",
+	staff: bool = False,
+	language: str = ev.ENGLISH,
+) -> str:
+	dear = _GREETINGS.get(language, "Dear")
+	parts = ['<p>%s {{ recipient_name or "%s" }},</p>' % (dear, greeting)]
 	for paragraph in paragraphs:
 		parts.append(paragraph if paragraph.startswith("<") else f"<p>{paragraph}</p>")
 	if action:
 		link = "desk_link or site_url" if staff else "portal_link or portal_url"
 		parts.append(_BUTTON % (link, action))
-	parts.append(_STAFF_FOOTER if staff else _FOOTER)
+	if language in _FOOTERS:
+		parts.append(_FOOTERS[language][1 if staff else 0])
+	else:
+		parts.append(_STAFF_FOOTER if staff else _FOOTER)
 	return "\n".join(parts)
 
 
@@ -380,7 +410,8 @@ TEMPLATES = {
 			),
 		},
 		ev.IN_APP: {
-			"subject": "Mess reduction {{ status|lower }}",
+			"subject": "Mess reduction {{ status|lower }}"
+			"{% if student_name %} for {{ student_name }}{% endif %}",
 			"body": "{{ application }}: {{ fdate(from_date) }} to {{ fdate(to_date) }}."
 			"{% if remarks %} Remarks: {{ remarks }}{% endif %}",
 		},
@@ -524,7 +555,7 @@ TEMPLATES = {
 			),
 		},
 		ev.IN_APP: {
-			"subject": "Leave {{ status|lower }}",
+			"subject": "Leave {{ status|lower }}{% if student_name %} for {{ student_name }}{% endif %}",
 			"body": "{{ leave }}: {{ fdatetime(from_datetime) }} to {{ fdatetime(to_datetime) }}."
 			"{%% if %s %%} Remarks: {{ %s }}{%% endif %%}" % (LEAVE_REMARKS, LEAVE_REMARKS),
 		},
@@ -553,6 +584,72 @@ TEMPLATES = {
 		ev.IN_APP: {
 			"subject": "Return overdue: {{ student_name }}",
 			"body": "Leave {{ leave }} ({{ hostel }}) was due back on {{ fdatetime(to_datetime) }}.",
+		},
+	},
+	ev.LEAVE_CHECKED_OUT: {
+		ev.SMS: {
+			"body": "{{ short(student_name) }} left {{ short(hostel, 20) }} on approved leave at "
+			"{{ fdatetime(checked_out_on) }}. Expected back by {{ fdatetime(to_datetime) }}." + SIGN_OFF,
+			"template_parameters": "short(student_name)\nshort(hostel, 20)\nfdatetime(checked_out_on)\n"
+			"fdatetime(to_datetime)",
+		},
+		ev.WHATSAPP: {
+			"body": "Dear {{ recipient_name }}, {{ student_name }} checked out of {{ hostel }} at "
+			"{{ fdatetime(checked_out_on) }} on approved leave to {{ destination }}. The expected return "
+			"is by {{ fdatetime(to_datetime) }}.",
+			"template_parameters": "recipient_name\nstudent_name\nhostel\nfdatetime(checked_out_on)\n"
+			"destination\nfdatetime(to_datetime)",
+		},
+		ev.EMAIL: {
+			"subject": "{{ student_name }} has left the hostel on leave",
+			"body": _email(
+				"{{ student_name }} checked out of the hostel at the gate on approved leave.",
+				_rows(
+					("Leave", "{{ leave }}"),
+					("Hostel", "{{ hostel }}"),
+					("Destination", "{{ destination }}"),
+					("Checked out", "{{ fdatetime(checked_out_on) }}"),
+					("Expected back by", "{{ fdatetime(to_datetime) }}"),
+				),
+				"If you did not expect this, please call the hostel office at once.",
+				action="View the leave",
+				greeting="Parent",
+			),
+		},
+		ev.IN_APP: {
+			"subject": "{{ student_name }} left the hostel on leave",
+			"body": "{{ leave }}: checked out of {{ hostel }} at {{ fdatetime(checked_out_on) }}, expected "
+			"back by {{ fdatetime(to_datetime) }}.",
+		},
+	},
+	ev.LEAVE_RETURNED: {
+		ev.SMS: {
+			"body": "{{ short(student_name) }} returned to {{ short(hostel, 20) }} from leave at "
+			"{{ fdatetime(returned_on) }}." + SIGN_OFF,
+			"template_parameters": "short(student_name)\nshort(hostel, 20)\nfdatetime(returned_on)",
+		},
+		ev.WHATSAPP: {
+			"body": "Dear {{ recipient_name }}, {{ student_name }} has returned to {{ hostel }} from leave "
+			"{{ leave }} at {{ fdatetime(returned_on) }}.",
+			"template_parameters": "recipient_name\nstudent_name\nhostel\nleave\nfdatetime(returned_on)",
+		},
+		ev.EMAIL: {
+			"subject": "{{ student_name }} is back at the hostel",
+			"body": _email(
+				"{{ student_name }} has returned to the hostel from leave and checked in at the gate.",
+				_rows(
+					("Leave", "{{ leave }}"),
+					("Hostel", "{{ hostel }}"),
+					("Checked out", "{{ fdatetime(checked_out_on) or '-' }}"),
+					("Returned", "{{ fdatetime(returned_on) }}"),
+				),
+				action="View the leave",
+				greeting="Parent",
+			),
+		},
+		ev.IN_APP: {
+			"subject": "{{ student_name }} returned from leave",
+			"body": "{{ leave }}: back at {{ hostel }} at {{ fdatetime(returned_on) }}.",
 		},
 	},
 	ev.GRIEVANCE_RECEIVED: {
@@ -711,6 +808,30 @@ TEMPLATES = {
 			"the problem continues.",
 		},
 	},
+	ev.BONAFIDE_REQUESTED: {
+		ev.EMAIL: {
+			"subject": "Bonafide certificate request from {{ student_name }} ({{ request }})",
+			"body": _email(
+				"A bonafide certificate request is waiting for your approval.",
+				_rows(
+					("Request", "{{ request }}"),
+					("Student", "{{ student_name }}"),
+					("Hostel", "{{ hostel }}"),
+					("Purpose", "{{ purpose }}"),
+					("Details", "{{ purpose_details or '-' }}"),
+				),
+				"You can approve or reject it from the Approvals page in Hostel360.",
+				action="Review the request",
+				greeting="Warden",
+				staff=True,
+			),
+		},
+		ev.IN_APP: {
+			"subject": "Bonafide request to review: {{ student_name }}",
+			"body": "{{ request }}{% if hostel %} ({{ hostel }}){% endif %}: {{ purpose }}"
+			"{% if purpose_details %} - {{ purpose_details }}{% endif %}.",
+		},
+	},
 	ev.BONAFIDE_DECIDED: {
 		ev.SMS: {
 			"body": "Bonafide certificate request {{ request }} for {{ short(student_name) }} has been "
@@ -738,7 +859,8 @@ TEMPLATES = {
 			),
 		},
 		ev.IN_APP: {
-			"subject": "Bonafide certificate {{ status|lower }}",
+			"subject": "Bonafide certificate {{ status|lower }}"
+			"{% if student_name %} for {{ student_name }}{% endif %}",
 			"body": "{{ request }}{% if certificate_number %}: certificate {{ certificate_number }} is "
 			"ready to download.{% elif rejection_reason %}: {{ rejection_reason }}{% else %}.{% endif %}",
 		},
@@ -812,23 +934,39 @@ TEMPLATES = {
 }
 
 
-def _with_defaults(event: str, channel: str, spec: dict) -> dict:
-	row = {"event": event, "channel": channel, "enabled": 1, **spec}
+# Translations that need registering with the operator before they can be sent.
+REGISTERED_CHANNELS = (ev.SMS, ev.WHATSAPP)
+
+
+def _with_defaults(event: str, channel: str, spec: dict, language: str = ev.ENGLISH) -> dict:
+	row = {"event": event, "channel": channel, "language": language, "enabled": 1, **spec}
+	if language != ev.ENGLISH and channel in REGISTERED_CHANNELS:
+		row["enabled"] = 0
 	if channel == ev.WHATSAPP:
 		row.setdefault("whatsapp_template_name", _wa(event))
-		row.setdefault("whatsapp_language", "en")
+		row.setdefault("whatsapp_language", language)
 	return row
 
 
-def get_default_templates() -> list[dict]:
-	"""Flat list of template definitions, one per event and channel."""
+def _catalogue(language: str) -> dict:
+	if language == ev.TAMIL:
+		from hostel360.hostel_communication.default_templates_ta import TEMPLATES as TAMIL_TEMPLATES
+
+		return TAMIL_TEMPLATES
+	return TEMPLATES if language == ev.ENGLISH else {}
+
+
+def get_default_templates(languages=None) -> list[dict]:
+	"""Flat list of template definitions, one per event, channel and language."""
 	return [
-		_with_defaults(event, channel, spec)
+		_with_defaults(event, channel, spec, language)
+		for language in languages or ev.LANGUAGES
 		for event in ev.EVENTS
-		for channel, spec in TEMPLATES.get(event, {}).items()
+		for channel, spec in _catalogue(language).get(event, {}).items()
 	]
 
 
-def get_default_template(event: str, channel: str) -> dict | None:
-	spec = TEMPLATES.get(event, {}).get(channel)
-	return _with_defaults(event, channel, spec) if spec else None
+def get_default_template(event: str, channel: str, language: str | None = None) -> dict | None:
+	language = language or ev.ENGLISH
+	spec = _catalogue(language).get(event, {}).get(channel)
+	return _with_defaults(event, channel, spec, language) if spec else None

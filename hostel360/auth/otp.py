@@ -50,7 +50,13 @@ import frappe
 from frappe import _
 from frappe.utils import cint, cstr
 
-from hostel360.hostel_communication.events import MOBILE_CHANNELS, SMS, WHATSAPP, normalize_channel
+from hostel360.hostel_communication.events import (
+	MOBILE_CHANNELS,
+	SMS,
+	WHATSAPP,
+	normalize_channel,
+	normalize_language,
+)
 from hostel360.utils.validation import mask_mobile, normalize_mobile
 
 KIND_STUDENT = "student"
@@ -301,8 +307,14 @@ def resolve_identities(mobile: str) -> list[frappe._dict]:
 # ---------------------------------------------------------------- sending
 
 
-def request_code(mobile: str, channel: str | None = None, ip: str | None = None) -> dict:
-	"""Send a sign-in code if the number belongs to a portal user. Same answer either way."""
+def request_code(
+	mobile: str, channel: str | None = None, ip: str | None = None, language: str | None = None
+) -> dict:
+	"""Send a sign-in code if the number belongs to a portal user. Same answer either way.
+
+	``language`` is the language on the requesting device (the portal sends it with every
+	call); the code goes out in Tamil when the Tamil sign-in template is enabled.
+	"""
 	started = _clock()
 	mobile = _normalise(mobile)
 	policy = get_policy()
@@ -336,7 +348,8 @@ def request_code(mobile: str, channel: str | None = None, ip: str | None = None)
 		# Named *_secret so Frappe's traceback sanitiser masks it if anything below fails.
 		otp_secret = generate_code(policy.length)
 		_store_code(ref, mobile, otp_secret, policy.expiry, channel)
-		delivered = _deliver(mobile, otp_secret, channel, policy, started)
+		language = normalize_language(language) if language else request_language()
+		delivered = _deliver(mobile, otp_secret, channel, policy, started, language=language)
 		del otp_secret
 		security_log(
 			"otp_sent" if delivered else "otp_send_failed", mobile, ip, kinds=[i.kind for i in identities]
@@ -358,7 +371,19 @@ def request_code(mobile: str, channel: str | None = None, ip: str | None = None)
 	}
 
 
-def _deliver(mobile: str, otp_secret: str, requested: str | None, policy, started: float) -> bool:
+def request_language() -> str:
+	"""Language of the current request ("ta" or "en"), as Frappe resolved it from ``_lang``."""
+	return normalize_language(getattr(frappe.local, "lang", None))
+
+
+def _deliver(
+	mobile: str,
+	otp_secret: str,
+	requested: str | None,
+	policy,
+	started: float,
+	language: str | None = None,
+) -> bool:
 	"""Try the requested channel first, then any other channel allowed for codes.
 
 	The whole attempt stays within ``OTP_SEND_BUDGET_SECONDS`` of the request starting, and
@@ -382,7 +407,7 @@ def _deliver(mobile: str, otp_secret: str, requested: str | None, policy, starte
 				break
 			timeout = (min(OTP_CONNECT_TIMEOUT, remaining), min(OTP_READ_TIMEOUT, remaining))
 			try:
-				if send_otp_message(mobile, otp_secret, channel, timeout=timeout):
+				if send_otp_message(mobile, otp_secret, channel, timeout=timeout, language=language):
 					return True
 			except Exception:
 				frappe.log_error(

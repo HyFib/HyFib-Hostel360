@@ -53,6 +53,7 @@ WARD_KEYS = {
 	"bed_label",
 	"status",
 	"validation_status",
+	"payment_enabled",
 }
 SETTINGS_KEYS = {
 	"institution_name",
@@ -316,9 +317,9 @@ def png_bytes() -> bytes:
 
 
 @contextmanager
-def multipart_request(filename: str, content: bytes):
+def multipart_request(filename: str, content: bytes, path: str = "/"):
 	"""Simulate the HTTP request of an upload from the portal."""
-	request = EnvironBuilder(method="POST", data={"file": (io.BytesIO(content), filename)}).get_request()
+	request = EnvironBuilder(path=path, method="POST", data={"file": (io.BytesIO(content), filename)}).get_request()
 	previous_request = getattr(frappe.local, "request", None)
 	previous_ip = getattr(frappe.local, "request_ip", None)
 	frappe.local.request = request
@@ -407,15 +408,28 @@ class TestPortalAPI(IntegrationTestCase):
 			self.assertRefused(portal.get_fees, student=self.a.name)
 
 	def test_portal_user_without_record_is_refused(self):
+		# The account is no longer linked to a hostel record: the session ends with that
+		# reason (the sign-in rule), not with a bare permission error.
 		orphan = make_user([STUDENT_ROLE])
 		with self.set_user(orphan):
-			self.assertRefused(portal.get_session)
+			with self.assertRaises(portal.PortalAccessClosed) as refused:
+				portal.get_session()
+			self.assertIn("not linked to a hostel record", str(refused.exception))
+			frappe.clear_messages()
+			self.assertRefused(portal.list_notifications, exc=portal.PortalAccessClosed)
+
+		orphan_parent = make_user([PARENT_ROLE])
+		with self.set_user(orphan_parent):
+			self.assertRefused(portal.get_session, exc=portal.PortalAccessClosed)
 
 	def test_switched_off_portal_refuses_existing_sessions(self):
 		set_hostel_settings(student_portal_enabled=0)
 		try:
 			with self.set_user(self.a.user):
-				self.assertRefused(portal.get_session)
+				with self.assertRaises(portal.PortalAccessClosed) as refused:
+					portal.get_session()
+				self.assertIn("not available right now", str(refused.exception))
+				frappe.clear_messages()
 			with self.set_user(self.parent_a.user):
 				self.assertTrue(portal.get_session()["wards"])
 		finally:
@@ -685,6 +699,39 @@ class TestPortalAPI(IntegrationTestCase):
 			self.assertRefused(portal.apply_leave, **leave_data(), exc=portal.PortalStudentInactive)
 		create.assert_called_once()
 
+	def test_consent_comes_before_profile_photo_and_notifications(self):
+		# DPDP: nothing personal is shown or changed before the privacy notice is accepted;
+		# the first-run order is consent, then confirming the details.
+		student = make_student(make_beds(make_hostel(), 1)[0], consent=False)
+		frappe.db.set_value("Hostel Student", student.name, "photo", "/private/files/photo-missing.png")
+		make_notification(student.user, "Fee due")
+		with self.set_user(student.user):
+			session = portal.get_session()
+			self.assertTrue(session["consent_required"])
+			self.assertFalse(session["profile_confirmed"])
+			for fn in (portal.get_profile, portal.download_photo, portal.list_notifications, portal.mark_notifications_read):
+				self.assertRefused(fn, exc=portal.PortalConsentRequired)
+			self.assertRefused(portal.confirm_profile, updates={"city": "Overwritten"}, exc=portal.PortalConsentRequired)
+			self.assertFalse(frappe.db.get_value("Hostel Student", student.name, "city"))
+			self.assertEqual(frappe.db.get_value("Hostel Student", student.name, "profile_confirmed"), 0)
+			# The notice itself, the language and the session stay open.
+			self.assertTrue(portal.get_privacy_notice()["consent_required"])
+
+			portal.accept_privacy_notice(version=privacy_version())
+			self.assertEqual(portal.get_profile()["name"], student.name)
+			# Past the consent check now; this photo simply has no file behind it.
+			self.assertRefused(portal.download_photo, exc=frappe.DoesNotExistError)
+			self.assertEqual(portal.confirm_profile(updates={"city": "Karaikudi"}), {"ok": True})
+			self.assertTrue(portal.get_session()["profile_confirmed"])
+			self.assertTrue(portal.list_notifications())
+
+		parent = make_guardian([student.name], consent=False)
+		with self.set_user(parent.user):
+			self.assertRefused(portal.get_profile, student=student.name, exc=portal.PortalConsentRequired)
+			self.assertRefused(portal.download_photo, student=student.name, exc=portal.PortalConsentRequired)
+			portal.accept_privacy_notice(version=privacy_version())
+			self.assertEqual(portal.get_profile(student=student.name)["name"], student.name)
+
 	def test_privacy_consent_is_required_until_accepted(self):
 		hostel = make_hostel()
 		student = make_student(make_beds(hostel, 1)[0], consent=False)
@@ -719,6 +766,32 @@ class TestPortalAPI(IntegrationTestCase):
 		self.assertEqual(file.is_private, 1)
 		self.assertFalse(file.attached_to_doctype or file.attached_to_name)
 		self.assertTrue(result["file_url"].startswith("/private/files/"))
+
+	def test_portal_upload_is_accepted_whatever_url_it_came_in_on(self):
+		# The File policy refuses a portal user's file from any endpoint but the portal's own;
+		# upload_attachment marks its File, so an alias or proxy path cannot break uploads.
+		path = "/api/method/hostel360.api.portal.grievance_upload_alias"
+		frappe.flags.hostel360_enforce_upload_policy = True
+		try:
+			with self.set_user(self.a.user), multipart_request("leak.png", png_bytes(), path=path):
+				result = portal.upload_attachment(purpose="grievance")
+			self.assertTrue(
+				frappe.db.exists("File", {"file_url": result["file_url"], "owner": self.a.user, "is_private": 1})
+			)
+
+			# Without the mark the same request is one the File policy refuses.
+			before = frappe.db.count("File", {"owner": self.a.user, "is_folder": 0})
+			with (
+				self.set_user(self.a.user),
+				patch.object(portal, "mark_portal_upload"),
+				multipart_request("leak.png", png_bytes(), path=path),
+			):
+				self.assertRefused(
+					portal.upload_attachment, purpose="grievance", exc=(frappe.ValidationError, frappe.PermissionError)
+				)
+			self.assertEqual(frappe.db.count("File", {"owner": self.a.user, "is_folder": 0}), before)
+		finally:
+			frappe.flags.hostel360_enforce_upload_policy = False
 
 	def test_grievance_can_only_use_the_callers_own_uploads(self):
 		with self.set_user(self.b.user), multipart_request("b.png", png_bytes()):
@@ -1082,7 +1155,7 @@ class TestPortalAPI(IntegrationTestCase):
 			self.set_user(self.a.user),
 		):
 			# An open PayU payment is settled with the gateway; the query string is never trusted.
-			self.assertEqual(portal.get_payment_status(transaction=open_payu), settled)
+			self.assertEqual(portal.get_payment_status(transaction=open_payu), {**settled, "test_mode": 0})
 			confirm.assert_called_once_with(open_payu, {})
 
 			waiting = portal.get_payment_status(transaction=open_razorpay)
@@ -1096,6 +1169,58 @@ class TestPortalAPI(IntegrationTestCase):
 
 		with self.set_user(self.parent_a.user):
 			self.assertEqual(portal.get_payment_status(transaction=paid)["status"], "Success")
+
+	def test_online_payment_is_offered_per_ward_as_on_the_fees_page(self):
+		hostel = make_hostel()
+		beds = make_beds(hostel, 2)
+		tester, other = make_student(beds[0]), make_student(beds[1])
+		parent = make_guardian([tester.name, other.name])
+
+		def available(student, user=None, settings=None):
+			# Test mode: only the designated test payer may pay online.
+			return student == tester.name
+
+		with (
+			patch("hostel360.hostel_fees.services.online_payment_available", side_effect=available) as check,
+			patch.object(portal, "_payment_test_mode", return_value=True),
+		):
+			with self.set_user(parent.user):
+				session = portal.get_session()
+				wards = {ward["student"]: ward["payment_enabled"] for ward in session["wards"]}
+				self.assertEqual(wards, {tester.name: True, other.name: False})
+				self.assertTrue(session["settings"]["payment_enabled"])
+				self.assertTrue(all(call.args[1] == parent.user for call in check.call_args_list))
+
+				fees = portal.get_fees(student=tester.name)
+				self.assertTrue(fees["payment_enabled"])
+				self.assertTrue(fees["payment_test_mode"])
+				self.assertTrue(portal.get_dashboard(student=tester.name)["fees"]["payment_enabled"])
+				fees = portal.get_fees(student=other.name)
+				self.assertFalse(fees["payment_enabled"])
+				self.assertFalse(fees["payment_test_mode"])
+
+			with self.set_user(other.user):
+				session = portal.get_session()
+				self.assertFalse(session["settings"]["payment_enabled"])
+				self.assertFalse(session["wards"][0]["payment_enabled"])
+
+	def test_payment_results_say_when_they_were_test_payments(self):
+		test_payment = self.make_transaction(self.a.name, "Pending", "Razorpay")
+		frappe.db.set_value("Hostel Payment Transaction", test_payment, "test_mode", 1)
+		failed = {"status": "Failed", "payment": None, "receipt_number": None, "transaction": test_payment, "message": "Card declined"}
+		with (
+			patch("hostel360.hostel_fees.services.confirm_checkout", return_value=failed),
+			self.set_user(self.a.user),
+		):
+			result = portal.verify_payment(
+				transaction=test_payment,
+				razorpay_payment_id="pay_TEST123",
+				razorpay_order_id="order_TEST123",
+				razorpay_signature="a" * 64,
+			)
+			self.assertEqual(result["status"], "Failed")
+			self.assertEqual(result["test_mode"], 1)
+			self.assertEqual(portal.get_payment_status(transaction=test_payment)["test_mode"], 1)
 
 	# ------------------------------------------------------------------ rate limits
 

@@ -51,3 +51,26 @@ output "ssh_via_bastion" {
   description = "Open a managed SSH session through the Bastion."
   value       = "oci bastion session create-managed-ssh --bastion-id ${oci_bastion_bastion.main.id} --target-resource-id ${oci_core_instance.app.id} --target-os-username ubuntu --ssh-public-key-file ~/.ssh/id_ed25519.pub --session-ttl ${var.bastion_max_session_ttl_seconds}"
 }
+
+output "exit_inventory" {
+  description = "What deploy/terraform/oci/exit-purge.sh needs at the end of the contract (TR 22, deploy/EXIT.md)."
+  value = {
+    name                    = local.name
+    compartment_id          = var.compartment_ocid
+    app_region              = var.region
+    backup_region           = var.backup_region
+    home_region             = var.home_region
+    namespace               = data.oci_objectstorage_namespace.ns.namespace
+    backup_bucket           = oci_objectstorage_bucket.backups.name
+    instance_id             = oci_core_instance.app.id
+    data_volume_id          = oci_core_volume.data.id
+    boot_volume_id          = oci_core_instance.app.boot_volume_id
+    dynamic_group_name      = oci_identity_dynamic_group.app.name
+    log_group_id            = oci_logging_log_group.main.id
+    log_ids                 = concat([for log in oci_logging_log.lb : log.id], [for log in oci_logging_log.flow : log.id])
+    log_retention_days      = var.log_retention_days
+    vault_id                = var.create_vault ? oci_kms_vault.main[0].id : ""
+    key_id                  = var.create_vault ? oci_kms_key.volumes[0].id : ""
+    key_management_endpoint = var.create_vault ? oci_kms_vault.main[0].management_endpoint : ""
+  }
+}

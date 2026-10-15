@@ -324,6 +324,19 @@ def _set_unusable_password(user: str) -> None:
 	update_password(user, secrets.token_urlsafe(48))
 
 
+def can_unlock_sign_in(user: str | None = None) -> bool:
+	"""May the user lift a portal sign-in lock (``hostel360.api.auth.unlock_sign_in``)?
+
+	The student and guardian forms show their Unlock Sign-in button from this, so the
+	button appears exactly for the roles the endpoint accepts.
+	"""
+	try:
+		from hostel360.api.auth import UNLOCK_ROLES
+	except ImportError:
+		return False
+	return has_any_role(UNLOCK_ROLES, user)
+
+
 # ---------------------------------------------------------------------- hostel of a student
 
 

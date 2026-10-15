@@ -3,6 +3,8 @@
 Each OCI Monitoring alarm (`deploy/terraform/oci/monitoring.tf`) links here. Every alarm
 also reaches Hostel360 as an Ops Alert when the `alarm_https_endpoint` subscription is
 configured, so acknowledge and resolve it there to keep the escalation matrix accurate.
+Anything that looks deliberate (unknown processes, unexplained load, traffic from scanners)
+is handled with the [security incident runbook](security-incident-runbook.md) instead.
 
 Connect to the server through the Bastion first:
 
@@ -22,8 +24,9 @@ CPU above the threshold for 10 minutes.
 3. A worker container busy for long: `docker logs hostel360-queue-long-1 --since 30m`
    (mess bill computation, bulk imports).
 4. MariaDB busy: `/srv/hostel360/mariadb/slow.log`.
-5. Unknown processes on the host: `top -c`; if suspicious, treat as a security incident
-   (CERT-In reporting within 6 hours).
+5. Unknown processes on the host: `top -c`; if suspicious, treat it as a security incident
+   and follow the [security incident runbook](security-incident-runbook.md) (declare it in
+   Hostel360, preserve evidence, report to CERT-In and ACGCET within 6 hours).
 
 ## memory
 

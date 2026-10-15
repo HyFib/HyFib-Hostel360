@@ -6,13 +6,33 @@ from frappe.tests import IntegrationTestCase
 
 from hostel360.hostel_people.services import (
 	PLACEHOLDER_EMAIL_DOMAIN,
+	can_unlock_sign_in,
 	confirm_profile,
 	ensure_portal_user,
 	get_student_summary,
 	record_privacy_consent,
 )
-from hostel360.hostel_people.testing import allot, beds_of, make_guardian, make_hostel, make_room, make_student
-from hostel360.setup.roles import PARENT_ROLE, STUDENT_ROLE
+from hostel360.hostel_people.testing import (
+	allot,
+	beds_of,
+	make_desk_user,
+	make_guardian,
+	make_hostel,
+	make_room,
+	make_student,
+	random_mobile,
+)
+from hostel360.setup.roles import (
+	ADMIN_ROLE,
+	AUDITOR_ROLE,
+	DEPUTY_WARDEN_ROLE,
+	MESS_MANAGER_ROLE,
+	OFFICE_ROLE,
+	PARENT_ROLE,
+	SECURITY_ROLE,
+	STUDENT_ROLE,
+	WARDEN_ROLE,
+)
 
 
 class TestPortalUsers(IntegrationTestCase):
@@ -136,3 +156,34 @@ class TestStudentServices(IntegrationTestCase):
 			self.assertRaises(frappe.PermissionError, confirm_profile, other.name, {"city": "Madurai"})
 		finally:
 			frappe.set_user("Administrator")
+
+
+class TestUnlockSignIn(IntegrationTestCase):
+	def test_unlock_button_follows_the_endpoint(self):
+		# The student and guardian forms offer Unlock Sign-in from can_unlock_sign_in; it must
+		# never show the button to someone the endpoint refuses, or hide it from someone it accepts.
+		from hostel360.api.auth import unlock_sign_in
+
+		mobile = random_mobile()
+		for role in (
+			ADMIN_ROLE,
+			WARDEN_ROLE,
+			DEPUTY_WARDEN_ROLE,
+			OFFICE_ROLE,
+			MESS_MANAGER_ROLE,
+			AUDITOR_ROLE,
+			SECURITY_ROLE,
+		):
+			user = make_desk_user(role)
+			with self.set_user(user):
+				offered = can_unlock_sign_in()
+				try:
+					self.assertEqual(unlock_sign_in(mobile=mobile), {"ok": True})
+					accepted = True
+				except frappe.PermissionError:
+					accepted = False
+			self.assertEqual(offered, accepted, role)
+
+		self.assertTrue(can_unlock_sign_in(make_desk_user(OFFICE_ROLE)))
+		self.assertFalse(can_unlock_sign_in(make_desk_user(SECURITY_ROLE)))
+		self.assertFalse(can_unlock_sign_in(ensure_portal_user("Hostel Student", make_student("Male").name)))

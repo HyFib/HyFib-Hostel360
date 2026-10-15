@@ -4,10 +4,12 @@ Missing records and unset settings are created. A template keeps a fingerprint o
 wording it was installed with: while the template still matches that fingerprint
 (nobody has edited, disabled or registered it), a newer shipped wording replaces it.
 As soon as an administrator changes anything, the template is never touched again.
+The same holds for the Tamil templates, which are separate records.
 """
 
 import frappe
 
+from hostel360.hostel_communication import events as ev
 from hostel360.hostel_communication.default_templates import get_default_templates
 
 TEMPLATE_FIELDS = (
@@ -75,13 +77,14 @@ def install_settings_defaults() -> None:
 
 def install_templates() -> dict:
 	"""Create missing default templates and refresh untouched ones. Returns counts."""
+	_mark_untranslated_templates_english()
 	existing = {
 		row.name: row
 		for row in frappe.get_all("Message Template", fields=["name", "standard_hash", *TEMPLATE_FIELDS])
 	}
 	created = updated = 0
 	for spec in get_default_templates():
-		name = f"{spec['event']}-{spec['channel']}"
+		name = ev.template_name(spec["event"], spec["channel"], spec.get("language"))
 		shipped = _template_from_spec(spec)
 		shipped_hash = shipped.wording_fingerprint()
 		row = existing.get(name)
@@ -108,10 +111,21 @@ def install_templates() -> dict:
 	return {"created": created, "updated": updated}
 
 
+def _mark_untranslated_templates_english() -> None:
+	"""Templates saved before languages existed are the English ones."""
+	template = frappe.qb.DocType("Message Template")
+	(
+		frappe.qb.update(template)
+		.set(template.language, ev.DEFAULT_LANGUAGE)
+		.where(template.language.isnull() | (template.language == ""))
+	).run()
+
+
 def _template_from_spec(spec: dict):
 	doc = frappe.new_doc("Message Template")
 	doc.event = spec["event"]
 	doc.channel = spec["channel"]
+	doc.language = spec.get("language") or ev.DEFAULT_LANGUAGE
 	for field in TEMPLATE_FIELDS:
 		if field in spec:
 			doc.set(field, spec[field])

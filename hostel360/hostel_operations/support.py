@@ -21,6 +21,7 @@ CLOSED_STATUSES = ("Resolved", "Closed")
 PRIORITY_SEVERITY = {"Low": INFO, "Medium": INFO, "High": WARNING, "Critical": CRITICAL}
 BREACH_SEVERITY = {"Low": WARNING, "Medium": WARNING, "High": CRITICAL, "Critical": CRITICAL}
 REOPEN_DAYS = 7
+TICKET_ASSIGNER_ROLES = frozenset({OPERATIONS_ROLE, "System Manager"})
 
 
 def alert_key(ticket_name: str) -> str:
@@ -32,6 +33,13 @@ def is_operations_user(user: str | None = None) -> bool:
 	if user == "Administrator":
 		return True
 	return OPERATIONS_ROLE in frappe.get_roles(user)
+
+
+def can_assign_tickets(user: str | None = None) -> bool:
+	"""HyFib Operations and System Managers: the roles that may write ``assigned_to``."""
+	from hostel360.utils.context import has_any_role
+
+	return has_any_role(TICKET_ASSIGNER_ROLES, user)
 
 
 # Controller hooks (called from SupportTicket) ----------------------------
@@ -444,7 +452,14 @@ def _rollback() -> None:
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def operations_user_query(doctype, txt, searchfield, start, page_len, filters):
-	"""Link search for ``assigned_to``: enabled users holding the HyFib Operations role."""
+	"""Link search for ``assigned_to``: enabled users holding the HyFib Operations role.
+
+	Any signed-in user can call a whitelisted method, portal students and parents included.
+	The helpdesk's login IDs are for the people who assign tickets, not for everyone else.
+	"""
+	if not can_assign_tickets():
+		frappe.throw(_("Only HyFib Operations can assign support tickets."), frappe.PermissionError)
+
 	has_role = frappe.qb.DocType("Has Role")
 	user = frappe.qb.DocType("User")
 	pattern = f"%{txt}%"

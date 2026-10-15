@@ -18,12 +18,13 @@ from hostel360.hostel_fees.constants import (
 )
 from hostel360.hostel_fees.utils import (
 	DISPLAY_DATE_FORMAT,
+	assert_hostel_permitted,
 	get_current_academic_year,
 	get_portal_link,
-	get_student_hostel,
 	get_student_print_details,
 	is_migration,
 	money,
+	resolve_record_hostel,
 )
 from hostel360.utils.jinja import format_inr
 
@@ -82,6 +83,7 @@ class HostelFeeInvoice(Document):
 
 	def validate(self):
 		self.set_missing_values()
+		assert_hostel_permitted(self)
 		self.validate_items()
 		self.validate_dates()
 		self.protect_migrated_amount()
@@ -91,10 +93,8 @@ class HostelFeeInvoice(Document):
 	def set_missing_values(self):
 		if not self.posting_date:
 			self.posting_date = nowdate()
-		if not self.hostel:
-			# A vacated student's invoice keeps the hostel they left, so hostel-scoped staff of
-			# other hostels never see it.
-			self.hostel = get_student_hostel(self.student)
+		# Current hostel, else the one the student left: hostel-scoped staff are filtered on it.
+		self.hostel = resolve_record_hostel(self)
 		if self.fee_structure and not self.academic_year:
 			self.academic_year = frappe.db.get_value(
 				"Hostel Fee Structure", self.fee_structure, "academic_year"

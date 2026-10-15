@@ -126,6 +126,11 @@ class HostelStudent(Document):
 				)
 			)
 
+	def onload(self):
+		from hostel360.hostel_people.services import can_unlock_sign_in
+
+		self.set_onload("can_unlock_sign_in", bool(self.mobile_number) and can_unlock_sign_in())
+
 	def on_update(self):
 		if self.validation_status == "Validated":
 			validate_linked_guardians(self)

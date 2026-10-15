@@ -4,8 +4,15 @@
 # Requests the public liveness URL the way a student's phone does (DNS, load balancer,
 # public certificate, WAF, application) and records uptime_probe = 1 or 0 with the response
 # time. Samples are sent in batches of H360_PROBE_BATCH (default 5) to keep the ingest
-# traffic low; the monthly performance report computes availability from them. After
-# H360_PROBE_FAIL_ALERT consecutive failures (default 3) an outage alert is raised.
+# traffic low; the monthly performance report computes availability from them.
+#
+# After H360_PROBE_FAIL_ALERT consecutive failures (default 3) an outage alert is raised,
+# once per outage: escalation and repeat notifications are the application's job. While the
+# outage lasts the alert is sent again only every H360_PROBE_ALERT_REPEAT_MINUTES (default
+# 60; 0 = never), which keeps its "last seen" time current and re-opens it if someone
+# resolved it by hand too early. An alert a minute would fill the ingest spool during a
+# long outage, push out the probe samples that record it and page OCI Notifications every
+# minute while the application cannot take the alert itself.
 #
 # The external monitor in ap-mumbai-1 (deploy/monitoring) watches the same URL from outside
 # OCI Hyderabad, so an outage of the whole region is still noticed.
@@ -24,6 +31,8 @@ h360_lock uptime-probe
 : "${H360_PROBE_BATCH:=5}"
 : "${H360_PROBE_FAIL_ALERT:=3}"
 : "${H360_PROBE_TIMEOUT:=10}"
+: "${H360_PROBE_ALERT_REPEAT_MINUTES:=60}"
+[[ "${H360_PROBE_ALERT_REPEAT_MINUTES}" =~ ^[0-9]{1,5}$ ]] || die "H360_PROBE_ALERT_REPEAT_MINUTES must be a whole number of minutes"
 
 state="${H360_STATE_DIR}/probe"
 mkdir -p "${state}"
@@ -44,8 +53,18 @@ fi
 printf '%s %s %s %s\n' "${recorded_at}" "${up}" "${milliseconds}" "${status}" >>"${buffer}"
 
 failures="$(cat "${state}/failures" 2>/dev/null || echo 0)"
+[[ "${failures}" =~ ^[0-9]+$ ]] || failures=0
 was_down=0
 [[ -f "${state}/alert_open" ]] && was_down=1
+
+alert_due() {
+	# First alert of this outage, or the repeat interval has passed since the last one.
+	[[ "${was_down}" == 0 ]] && return 0
+	((H360_PROBE_ALERT_REPEAT_MINUTES > 0)) || return 1
+	local sent
+	sent="$(stat -c '%Y' "${state}/alert_open" 2>/dev/null || echo 0)"
+	(($(date +%s) - sent >= H360_PROBE_ALERT_REPEAT_MINUTES * 60))
+}
 
 if [[ "${up}" == 1 ]]; then
 	printf '0\n' >"${state}/failures"
@@ -59,12 +78,14 @@ else
 	failures=$((failures + 1))
 	printf '%s\n' "${failures}" >"${state}/failures"
 	log_warn "probe failed (HTTP ${status}), ${failures} in a row"
-	if ((failures >= H360_PROBE_FAIL_ALERT)); then
+	if ((failures >= H360_PROBE_FAIL_ALERT)) && alert_due; then
 		h360_report "$(jq -cn --arg key "${key}" --arg host "${host}" --arg url "${H360_PROBE_URL}" \
 			--arg description "The portal has not answered for ${failures} minutes (last HTTP status ${status})." \
+			--argjson failures "${failures}" \
 			'{type: "alert", source: "Uptime Probe", key: $key, severity: "Critical", category: "Availability",
 			  title: "Portal unreachable", description: $description, is_outage: true,
-			  details: {host: $host, url: $url}}')"
+			  details: {host: $host, url: $url, consecutive_failures: $failures}}')"
+		# The file's time is when the alert was last sent.
 		touch "${state}/alert_open"
 	fi
 fi

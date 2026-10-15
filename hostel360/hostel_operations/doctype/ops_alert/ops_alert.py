@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import json
+import secrets
 
 import frappe
 from frappe import _
@@ -14,8 +15,34 @@ from hostel360.hostel_operations.constants import (
 	STATUS_RESOLVED,
 )
 
+# Letters and digits that cannot be misread for one another when a name is read out over
+# the phone or copied from an SMS (no 0/O, 1/I/L).
+NAME_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+NAME_SUFFIX_LENGTH = 5
+
+
+def make_alert_name(now=None) -> str:
+	"""A readable name such as ``ALERT-261015-K7Q3X`` (date raised + random suffix).
+
+	Alerts are deliberately not numbered from a naming series: a series hands out numbers
+	from one shared counter row, and the transaction that takes a number keeps that row
+	locked until it ends. Every other alert being opened at that moment, for any problem,
+	would queue behind it.
+	"""
+	stamp = (now or now_datetime()).strftime("%y%m%d")
+	suffix = "".join(secrets.choice(NAME_ALPHABET) for _position in range(NAME_SUFFIX_LENGTH))
+	return f"ALERT-{stamp}-{suffix}"
+
 
 class OpsAlert(Document):
+	def autoname(self):
+		# About 28 million suffixes a day, so a clash is already unlikely; a clash that slips
+		# between this check and the insert fails as a duplicate entry, which raise_alert retries.
+		for _attempt in range(5):
+			self.name = make_alert_name()
+			if not frappe.db.exists("Ops Alert", self.name):
+				return
+
 	def validate(self):
 		from hostel360.hostel_operations.alerts import normalise_key
 
@@ -66,7 +93,7 @@ class OpsAlert(Document):
 	def after_insert(self):
 		from hostel360.hostel_operations import transaction
 
-		# This transaction now holds the alert naming-series lock; see transaction.py.
+		# This transaction now holds the new row's locks (its open_key above all); see transaction.py.
 		transaction.mark_alert_rows_written_inline()
 		if self.flags.raised_by_service:
 			return

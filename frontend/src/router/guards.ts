@@ -1,9 +1,9 @@
 /**
  * Where a visitor may go, as a pure function of the route and the session.
  *
- * Order matters: sign-in first, then the privacy notice (consent must come before any
- * personal data is shown), then first-run profile confirmation for students, then role and
- * verification checks.
+ * Order matters: sign-in first (or, when the server has just closed the session, the page
+ * that says why), then the privacy notice (consent must come before any personal data is
+ * shown), then first-run profile confirmation for students, then role and verification checks.
  */
 import type { RouteLocationNormalized, RouteLocationRaw } from "vue-router";
 import type { PortalKind } from "@/api/types";
@@ -26,6 +26,8 @@ declare module "vue-router" {
 		title?: string;
 		/** Render without the app header and navigation. */
 		bare?: boolean;
+		/** The page explaining why the server closed the session; only while there is a reason to show. */
+		accessClosed?: boolean;
 	}
 }
 
@@ -38,6 +40,8 @@ export interface GuardState {
 	validationStatus: string;
 	/** Hostel Student status of the student being viewed; empty when not known. */
 	studentStatus?: string;
+	/** Why the server closed the last session (not validated, closed, portal switched off). */
+	closedReason?: string;
 }
 
 /** Only same-app paths are accepted as a post-login destination (no open redirects). */
@@ -56,7 +60,12 @@ export function decideNavigation(to: RouteLocationNormalized, state: GuardState)
 	const meta = to.meta;
 
 	if (!state.loggedIn) {
-		return meta.public ? true : { name: "login", query: redirectQuery(to) };
+		if (meta.accessClosed) return state.closedReason ? true : { name: "login" };
+		if (meta.public) return true;
+		// The server ended the session for a reason the person must act on (usually by
+		// contacting the hostel office); an empty sign-in form would only invite a retry.
+		if (state.closedReason) return { name: "access-closed" };
+		return { name: "login", query: redirectQuery(to) };
 	}
 
 	if (meta.guestOnly) {

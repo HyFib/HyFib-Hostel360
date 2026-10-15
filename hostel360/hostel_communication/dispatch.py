@@ -19,6 +19,11 @@ stops the job, after the work done so far is committed.
 Message Log rows keep the rendered subject and text for troubleshooting at permlevel 1
 (Hostel Administrators and System Managers): messages about confidential grievances, leave
 and fees are not for every role that may read the log.
+
+Each recipient gets the template in their language: the ``language`` given in the
+recipient dict, else their user account's language, else English. A translation is used
+only while it is enabled (and, for SMS and WhatsApp, registered); the English template of
+the channel stays the switch that decides whether the event goes out on that channel.
 """
 
 import html
@@ -76,6 +81,8 @@ PORTAL_LINKS = {
 	ev.LEAVE_PARENT_APPROVAL_REQUIRED: "/hostel/leave/approvals",
 	ev.LEAVE_DECIDED: "/hostel/leave",
 	ev.LEAVE_OVERDUE: "/hostel/leave",
+	ev.LEAVE_CHECKED_OUT: "/hostel/leave",
+	ev.LEAVE_RETURNED: "/hostel/leave",
 	ev.GRIEVANCE_RECEIVED: "/hostel/grievances",
 	ev.GRIEVANCE_UPDATED: "/hostel/grievances",
 	ev.GRIEVANCE_RESOLVED: "/hostel/grievances",
@@ -85,6 +92,7 @@ PORTAL_LINKS = {
 TEMPLATE_FIELDS = (
 	"name",
 	"channel",
+	"language",
 	"subject",
 	"body",
 	"dlt_template_id",
@@ -112,9 +120,10 @@ def notify(
 ) -> None:
 	"""Queue ``event`` for delivery to ``recipients``.
 
-	``recipients`` are dicts with any of ``user``, ``mobile``, ``email``, ``name`` and
-	``kind`` ("student" | "parent" | "staff"); use the ``recipients_for_*`` helpers to
-	build them. ``context`` carries the variables listed for the event in
+	``recipients`` are dicts with any of ``user``, ``mobile``, ``email``, ``name``,
+	``kind`` ("student" | "parent" | "staff") and ``language`` ("en" | "ta", when a
+	preference is known for someone without a user account); use the ``recipients_for_*``
+	helpers to build them. ``context`` carries the variables listed for the event in
 	``events.EVENT_CONTEXT``. ``channels`` restricts delivery to some channels, for
 	example ``["In-App"]``.
 	"""
@@ -138,7 +147,9 @@ def notify(
 			if not channel_list:
 				return
 
-		plain_context = rendering.to_plain(context or {})
+		plain_context = complete_context(
+			event, rendering.to_plain(context or {}), reference_doctype, reference_name
+		)
 		for start in range(0, len(cleaned), RECIPIENTS_PER_JOB):
 			frappe.enqueue(
 				DELIVER_METHOD,
@@ -175,7 +186,9 @@ def deliver(
 		if not templates:
 			return
 		job = _Delivery(event, context or {}, reference_doctype, reference_name, settings, templates)
-		for recipient in clean_recipients(recipients):
+		recipients = clean_recipients(recipients)
+		job.load_languages(recipients)
+		for recipient in recipients:
 			try:
 				job.deliver_to(recipient)
 			except BaseTimeoutException:
@@ -206,13 +219,20 @@ def _commit_progress() -> None:
 		frappe.log_error(title="Hostel360: could not save message logs", message=frappe.get_traceback())
 
 
-def send_otp_message(mobile: str, otp: str, channel: str, timeout: tuple[float, float] | None = None) -> bool:
+def send_otp_message(
+	mobile: str,
+	otp: str,
+	channel: str,
+	timeout: tuple[float, float] | None = None,
+	language: str | None = None,
+) -> bool:
 	"""Send a sign-in code synchronously. Returns True when the provider accepted it.
 
 	The code itself is never written to the Message Log, the Error Log or any log file;
 	provider responses are scrubbed of it before they are stored. ``timeout`` (connect,
 	read) bounds the provider call; a provider whose circuit breaker is open is not called
-	at all, so a messaging outage does not hold sign-in requests.
+	at all, so a messaging outage does not hold sign-in requests. ``language`` picks the
+	Tamil sign-in template when one is enabled and registered.
 	"""
 	channel = ev.normalize_channel(channel)
 	if channel not in ev.MOBILE_CHANNELS or not otp:
@@ -222,7 +242,7 @@ def send_otp_message(mobile: str, otp: str, channel: str, timeout: tuple[float, 
 		return False
 
 	settings = get_settings()
-	template = _otp_template(channel)
+	template = _otp_template(channel, language)
 	if not template:
 		return False
 
@@ -243,7 +263,9 @@ def send_otp_message(mobile: str, otp: str, channel: str, timeout: tuple[float, 
 		return False
 
 	try:
-		ctx = rendering.build_context({"otp": otp, "expiry_minutes": expiry_minutes})
+		ctx = rendering.build_context(
+			{"otp": otp, "expiry_minutes": expiry_minutes}, language=template.get("language")
+		)
 		if channel == ev.SMS:
 			result = sms_provider.send_sms(
 				mobile,
@@ -571,6 +593,7 @@ def clean_recipients(recipients) -> list[dict]:
 		if key in seen:
 			continue
 		seen.add(key)
+		language = recipient.get("language")
 		cleaned.append(
 			{
 				"user": user,
@@ -578,16 +601,51 @@ def clean_recipients(recipients) -> list[dict]:
 				"email": email,
 				"name": cstr(recipient.get("name")).strip() or None,
 				"kind": cstr(recipient.get("kind")).strip() or None,
+				"language": ev.normalize_language(language) if language else None,
 			}
 		)
 	return cleaned
+
+
+def complete_context(
+	event: str, context: dict, reference_doctype: str | None, reference_name: str | None
+) -> dict:
+	"""Fill values the event's templates need from the referenced document.
+
+	Only for the events listed in ``events.REFERENCE_FALLBACKS``, and only for values the
+	caller left out or blank, so a check-out message always carries its time even when the
+	caller passes just the leave's usual details.
+	"""
+	spec = ev.REFERENCE_FALLBACKS.get(event)
+	if not spec or not reference_name or reference_doctype != spec[0]:
+		return context
+	missing = [field for field in spec[1] if context.get(field) in (None, "")]
+	if not missing:
+		return context
+	try:
+		meta = frappe.get_meta(reference_doctype)
+		fields = [field for field in missing if meta.has_field(field)]
+		row = (
+			frappe.db.get_value(reference_doctype, reference_name, fields, as_dict=True) if fields else None
+		)
+	except Exception:
+		frappe.log_error(
+			title=f"Hostel360: could not read {reference_doctype} for {event}",
+			message=frappe.get_traceback(),
+		)
+		return context
+	if not row:
+		return context
+	found = {key: value for key, value in row.items() if value not in (None, "")}
+	return {**context, **rendering.to_plain(found)}
 
 
 # ---------------------------------------------------------------- delivery internals
 
 
 class _Delivery:
-	"""One deliver() job: shared templates and per-channel de-duplication of addresses."""
+	"""One deliver() job: shared templates, recipients' languages and per-channel
+	de-duplication of addresses."""
 
 	def __init__(self, event, context, reference_doctype, reference_name, settings, templates):
 		self.event = event
@@ -595,11 +653,38 @@ class _Delivery:
 		self.reference_doctype = reference_doctype
 		self.reference_name = reference_name
 		self.settings = settings
+		# {channel: {language: template row}}; every channel has its English row.
 		self.templates = templates
+		self.user_languages = {}
 		# A student and a parent may share a phone; send each address one copy.
 		self.seen = {channel: set() for channel in ev.CHANNELS}
 
+	def load_languages(self, recipients: list[dict]) -> None:
+		"""Account languages of every recipient with a user, in one query."""
+		users = sorted({r["user"] for r in recipients if r.get("user") and not r.get("language")})
+		if not users:
+			return
+		for row in frappe.get_all("User", filters={"name": ("in", users)}, fields=["name", "language"]):
+			self.user_languages[row.name] = row.language
+
+	def language_for(self, recipient: dict) -> str:
+		if recipient.get("language"):
+			return ev.normalize_language(recipient["language"])
+		user = recipient.get("user")
+		if not user:
+			return ev.DEFAULT_LANGUAGE
+		if user not in self.user_languages:
+			self.user_languages[user] = frappe.db.get_value("User", user, "language")
+		return ev.normalize_language(self.user_languages[user])
+
+	def template_for(self, channel: str, language: str):
+		options = self.templates[channel]
+		base = options[ev.DEFAULT_LANGUAGE]
+		translated = options.get(language) if language != ev.DEFAULT_LANGUAGE else None
+		return translated if translated and translation_usable(channel, base, translated) else base
+
 	def deliver_to(self, recipient: dict) -> None:
+		recipient = {**recipient, "language": self.language_for(recipient)}
 		mobile_channels = [c for c in (ev.WHATSAPP, ev.SMS) if c in self.templates]
 		if recipient.get("mobile") and mobile_channels:
 			if cint(self.settings.get("prefer_whatsapp")) and len(mobile_channels) == 2:
@@ -628,7 +713,7 @@ class _Delivery:
 			return None
 		self.seen[channel].add(address)
 
-		template = self.templates[channel]
+		template = self.template_for(channel, recipient.get("language") or ev.DEFAULT_LANGUAGE)
 		log = _new_log(
 			channel,
 			self.event,
@@ -686,11 +771,17 @@ class _Delivery:
 def render_for_channel(
 	event: str, template, channel: str, context: dict, recipient: dict | None = None
 ) -> dict:
-	"""Subject, body, provider parameters and named variables for one recipient."""
+	"""Subject, body, provider parameters and named variables for one recipient.
+
+	Dates and fixed values are rendered in the template's own language.
+	"""
 	html_safe = channel in (ev.EMAIL, ev.IN_APP)
-	ctx = rendering.build_context(context, recipient, html_safe=html_safe)
+	language = template.get("language") or ev.DEFAULT_LANGUAGE
+	ctx = rendering.build_context(context, recipient, html_safe=html_safe, language=language)
 	# E-mail subjects are plain text headers, so they get the unescaped values.
-	subject_ctx = rendering.build_context(context, recipient) if channel == ev.EMAIL else ctx
+	subject_ctx = (
+		rendering.build_context(context, recipient, language=language) if channel == ev.EMAIL else ctx
+	)
 
 	subject = rendering.plain_text(rendering.render(template.get("subject"), subject_ctx))
 	body = rendering.render(template.get("body"), ctx).strip()
@@ -706,17 +797,34 @@ def render_for_channel(
 
 
 def _templates_for(event: str, channels: list[str] | None, settings) -> dict:
+	"""{channel: {language: template}} for the channels whose English template is enabled."""
 	filters = {"event": event, "enabled": 1}
 	if channels:
 		filters["channel"] = ("in", channels)
 	rows = frappe.get_all("Message Template", filters=filters, fields=list(TEMPLATE_FIELDS))
-	templates = {}
+	by_channel = {}
 	for row in rows:
 		if event in ev.MOBILE_ONLY_EVENTS and row.channel not in ev.MOBILE_CHANNELS:
 			continue
 		if _channel_enabled(settings, row.channel):
-			templates[row.channel] = row
-	return templates
+			row.language = row.language or ev.DEFAULT_LANGUAGE
+			by_channel.setdefault(row.channel, {})[row.language] = row
+	return {
+		channel: options for channel, options in by_channel.items() if ev.DEFAULT_LANGUAGE in options
+	}
+
+
+def translation_usable(channel: str, base, translated) -> bool:
+	"""May ``translated`` stand in for the English template ``base`` on ``channel``?
+
+	An SMS translation needs its own DLT or MSG91 registration whenever the English one has
+	one (operators drop unregistered text), and a WhatsApp translation needs a template name.
+	"""
+	if channel == ev.SMS and (base.get("dlt_template_id") or base.get("msg91_template_id")):
+		return bool(translated.get("dlt_template_id") or translated.get("msg91_template_id"))
+	if channel == ev.WHATSAPP:
+		return bool(translated.get("whatsapp_template_name"))
+	return True
 
 
 def _channel_enabled(settings, channel: str) -> bool:
@@ -728,14 +836,34 @@ def _channel_enabled(settings, channel: str) -> bool:
 	}.get(channel, 0) == 1
 
 
-def _otp_template(channel: str) -> dict | None:
-	"""The sign-in code template; falls back to the built-in wording if it was deleted."""
-	name = f"{ev.OTP_LOGIN}-{channel}"
-	row = frappe.db.get_value("Message Template", name, [*TEMPLATE_FIELDS, "enabled"], as_dict=True)
+def _otp_template(channel: str, language: str | None = None) -> dict | None:
+	"""The sign-in code template; falls back to the built-in wording if it was deleted.
+
+	The Tamil template is used for a Tamil request when it is enabled and registered; the
+	English one stays the switch for the channel.
+	"""
+	fields = [*TEMPLATE_FIELDS, "enabled"]
+	row = frappe.db.get_value(
+		"Message Template", ev.template_name(ev.OTP_LOGIN, channel), fields, as_dict=True
+	)
 	if row:
-		return row if cint(row.enabled) else None
-	default = get_default_template(ev.OTP_LOGIN, channel)
-	return frappe._dict(default, name=None) if default else None
+		if not cint(row.enabled):
+			return None
+		row.language = row.language or ev.DEFAULT_LANGUAGE
+	else:
+		default = get_default_template(ev.OTP_LOGIN, channel)
+		if not default:
+			return None
+		row = frappe._dict(default, name=None)
+
+	language = ev.normalize_language(language)
+	if language != ev.DEFAULT_LANGUAGE:
+		translated = frappe.db.get_value(
+			"Message Template", ev.template_name(ev.OTP_LOGIN, channel, language), fields, as_dict=True
+		)
+		if translated and cint(translated.enabled) and translation_usable(channel, row, translated):
+			return translated
+	return row
 
 
 def _send_rendered(channel, address, payload, reference_doctype, reference_name, settings) -> DeliveryResult:

@@ -3,6 +3,12 @@
 Payment problems (bad webhook signatures, money received without a receipt, an unreachable
 gateway) must reach the HyFib operations desk. If the operations module cannot be imported the
 signal is written to the Error Log instead of being lost.
+
+A failed alert never fails the payment work that raised it, with one exception: a deadlock.
+When the operations module cannot open its own connection it writes the alert in the caller's
+transaction, and a deadlock there means InnoDB has already rolled the caller's work back.
+Carrying on would commit only what the caller writes afterwards (a receipt without its invoice
+update, say), so the deadlock is passed on for the caller's retry or rollback to deal with.
 """
 
 import json
@@ -37,6 +43,8 @@ def raise_alert(
 			description=description,
 			details=details,
 		)
+	except frappe.QueryDeadlockError:
+		raise
 	except Exception:
 		frappe.log_error(title=f"Hostel360 could not raise alert {key}")
 		return None
@@ -50,6 +58,8 @@ def resolve_alert(key: str, notes: str = "") -> bool:
 
 	try:
 		return bool(ops_resolve_alert(key, notes=notes, source="App"))
+	except frappe.QueryDeadlockError:
+		raise
 	except Exception:
 		frappe.log_error(title=f"Hostel360 could not resolve alert {key}")
 		return False

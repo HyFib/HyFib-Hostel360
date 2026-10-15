@@ -8,7 +8,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_to_date, date_diff, get_datetime, getdate, now_datetime
 
-from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE, SECURITY_ROLE
 from hostel360.student_services import notifications
 from hostel360.student_services.utils import (
 	assert_student_eligible,
@@ -17,12 +17,14 @@ from hostel360.student_services.utils import (
 	get_mess_setting,
 	get_role_users,
 	get_setting,
+	get_staff_scope,
 	get_student,
 	get_warden_approvers,
 	in_migration,
 	is_staff_user,
 	load_for_action,
 	recheck_scope,
+	scope_covers_record,
 	student_hostel,
 )
 
@@ -30,9 +32,17 @@ PENDING_STATUSES = ("Pending Parent Approval", "Pending Warden Approval")
 # Leaves that still hold the student's calendar: a new leave may not overlap them.
 ACTIVE_STATUSES = (*PENDING_STATUSES, "Approved", "Checked Out", "Overdue")
 CANCELLABLE_STATUSES = (*PENDING_STATUSES, "Approved")
+# A return can be recorded for these; "Approved" covers a student who left unrecorded.
+RETURNABLE_STATUSES = ("Approved", "Checked Out", "Overdue")
 # Students may apply for a leave that starts a little in the past (the form is often filled
 # in at the gate), but not for one that started long ago.
 BACKDATE_TOLERANCE_MINUTES = 60
+# A student may be let out a little before the leave starts (an early bus), never once it
+# has ended: going home on other days needs a new leave.
+EARLY_CHECK_OUT_MINUTES = 120
+# Allowance for a desk clock running ahead of the server when a time is typed in.
+FUTURE_TOLERANCE_MINUTES = 5
+MOVEMENT_ACTIONS = ("check_out", "return")
 # For mess reduction a travel day counts as a day away when most of its meals are missed.
 MESS_DAY_CUTOFF_HOUR = 12
 REDUCTION = "Mess Reduction Application"
@@ -383,19 +393,42 @@ class HomeVisitLeave(Document):
 	def record_check_out(self, user: str, checked_out_on=None):
 		if self.status != "Approved":
 			frappe.throw(_("Only approved leaves can be checked out (this one is {0}).").format(_(self.status)))
-		self.checked_out_on = get_datetime(checked_out_on) if checked_out_on else now_datetime()
+		at = movement_time(checked_out_on)
+		opens_at = check_out_opens_at(self.from_datetime)
+		if at < opens_at:
+			frappe.throw(
+				_("Check-out for this leave opens at {0}, {1} minutes before the leave starts.").format(
+					frappe.utils.format_datetime(opens_at), EARLY_CHECK_OUT_MINUTES
+				),
+				title=_("Leave Not Started"),
+			)
+		if at >= get_datetime(self.to_datetime):
+			frappe.throw(
+				_("This leave ended at {0}. The student needs a new leave to go out.").format(
+					frappe.utils.format_datetime(self.to_datetime)
+				),
+				title=_("Leave Ended"),
+			)
+		self.checked_out_on = at
 		self.status = "Checked Out"
 		self.save_status()
+		self.notify_guardians("leave_checked_out")
 
 	def record_return(self, user: str, returned_on=None):
-		if self.status not in ("Approved", "Checked Out", "Overdue"):
+		if self.status not in RETURNABLE_STATUSES:
 			frappe.throw(_("A return cannot be recorded for a leave that is {0}.").format(_(self.status)))
-		returned_on = get_datetime(returned_on) if returned_on else now_datetime()
+		returned_on = movement_time(returned_on)
 		if self.checked_out_on and returned_on < get_datetime(self.checked_out_on):
 			frappe.throw(_("Return time cannot be before the check-out time."))
+		if not self.checked_out_on and returned_on < check_out_opens_at(self.from_datetime):
+			frappe.throw(
+				_("This leave has not started yet. Cancel it instead if the student is not going."),
+				title=_("Leave Not Started"),
+			)
 		self.returned_on = returned_on
 		self.status = "Returned"
 		self.save_status()
+		self.notify_guardians("leave_returned")
 
 	def mark_overdue(self):
 		self.status = "Overdue"
@@ -421,6 +454,41 @@ class HomeVisitLeave(Document):
 		if not is_staff_user(user) or not frappe.has_permission(self.doctype, "write", doc=self, user=user):
 			frappe.throw(_("You are not permitted to update this leave."), frappe.PermissionError)
 
+	def check_movement_access(self, user: str) -> bool:
+		"""May the user record the student leaving or coming back? Returns True for gate staff.
+
+		Hostel staff who may edit the leave can, and so can gate staff (Hostel Security), who
+		only read leaves, for students of the hostels and blocks they are posted to. Gate staff
+		record the server's time and nothing else; a wrong time is for the warden to correct.
+		"""
+		if user == "Administrator":
+			return False
+		# Not self.has_permission(): an earlier action on this object leaves ignore_permissions set.
+		if is_staff_user(user) and frappe.has_permission(self.doctype, "write", doc=self, user=user):
+			return False
+		if (
+			SECURITY_ROLE in frappe.get_roles(user)
+			and frappe.has_permission(self.doctype, "read", doc=self, user=user)
+			and scope_covers_record(get_staff_scope(user), self.hostel, self.student)
+		):
+			return True
+		frappe.throw(_("You are not permitted to record check-out or return for this leave."), frappe.PermissionError)
+
+	def record_movement(self, action: str, at: str | None = None):
+		"""Check-out or return started by the signed-in user, on the stored leave."""
+		if action not in MOVEMENT_ACTIONS:
+			frappe.throw(_("Unknown action."))
+		user = frappe.session.user
+		if self.check_movement_access(user) and at:
+			frappe.throw(
+				_("Gate staff record the current time only. Please ask the warden to correct a time."),
+				frappe.PermissionError,
+			)
+		if action == "check_out":
+			self.record_check_out(user, at)
+		else:
+			self.record_return(user, at)
+
 	# The form sends its own copy of the leave with these calls; every action works on the
 	# stored record instead and then refreshes the form's copy from it.
 
@@ -436,16 +504,12 @@ class HomeVisitLeave(Document):
 
 	@frappe.whitelist(methods=["POST"])
 	def mark_checked_out(self, checked_out_on: str | None = None):
-		leave = load_for_action(self)
-		leave.check_staff_write()
-		leave.record_check_out(frappe.session.user, checked_out_on)
+		load_for_action(self).record_movement("check_out", checked_out_on)
 		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def mark_returned(self, returned_on: str | None = None):
-		leave = load_for_action(self)
-		leave.check_staff_write()
-		leave.record_return(frappe.session.user, returned_on)
+		load_for_action(self).record_movement("return", returned_on)
 		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
@@ -485,6 +549,30 @@ class HomeVisitLeave(Document):
 			notifications.leave_context(self),
 			self,
 		)
+
+	def notify_guardians(self, event: str):
+		"""Parents hear when their ward leaves the hostel and when they are back."""
+		notifications.send(
+			event,
+			notifications.for_student(self.student, include_student=False, include_guardians=True),
+			notifications.leave_context(self),
+			self,
+		)
+
+
+def check_out_opens_at(from_datetime):
+	return add_to_date(get_datetime(from_datetime), minutes=-EARLY_CHECK_OUT_MINUTES)
+
+
+def movement_time(value=None):
+	"""The time a check-out or return happened: now, or a time typed in that is not ahead of now."""
+	now = now_datetime()
+	if not value:
+		return now
+	at = get_datetime(value)
+	if at > add_to_date(now, minutes=FUTURE_TOLERANCE_MINUTES):
+		frappe.throw(_("The time cannot be in the future."))
+	return at
 
 
 @frappe.whitelist()

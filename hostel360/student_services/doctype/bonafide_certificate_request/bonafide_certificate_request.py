@@ -17,6 +17,7 @@ from hostel360.student_services.utils import (
 	get_setting,
 	get_student,
 	get_verification_url,
+	get_warden_approvers,
 	in_migration,
 	is_staff_user,
 	load_for_action,
@@ -84,6 +85,10 @@ class BonafideCertificateRequest(Document):
 		if self.purpose == "Other" and not self.purpose_details:
 			frappe.throw(_("Please describe the purpose of the certificate."))
 		self.validate_locked()
+
+	def after_insert(self):
+		if self.status == "Pending":
+			self.notify_approvers()
 
 	def validate_protected_fields(self):
 		if in_migration():
@@ -186,6 +191,15 @@ class BonafideCertificateRequest(Document):
 		notifications.send(
 			"bonafide_decided",
 			notifications.for_student(self.student),
+			notifications.bonafide_context(self),
+			self,
+		)
+
+	def notify_approvers(self):
+		"""The wardens who may sign the certificate, and the student's deputy wardens."""
+		notifications.send(
+			"bonafide_requested",
+			notifications.for_users(get_warden_approvers(self.hostel, self.student)),
 			notifications.bonafide_context(self),
 			self,
 		)

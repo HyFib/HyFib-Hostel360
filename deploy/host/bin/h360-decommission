@@ -1,0 +1,448 @@
+#!/usr/bin/env bash
+# Retire this Hostel360 server at the end of the contract (TR 22, deploy/EXIT.md step 4).
+#
+#   h360-decommission --site SITE --certificate FILE --log-passphrase-file FILE
+#                     [--export-path PATH]... [--execute]
+#
+# Runs after the application's own deletion (bench h360-purge-institution-data --execute)
+# has issued its certificate. It destroys what that command cannot reach on this server,
+# keeping only what the CERT-In directions require to be kept for 180 days:
+#
+#   1. checks the certificate: it is for this site, its after-check is clean, the site still
+#      accepts its signature, and the encryption_key HyFib holds in its vault (asked for,
+#      never stored) matches it, so the certificate can still be verified once the site is gone
+#   2. CERT-In log hold: the stack, host security and malware-scan logs, the journal and the
+#      containers' own logs go into an archive encrypted with the passphrase file (OpenPGP,
+#      AES-256), uploaded with a manifest and the certificate to <run>/ in the log hold
+#      bucket (<backup bucket>-exit-hold, made beforehand with exit-purge.sh prepare-hold:
+#      locked for 181 days, this server may add objects but not change or delete them) and
+#      checked there
+#   3. stops and disables the backup, restore-test, snapshot-prune, agent, probe and
+#      malware-scan timers, then the scheduler and workers
+#   4. drops the site's database and folder without a backup (bench drop-site --no-backup
+#      --force), removes the copy drop-site archives (and any left by an earlier drop-site),
+#      and checks MariaDB holds no other database
+#   5. adds what was logged since step 2 to the hold, then stops and removes the containers
+#      and disables hostel360-stack
+#   6. deletes: the rest of the sites folder (export copies and certificates included), the
+#      MariaDB data directory (binary logs too), Redis queue data, pre-deploy and pre-restore
+#      dumps, restore-test and restore staging folders, local logs (now in the hold), ClamAV
+#      data, the restic cache, the ingest spool and state, the malware quarantine, every
+#      --export-path, the log passphrase file and, last, /etc/hostel360 with its secrets
+#   7. writes a record of every step to /root and next to the logs in the bucket
+#
+# Without --execute nothing is changed: the checks run and the plan is printed. With it, an
+# interactive terminal is required and the escrowed key, the site name, ACGCET's
+# acknowledgement reference and the word DESTROY are asked for; none of this can be skipped.
+# A run that stopped part-way can be started again with the same arguments: finished steps
+# (kept in /root/h360-decommission-<site>.state) are not repeated.
+#
+# Off-site backups, volume backups and the OCI resources are destroyed afterwards by the
+# tenancy administrator with deploy/terraform/oci/exit-purge.sh.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-decommission
+h360_require_root
+
+usage() {
+	sed -n '2,/^set -Eeuo/p' "$0" | sed '$d; s/^# \{0,1\}//'
+}
+
+site=""
+certificate=""
+passphrase_file=""
+execute=0
+export_paths=()
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--site)
+			site="${2:?--site needs the site name}"
+			shift
+			;;
+		--certificate)
+			certificate="${2:?--certificate needs the certificate .json file}"
+			shift
+			;;
+		--log-passphrase-file)
+			passphrase_file="${2:?--log-passphrase-file needs a file}"
+			shift
+			;;
+		--export-path)
+			export_paths+=("${2:?--export-path needs a path}")
+			shift
+			;;
+		--execute) execute=1 ;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		*) die "unknown option $1 (see $0 --help)" ;;
+	esac
+	shift
+done
+[[ -n "${site}" && -n "${certificate}" && -n "${passphrase_file}" ]] ||
+	die "--site, --certificate and --log-passphrase-file are required (see $0 --help)"
+[[ "${site}" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$ ]] || die "invalid site name: ${site}"
+
+state_file="/root/h360-decommission-${site}.state"
+resuming=0
+[[ -s "${state_file}" ]] && resuming=1
+
+has_step() {
+	[[ -f "${state_file}" ]] && jq -e --arg name "$1" 'select(.name == $name)' "${state_file}" >/dev/null 2>&1
+}
+
+step() {
+	# step <name> <what>: a finished step, kept for a restart and for the record
+	jq -cn --arg name "$1" --arg at "$(date '+%Y-%m-%dT%H:%M:%S%z')" --arg what "$2" \
+		'{name: $name, at: $at, step: $what}' >>"${state_file}"
+	chmod 0600 "${state_file}"
+	log_notice "$2"
+}
+
+# Settings: from /etc/hostel360 on the first run; a restart after step 6 began may find it
+# gone, and then only what is left to do can still be done.
+if [[ -d "${H360_CONFIG_DIR}" ]]; then
+	h360_load_env "${H360_CONFIG_DIR}/agent.env"
+	h360_load_env "${H360_CONFIG_DIR}/backup.env"
+elif ! has_step down; then
+	die "${H360_CONFIG_DIR} is missing; the server's settings are needed up to step 5"
+fi
+h360_require_cmd docker jq python3 gpg tar rclone sha256sum
+h360_lock decommission
+
+stack_site="$(h360_stack_value SITE_NAME 2>/dev/null || true)"
+data_dir="$(h360_stack_value H360_DATA_DIR 2>/dev/null || true)"
+data_dir="${data_dir:-/srv/hostel360}"
+secrets="${H360_CONFIG_DIR}/secrets"
+host="$(h360_host)"
+project="${H360_COMPOSE_PROJECT:-hostel360}"
+
+if has_step started; then
+	run_id="$(jq -r 'select(.name == "started") | .step' "${state_file}" | head -n 1 | sed 's/^run //')"
+else
+	run_id="${host}-$(date +%Y%m%d-%H%M%S)"
+fi
+hold_dir="${data_dir}/exit-log-hold/${run_id}"
+record="/root/h360-decommission-${run_id}.json"
+
+if has_step started; then
+	hold_remote="$(jq -r 'select(.name == "started") | .remote' "${state_file}" | head -n 1)"
+else
+	# The hold bucket is named after the bucket of the restic repository (rclone:oos:<bucket>/<path>).
+	bucket="${RESTIC_REPOSITORY:-}"
+	bucket="${bucket#rclone:oos:}"
+	bucket="${bucket%%/*}"
+	[[ -n "${bucket}" && "rclone:oos:${bucket}" != "${RESTIC_REPOSITORY:-}" ]] ||
+		die "cannot tell the backup bucket from RESTIC_REPOSITORY (${RESTIC_REPOSITORY:-unset})"
+	hold_remote="oos:${bucket}-exit-hold/${run_id}"
+fi
+
+write_record() {
+	local status="$1"
+	jq -s --arg site "${site}" --arg host "${host}" --arg run "${run_id}" --arg status "${status}" \
+		--arg certificate_id "${certificate_id}" --arg reference "${reference}" --arg hold "${hold_remote}" \
+		'{site: $site, host: $host, run: $run, status: $status, certificate_id: $certificate_id,
+		  acknowledgement_reference: $reference, log_hold: $hold,
+		  started_at: (map(select(.name == "started"))[0].at // null), steps: .}' \
+		"${state_file}" >"${record}"
+	chmod 0600 "${record}"
+}
+
+# --------------------------------------------------------------------------- 1. checks
+
+[[ -f "${certificate}" ]] || die "certificate ${certificate} not found"
+jq -e '.certificate.certificate_id and .certificate.site and .signature.value' "${certificate}" >/dev/null 2>&1 ||
+	die "${certificate} is not a Hostel360 deletion certificate (.json)"
+certificate_id="$(jq -r '.certificate.certificate_id' "${certificate}")"
+reference="$(jq -r '.certificate.acknowledgement_reference // ""' "${certificate}")"
+[[ "$(jq -r '.certificate.site' "${certificate}")" == "${site}" ]] || die "the certificate is for another site"
+[[ "$(jq -r '.certificate.verification.clean' "${certificate}")" == true ]] ||
+	die "the certificate's after-check is not clean; run h360-purge-institution-data again until it is"
+case "$(realpath -m -- "${certificate}")" in
+	"${data_dir}"/*) die "copy the certificate out of ${data_dir} first (for example to /root); that folder is deleted" ;;
+esac
+
+if ! has_step down; then
+	[[ "${site}" == "${stack_site}" ]] || die "this server runs ${stack_site:-no site}, not ${site}"
+	[[ -s "${passphrase_file}" ]] || die "log passphrase file ${passphrase_file} is missing or empty"
+	case "$(realpath -m -- "${passphrase_file}")" in
+		"${data_dir}"/* | "${H360_CONFIG_DIR}"/*) die "keep the log passphrase file outside ${data_dir} and ${H360_CONFIG_DIR}" ;;
+	esac
+fi
+for path in "${export_paths[@]}"; do
+	[[ "${path}" == /?* ]] || die "--export-path ${path} must be an absolute path"
+	[[ -e "${path}" ]] || log_warn "--export-path ${path} does not exist (already deleted?)"
+done
+
+if ! has_step hold; then
+	rclone lsf --oos-no-check-bucket --max-depth 1 "${hold_remote%/*}" >/dev/null 2>&1 ||
+		die "the log hold bucket ${hold_remote%/*} is not there or not writable; the tenancy administrator runs exit-purge.sh prepare-hold first (deploy/EXIT.md)"
+fi
+
+backend="$(h360_container backend)"
+if ! has_step dropped; then
+	[[ -n "${backend}" && -n "$(h360_container mariadb)" ]] ||
+		die "the backend and mariadb containers must be running (the site is verified and dropped through them)"
+	docker exec -i "${backend}" sh -c 'umask 077; cat > /tmp/h360-exit-certificate.json' <"${certificate}"
+	verified=0
+	h360_bench --site "${site}" h360-verify-deletion-certificate --path /tmp/h360-exit-certificate.json >/dev/null 2>&1 ||
+		verified=$?
+	docker exec "${backend}" rm -f /tmp/h360-exit-certificate.json
+	[[ "${verified}" == 0 ]] || die "the site does not accept the certificate's signature; was it issued here?"
+	log_notice "certificate ${certificate_id} verified against ${site}"
+fi
+
+targets=(
+	"${data_dir}/sites"
+	"${data_dir}/mariadb"
+	"${data_dir}/redis-queue"
+	"${data_dir}/backups"
+	"${data_dir}/restore-test"
+	"${data_dir}/restore-staging"
+	"${data_dir}/logs"
+	"${data_dir}/clamav"
+	"${data_dir}/exit-log-hold"
+	"${RESTIC_CACHE_DIR:-/var/cache/restic}"
+	"${H360_SPOOL_DIR}"
+	"${H360_STATE_DIR}"
+	/usr/local/maldetect/quarantine
+	"${export_paths[@]}"
+	"${passphrase_file}"
+	"${H360_CONFIG_DIR}"
+)
+read -r -a log_patterns <<<"${H360_BACKUP_EXTRA_PATHS:-/var/log/audit /var/log/auth.log /var/log/syslog}"
+log_sources=()
+for pattern in "${data_dir}/logs" "${log_patterns[@]}" /usr/local/maldetect/logs /usr/local/maldetect/sess; do
+	while IFS= read -r match; do
+		[[ -e "${match}" ]] && log_sources+=("${match}")
+	done < <(compgen -G "${pattern}*" || true)
+done
+timers=(h360-backup.timer h360-restore-test.timer h360-snapshot-prune.timer h360-agent.timer
+	h360-uptime-probe.timer h360-maldet-scan.timer)
+
+printf '\nDecommissioning %s on %s%s\n' "${site}" "${host}" "$([[ "${resuming}" == 1 ]] && echo ' (continuing an earlier run)')"
+printf '  certificate      %s (acknowledgement %s)\n' "${certificate_id}" "${reference:-none}"
+printf '  CERT-In log hold %s (%s log sources)\n' "${hold_remote}" "${#log_sources[@]}"
+printf '  timers stopped   %s\n' "${timers[*]}"
+printf '  site dropped     %s: database, user and folder, no backup\n' "${site}"
+printf '  deleted:\n'
+for path in "${targets[@]}"; do
+	[[ -e "${path}" ]] && printf '    %-50s %s\n' "${path}" "$(du -sh -- "${path}" 2>/dev/null | cut -f1)"
+done
+if [[ -s "${state_file}" ]]; then
+	printf '  already done:     %s\n' "$(jq -r '.name' "${state_file}" | paste -sd' ' -)"
+fi
+printf '\n'
+
+if [[ "${execute}" != 1 ]]; then
+	printf 'Nothing was changed. Run again with --execute to do this.\n'
+	exit 0
+fi
+
+# --------------------------------------------------------------------------- confirmations
+
+[[ -t 0 && -t 1 ]] || die "--execute needs an interactive terminal; nothing was changed"
+
+printf "After today the certificate can be verified only with the site's encryption_key.\n"
+printf "Paste the encryption_key kept in HyFib's vault (not shown): "
+IFS= read -r -s escrowed_key
+printf '\n'
+fingerprint="$(H360_ESCROWED_KEY="${escrowed_key}" python3 -c '
+import hashlib, hmac, os
+key = hmac.new(os.environ["H360_ESCROWED_KEY"].strip().encode(), b"hostel360/deletion-certificate/v1", hashlib.sha256).digest()
+print(hashlib.sha256(b"fingerprint:" + key).hexdigest()[:16])
+')"
+unset escrowed_key
+[[ "${fingerprint}" == "$(jq -r '.signature.key_fingerprint' "${certificate}")" ]] ||
+	die "that is not the key the certificate was signed with; put the right one in the vault first. Nothing was changed"
+
+printf 'Type the site name (%s) to continue: ' "${site}"
+IFS= read -r answer
+[[ "${answer}" == "${site}" ]] || die "site name not confirmed; nothing was changed"
+if [[ -n "${reference}" ]]; then
+	printf "Type ACGCET's acknowledgement reference from the certificate: "
+	IFS= read -r answer
+	[[ "${answer}" == "${reference}" ]] || die "acknowledgement reference not confirmed; nothing was changed"
+fi
+printf 'This cannot be undone. Type DESTROY to delete %s from this server: ' "${site}"
+IFS= read -r answer
+[[ "${answer}" == DESTROY ]] || die "not confirmed; nothing was changed"
+
+trap 'status=$?; if [[ "${status}" != 0 ]]; then write_record failed; log_error "stopped; run the same command again to continue (record so far: ${record})"; fi' EXIT
+if ! has_step started; then
+	jq -cn --arg at "$(date '+%Y-%m-%dT%H:%M:%S%z')" --arg run "${run_id}" --arg remote "${hold_remote}" \
+		'{name: "started", at: $at, step: ("run " + $run), remote: $remote}' >>"${state_file}"
+	chmod 0600 "${state_file}"
+fi
+step confirmed "confirmed by ${SUDO_USER:-root} for certificate ${certificate_id}"
+
+# --------------------------------------------------------------------------- helpers
+
+hold_archive() {
+	# hold_archive <name> [find -newer marker]: encrypted archive of the log sources (only
+	# files changed since the marker, when given) and the containers' logs, into hold_dir
+	local name="$1" marker="${2:-}" status_file archive tar_status
+	local -a sources=("${log_sources[@]}")
+	install -d -m 0700 "${hold_dir}" "${hold_dir}/.containers"
+	for container in $(docker ps -aq --filter "label=com.docker.compose.project=${project}"); do
+		docker logs --timestamps "${container}" \
+			>"${hold_dir}/.containers/$(docker inspect --format '{{.Name}}' "${container}" | tr -d /).log" 2>&1 || true
+	done
+	journalctl --since "${journal_since}" -o short-iso-precise 2>/dev/null | gzip -6 >"${hold_dir}/.containers/journal.txt.gz" || true
+	if [[ -n "${marker}" ]]; then
+		mapfile -t sources < <(find "${log_sources[@]}" -type f -newer "${marker}" 2>/dev/null)
+	fi
+	archive="${hold_dir}/${name}.tar.gz.gpg"
+	status_file="${hold_dir}/.tar-status"
+	# tar may report files that changed while they were read (live logs); that is fine.
+	gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "${passphrase_file}" \
+		--symmetric --cipher-algo AES256 --compress-algo none --output "${archive}" < <(
+		status=0
+		tar --create --gzip --file - --ignore-failed-read --warning=no-file-changed \
+			"${sources[@]}" -C "${hold_dir}/.containers" . 2>/dev/null || status=$?
+		printf '%s' "${status}" >"${status_file}"
+	)
+	tar_status="$(cat "${status_file}")"
+	rm -rf -- "${hold_dir}/.containers" "${status_file}"
+	[[ "${tar_status}" -le 1 ]] || die "archiving the logs failed (tar status ${tar_status}); nothing more was deleted"
+	gpg --batch --quiet --pinentry-mode loopback --passphrase-file "${passphrase_file}" --decrypt "${archive}" |
+		tar --list --gzip --file - >/dev/null || die "the encrypted archive ${archive##*/} cannot be read back"
+	printf '%s' "${archive}"
+}
+
+upload_hold() {
+	# Hidden files are this script's own markers.
+	rclone copy --oos-no-check-bucket --exclude '.*' "${hold_dir}" "${hold_remote}" ||
+		die "uploading ${hold_dir} to ${hold_remote} failed; nothing more was deleted"
+	rclone check --one-way --oos-no-check-bucket --exclude '.*' "${hold_dir}" "${hold_remote}" ||
+		die "the copy in ${hold_remote} does not match ${hold_dir}; nothing more was deleted"
+}
+
+journal_since="-181d"
+
+# --------------------------------------------------------------------------- 2. CERT-In log hold
+
+if ! has_step hold; then
+	marker="${hold_dir}/.since"
+	install -d -m 0700 "${hold_dir}"
+	touch "${marker}"
+	archive="$(hold_archive "logs-${run_id}")"
+	install -m 0600 "${certificate}" "${hold_dir}/${certificate_id}.json"
+	for extra in "${certificate%.json}.md" "${certificate%.json}.pdf"; do
+		[[ -f "${extra}" ]] && install -m 0600 "${extra}" "${hold_dir}/"
+	done
+	jq -n --arg run "${run_id}" --arg site "${site}" --arg host "${host}" --arg created "$(h360_now_iso)" \
+		--arg certificate_id "${certificate_id}" --arg archive "${archive##*/}" \
+		--arg sha256 "$(sha256sum "${archive}" | cut -d' ' -f1)" --argjson bytes "$(stat -c %s "${archive}")" \
+		--arg keep_until "$(date -d '+181 days' +%Y-%m-%d)" \
+		--argjson sources "$(printf '%s\n' "${log_sources[@]}" | jq -R . | jq -s .)" \
+		'{run: $run, site: $site, host: $host, created: $created, certificate_id: $certificate_id,
+		  archives: [{name: $archive, sha256: $sha256, bytes: $bytes}],
+		  encryption: "OpenPGP symmetric, AES-256 (gpg); passphrase kept in HyFib'"'"'s vault with the exit records",
+		  keep_until: $keep_until,
+		  reason: "CERT-In directions of 28 April 2022: logs are kept for 180 days, in India",
+		  sources: $sources}' >"${hold_dir}/manifest.json"
+	upload_hold
+	step hold "CERT-In log hold uploaded and checked: ${hold_remote}"
+fi
+
+# --------------------------------------------------------------------------- 3. timers and jobs
+
+if ! has_step stopped; then
+	systemctl disable --now "${timers[@]}" >/dev/null 2>&1 || true
+	for timer in "${timers[@]}"; do
+		systemctl stop "${timer%.timer}.service" >/dev/null 2>&1 || true
+	done
+	h360_maintenance "${site}" on
+	h360_compose stop scheduler queue-short queue-long >/dev/null
+	step stopped "timers (${timers[*]}), scheduler and workers stopped"
+fi
+
+# --------------------------------------------------------------------------- 4. drop the site
+
+if ! has_step dropped; then
+	dropped=/home/frappe/frappe-bench/sites/.h360-dropped
+	# Line 1: the database root password (stdin only, never on this host's command line)
+	{
+		cat "${secrets}/db_root_password"
+		echo
+	} | docker exec -i "${backend}" bash -c '
+		set -euo pipefail
+		IFS= read -r db_root
+		cd /home/frappe/frappe-bench
+		bench drop-site "$1" --db-root-password "${db_root}" --no-backup --force --archived-sites-path "$2"
+	' bash "${site}" "${dropped}" >/dev/null
+	for container in $(docker ps -q --filter "label=com.docker.compose.project=${project}"); do
+		# Copies left by an earlier drop-site in a container's own layer
+		docker exec "${container}" sh -c 'rm -rf /home/frappe/frappe-bench/archived/sites/"$1"*' sh "${site}" \
+			>/dev/null 2>&1 || true
+	done
+	rm -rf -- "${data_dir}/sites/.h360-dropped"
+	[[ ! -e "${data_dir}/sites/${site}" ]] || die "the site folder ${data_dir}/sites/${site} is still there"
+	if h360_db_exec -N -e "SHOW DATABASES" | grep -qvE '^(information_schema|mysql|performance_schema|sys)$'; then
+		die "MariaDB still holds a database other than its own system databases; check it before going on"
+	fi
+	step dropped "site ${site} dropped: database, user and folder, no backup"
+fi
+
+# --------------------------------------------------------------------------- 5. last logs, containers
+
+if ! has_step down; then
+	if ! has_step final-hold; then
+		journal_since="$(jq -r 'select(.name == "hold") | .at' "${state_file}" | head -n 1)"
+		journal_since="${journal_since:-"-1d"}"
+		# journalctl wants "YYYY-MM-DD HH:MM:SS"; the state has ISO 8601 with an offset.
+		journal_since="$(date -d "${journal_since}" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '-1d')"
+		final="$(hold_archive "logs-${run_id}-final" "${hold_dir}/.since")"
+		# A second manifest: objects in the hold bucket cannot be overwritten.
+		jq --arg archive "${final##*/}" --arg sha256 "$(sha256sum "${final}" | cut -d' ' -f1)" \
+			--argjson bytes "$(stat -c %s "${final}")" --arg created "$(h360_now_iso)" \
+			'. + {created: $created, archives: [{name: $archive, sha256: $sha256, bytes: $bytes}],
+			      note: "logs written after manifest.json, including the site drop"}' \
+			"${hold_dir}/manifest.json" >"${hold_dir}/manifest-final.json"
+		upload_hold
+		step final-hold "logs written since the hold, including the drop, added to ${hold_remote}"
+	fi
+	# --volumes: anonymous volumes an image may have declared go with the containers
+	h360_compose down --remove-orphans --volumes --timeout 120 >/dev/null
+	systemctl disable --now hostel360-stack.service >/dev/null 2>&1 || true
+	step down "containers removed, hostel360-stack disabled"
+fi
+
+# --------------------------------------------------------------------------- 6. local stores
+
+if ! has_step deleted; then
+	for path in "${targets[@]}"; do
+		[[ -e "${path}" ]] || continue
+		case "$(realpath -m -- "${path}")" in
+			/ | /etc | /root | /srv | /usr | /var | /home | /usr/local | /var/lib | /var/log)
+				die "refusing to delete ${path}"
+				;;
+		esac
+		rm -rf -- "${path}"
+	done
+	install -d -m 0750 /usr/local/maldetect/quarantine
+	leftover=()
+	for path in "${targets[@]}"; do
+		[[ "${path}" == /usr/local/maldetect/quarantine ]] && continue
+		[[ -e "${path}" ]] && leftover+=("${path}")
+	done
+	[[ "${#leftover[@]}" -eq 0 ]] || die "could not delete: ${leftover[*]}"
+	step deleted "deleted: ${targets[*]}"
+fi
+
+# --------------------------------------------------------------------------- 7. record
+
+trap - EXIT
+write_record completed
+if [[ -n "${RCLONE_CONFIG_OOS_NAMESPACE:-}" ]]; then
+	rclone copyto --oos-no-check-bucket "${record}" "${hold_remote}/decommission-record.json" ||
+		log_warn "could not upload the record; copy ${record} off this server"
+fi
+rm -f -- "${state_file}"
+printf '\nDone. Record: %s (also %s/decommission-record.json).\n' "${record}" "${hold_remote}"
+printf 'Copy the record and the certificate off this server, then continue with\n'
+printf 'deploy/terraform/oci/exit-purge.sh (deploy/EXIT.md, step 5).\n'

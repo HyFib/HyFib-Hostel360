@@ -52,7 +52,7 @@
    "unique": 1
   },
   {
-   "description": "Security, Housekeeping and Other staff are recorded for contact purposes only and do not get a desk login.",
+   "description": "Security staff get a gate login for their assigned hostels, used only to record students leaving and returning on approved leave. Housekeeping and Other staff are recorded for contact purposes only and do not get a desk login.",
    "fieldname": "designation",
    "fieldtype": "Select",
    "in_list_view": 1,
@@ -98,7 +98,7 @@
    "label": "Is Active"
   },
   {
-   "description": "Creates a login with the roles for this designation. Two-factor authentication is mandatory. Not available for Security, Housekeeping and Other staff.",
+   "description": "Creates a login with the roles for this designation. Two-factor authentication is mandatory. Not available for Housekeeping and Other staff.",
    "fieldname": "create_user",
    "fieldtype": "Check",
    "label": "Create Desk Login"
@@ -125,7 +125,7 @@
    "search_index": 1
   },
   {
-   "description": "Deputy wardens, office staff and mess staff only see records of the hostels listed here.",
+   "description": "Deputy wardens, office staff, mess staff and security staff only see records of the hostels listed here.",
    "fieldname": "assignments_section",
    "fieldtype": "Section Break",
    "label": "Hostel Assignments"
@@ -141,7 +141,7 @@
  "image_field": "photo",
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-15 19:20:00.000000",
+ "modified": "2026-10-15 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel People",
  "name": "Hostel Staff",

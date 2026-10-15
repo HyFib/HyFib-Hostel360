@@ -6,6 +6,7 @@ import { decideNavigation, safeRedirect, type GuardState } from "@/router/guards
 import { routes } from "@/router/routes";
 
 vi.mock("@/api/portal", () => ({ getSession: vi.fn() }));
+vi.mock("@/api/auth", () => ({ logout: vi.fn(() => Promise.resolve({})) }));
 
 const portal = await import("@/api/portal");
 const { createAppRouter } = await import("@/router");
@@ -71,6 +72,19 @@ describe("decideNavigation", () => {
 		expect(decideNavigation(route("feedback", "/feedback"), parent)).toEqual({ name: "home" });
 	});
 
+	it("explains a session the server closed before offering sign-in again", () => {
+		const closed = { ...guest, closedReason: "Portal access for this hostel record has been closed." };
+		expect(decideNavigation(route("fees", "/fees"), closed)).toEqual({ name: "access-closed" });
+		expect(decideNavigation(route("home", "/"), closed)).toEqual({ name: "access-closed" });
+		expect(decideNavigation(route("access-closed", "/access-closed"), closed)).toBe(true);
+		// Public pages stay open, so the person can read help or sign in again.
+		expect(decideNavigation(route("login", "/login"), closed)).toBe(true);
+		expect(decideNavigation(route("help", "/help"), closed)).toBe(true);
+		// Without a reason there is nothing to explain.
+		expect(decideNavigation(route("access-closed", "/access-closed"), guest)).toEqual({ name: "login" });
+		expect(decideNavigation(route("access-closed", "/access-closed"), student)).toEqual({ name: "home" });
+	});
+
 	it("holds back full features until the registration is verified", () => {
 		const pending = { ...student, validationStatus: "Pending" };
 		expect(decideNavigation(route("fees", "/fees"), pending)).toEqual({ name: "home", query: { notice: "verification" } });
@@ -114,6 +128,20 @@ describe("router", () => {
 		await router.push("/grievances");
 		expect(router.currentRoute.value.name).toBe("privacy");
 		expect(router.currentRoute.value.query.redirect).toBe("/grievances");
+	});
+
+	it("shows why the server closed a session instead of an empty sign-in form", async () => {
+		vi.mocked(portal.getSession).mockRejectedValue(
+			new ApiError("permission", "Your hostel registration has not been validated by the hostel office yet.", {
+				status: 403,
+				excType: "PortalAccessClosed",
+			}),
+		);
+		const router = createAppRouter(createMemoryHistory("/hostel/"));
+		await router.push("/fees");
+		expect(router.currentRoute.value.name).toBe("access-closed");
+		await router.push("/login");
+		expect(router.currentRoute.value.name).toBe("login");
 	});
 
 	it("lets a confirmed, verified student straight in", async () => {

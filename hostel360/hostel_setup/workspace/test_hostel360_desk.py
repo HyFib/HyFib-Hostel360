@@ -18,6 +18,7 @@ from hostel360.setup.roles import (
 	MESS_STAFF_ROLE,
 	OFFICE_ROLE,
 	OPERATIONS_ROLE,
+	SECURITY_ROLE,
 )
 
 WORKSPACES = ("Hostel Admin", "People and Rooms", "Fees", "Mess", "Student Services", "HyFib Operations")
@@ -176,3 +177,13 @@ class TestHostel360Desk(IntegrationTestCase):
 			visible = {page["name"] for page in get_workspaces()["pages"]} & set(WORKSPACES)
 			self.assertEqual(visible, workspaces, role)
 			frappe.set_user("Administrator")
+
+	def test_gate_staff_see_no_records_workspaces(self):
+		# Security staff sign in only to record students leaving and returning; the setup,
+		# people, fees, mess and operations workspaces are not theirs.
+		from frappe.desk.desktop import get_workspaces
+
+		frappe.set_user(make_user([SECURITY_ROLE]))
+		frappe.local.request_cache.clear()
+		visible = {page["name"] for page in get_workspaces()["pages"]}
+		self.assertFalse(visible & {"Hostel Admin", "People and Rooms", "Fees", "Mess", "HyFib Operations"}, visible)

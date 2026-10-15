@@ -9,7 +9,9 @@ from hostel360.setup.roles import (
 	ADMIN_ROLE,
 	ADMIN_ROLES,
 	DEPUTY_WARDEN_ROLE,
+	DESIGNATION_ROLES,
 	GRIEVANCE_HANDLER_ROLES,
+	HOSTEL_SCOPED_DESIGNATIONS,
 	STAFF_ROLES,
 	WARDEN_ROLE,
 )
@@ -26,6 +28,19 @@ SETTINGS_DEFAULTS = {
 # Roles that decide leave and bonafide requests for every hostel. Deputy wardens decide
 # only for the hostels they are assigned to (User Permission on Hostel).
 GLOBAL_APPROVER_ROLES = frozenset({WARDEN_ROLE, *ADMIN_ROLES})
+# Roles whose holders work only in the hostels (and blocks) they are assigned to.
+HOSTEL_SCOPED_ROLES = frozenset(
+	role for designation in HOSTEL_SCOPED_DESIGNATIONS for role in DESIGNATION_ROLES.get(designation, [])
+)
+
+
+def N_(message: str) -> str:
+	"""Marks ``message`` for the translation catalogue but returns it untranslated.
+
+	For text that is stored and translated each time someone reads it, so that it does not
+	end up in the language of whoever happened to cause it to be written.
+	"""
+	return message
 
 STUDENT_FIELDS = (
 	"name",
@@ -173,6 +188,53 @@ def staff_covers_student(user: str, student: str | None, hostel: str | None) -> 
 	if get_student_hostel(student) != hostel:
 		return True
 	return bool(covers(user, student))
+
+
+def get_staff_scope(user: str) -> dict | None:
+	"""Which students the user looks after: None for every hostel, otherwise
+	``{hostel: None (whole hostel) | {block, ...}}``; ``{}`` means nobody.
+
+	Hostel People decides this from the staff assignments. Without it, hostel-level User
+	Permissions are all there is, and a hostel-scoped role with no hostel covers nobody.
+	"""
+	scope_of = people_service("get_staff_scope")
+	if scope_of:
+		return scope_of(user)
+	if user == "Administrator":
+		return None
+	roles = set(frappe.get_roles(user))
+	if roles & GLOBAL_APPROVER_ROLES:
+		return None
+	if not roles & (STAFF_ROLES | HOSTEL_SCOPED_ROLES):
+		return {}
+	hostels = get_user_hostels(user)
+	if not hostels:
+		return {} if roles & HOSTEL_SCOPED_ROLES else None
+	return {hostel: None for hostel in hostels}
+
+
+def scope_covers(scope: dict | None, hostel: str | None, block: str | None = None) -> bool:
+	"""Does a scope from ``get_staff_scope`` take in this hostel (and block)?"""
+	if scope is None:
+		return True
+	if not hostel or hostel not in scope:
+		return False
+	blocks = scope[hostel]
+	return blocks is None or block in blocks
+
+
+def scope_covers_record(scope: dict | None, hostel: str | None, student: str | None) -> bool:
+	"""Reach over a student's record kept under ``hostel``.
+
+	The block is the one the student lives in now, and only counts while they still live in
+	that hostel: block-level staff do not look after a record from the student's old hostel.
+	"""
+	if scope is None:
+		return True
+	block = None
+	if student and hostel and scope.get(hostel) is not None and get_student_hostel(student) == hostel:
+		block = get_student_block(student)
+	return scope_covers(scope, hostel, block)
 
 
 def is_warden_approver(user: str, hostel: str | None, student: str | None = None) -> bool:

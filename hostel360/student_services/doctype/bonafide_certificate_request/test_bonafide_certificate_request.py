@@ -66,6 +66,28 @@ class TestBonafideCertificateRequest(IntegrationTestCase):
 		self.assertEqual(doc.year_of_study, "2")
 		self.assertFalse(doc.certificate_number)
 
+	def test_new_request_tells_the_approvers(self):
+		deputy = make_user([DEPUTY_WARDEN_ROLE])
+		scope_to_hostel(deputy, self.hostel)
+		other_deputy = make_user([DEPUTY_WARDEN_ROLE])
+		scope_to_hostel(other_deputy, make_hostel())
+		with capture_notifications() as sent:
+			name = self.request()
+		recipients = sent.recipients("bonafide_requested")
+		self.assertIn(self.warden, recipients)
+		self.assertIn(deputy, recipients)
+		self.assertNotIn(other_deputy, recipients)
+		self.assertNotIn(self.student.user, recipients)
+		message = next(m for m in sent if m["event"] == "bonafide_requested")
+		self.assertEqual(message["reference_name"], name)
+		self.assertEqual(message["context"]["purpose"], "Bank Loan")
+		self.assertEqual(message["context"]["hostel"], self.hostel)
+
+		# Deciding does not tell the approvers again.
+		with capture_notifications() as sent:
+			frappe.get_doc(DOCTYPE, name).approve_by(self.warden)
+		self.assertNotIn("bonafide_requested", sent.events())
+
 	def test_duplicate_pending_request_is_refused(self):
 		self.request()
 		with self.assertRaises(frappe.DuplicateEntryError):

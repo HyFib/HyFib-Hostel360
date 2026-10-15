@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe.tests import set_user
 from frappe.utils import add_days, nowdate
 
 from hostel360.hostel_fees.constants import INVOICE, PAYMENT
@@ -12,7 +13,9 @@ from hostel360.hostel_fees.tests.fixtures import (
 	make_hostel,
 	make_invoice,
 	make_payment,
+	make_scoped_user,
 	make_student,
+	move_student,
 )
 
 # Read by the Frappe test runner: fee tests build every linked record they need themselves.
@@ -22,7 +25,8 @@ IGNORE_TEST_RECORD_DEPENDENCIES = fee_fixtures.IGNORE_TEST_RECORD_DEPENDENCIES
 class TestHostelPayment(FeeTestCase):
 	def setUp(self):
 		super().setUp()
-		self.student = make_student(hostel=make_hostel())
+		self.hostel = make_hostel()
+		self.student = make_student(hostel=self.hostel)
 		self.invoice = make_invoice(self.student, 1000)
 
 	def test_allocations_are_required(self):
@@ -159,3 +163,74 @@ class TestHostelPayment(FeeTestCase):
 		stored = frappe.db.get_value(PAYMENT, payment.name, ["cancelled_on", "cancelled_by"], as_dict=True)
 		self.assertTrue(stored.cancelled_on)
 		self.assertEqual(stored.cancelled_by, frappe.session.user)
+
+	# -- hostel scoping ----------------------------------------------------------------------
+
+	def test_hostel_follows_the_student_not_the_request(self):
+		payment = make_payment(self.student, [(self.invoice.name, 1000)], hostel=make_hostel())
+		self.assertEqual(payment.hostel, self.hostel)
+
+		vacated_from = self.hostel
+		move_student(self.student, None, last_hostel=vacated_from)
+		payment.hostel = make_hostel()
+		payment.save()
+		self.assertEqual(payment.hostel, vacated_from)
+
+	def test_scoped_staff_cannot_receipt_students_of_other_hostels(self):
+		clerk = make_scoped_user(make_hostel())
+		with set_user(clerk), self.assertRaises(frappe.PermissionError):
+			record_payment(self.student, "Cash", [{"invoice": self.invoice.name, "allocated_amount": 1000}])
+		self.assertEqual(frappe.db.get_value(INVOICE, self.invoice.name, "outstanding_amount"), 1000)
+
+	def test_scoped_staff_cannot_settle_invoices_of_their_previous_hostel(self):
+		# The student moved here from another hostel; that hostel's invoice stays filed there.
+		new_hostel = make_hostel()
+		move_student(self.student, new_hostel)
+		current = make_invoice(self.student, 300)
+		self.assertEqual((self.invoice.hostel, current.hostel), (self.hostel, new_hostel))
+		clerk = make_scoped_user(new_hostel)
+
+		with set_user(clerk):
+			with self.assertRaises(frappe.PermissionError):
+				record_payment(
+					self.student,
+					"Cash",
+					[
+						{"invoice": current.name, "allocated_amount": 300},
+						{"invoice": self.invoice.name, "allocated_amount": 1000},
+					],
+				)
+			draft = frappe.get_doc(
+				{
+					"doctype": PAYMENT,
+					"student": self.student,
+					"mode_of_payment": "Cash",
+					"allocations": [{"invoice": self.invoice.name, "allocated_amount": 1000}],
+				}
+			)
+			with self.assertRaises(frappe.PermissionError):
+				draft.insert()
+
+			result = record_payment(self.student, "Cash", [{"invoice": current.name, "allocated_amount": 300}])
+
+		self.assertEqual(frappe.db.get_value(PAYMENT, result["payment"], "hostel"), new_hostel)
+		self.assertEqual(frappe.db.get_value(INVOICE, current.name, "status"), "Paid")
+		self.assertEqual(frappe.db.get_value(INVOICE, self.invoice.name, "outstanding_amount"), 1000)
+
+	def test_scoped_staff_cannot_reopen_another_hostels_invoice_by_cancelling(self):
+		new_hostel = make_hostel()
+		move_student(self.student, new_hostel)
+		# Recorded by an unrestricted user against the invoice the old hostel issued.
+		receipt = make_payment(self.student, [(self.invoice.name, 1000)])
+		receipt.submit()
+		self.assertEqual(receipt.hostel, new_hostel)
+
+		with set_user(make_scoped_user(new_hostel)):
+			receipt = frappe.get_doc(PAYMENT, receipt.name)
+			with self.assertRaises(frappe.PermissionError):
+				receipt.cancel()
+		self.assertEqual(frappe.db.get_value(INVOICE, self.invoice.name, "status"), "Paid")
+
+		with set_user(make_scoped_user(self.hostel)), self.assertRaises(frappe.PermissionError):
+			# The receipt itself is filed under the student's new hostel.
+			frappe.get_doc(PAYMENT, receipt.name).cancel()

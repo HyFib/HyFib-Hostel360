@@ -69,11 +69,12 @@ configureApi({
 		if (current.name !== "privacy") await router.replace({ name: "privacy", query: { redirect: current.fullPath } });
 	},
 	async onAccessClosed(error) {
-		// The record may no longer use the portal: the sign-in page shows the server's reason.
+		// The record may no longer use the portal: end the session and say why. At start-up the
+		// router guard sends the visitor to the same page once the session check has failed.
 		const wasSignedIn = session.loggedIn;
 		await closeAccess(error.message);
 		resetInbox();
-		if (wasSignedIn) await router.replace({ name: "login" });
+		if (wasSignedIn) await router.replace({ name: "access-closed" });
 	},
 });
 

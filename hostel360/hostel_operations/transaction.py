@@ -49,10 +49,10 @@ def use_independent_transactions() -> bool:
 def mark_alert_rows_written_inline() -> None:
 	"""Keep the rest of this transaction's alert writes inline.
 
-	A transaction that has inserted or updated alert rows itself holds their row locks and
-	the alert naming-series lock until it ends. A second connection of the same process
-	would wait for those locks until it timed out, so later alerts in this transaction are
-	written in it too. The mark is cleared when the transaction commits or rolls back.
+	A transaction that has inserted or updated alert rows itself holds their row and
+	``open_key`` index locks until it ends. A second connection of the same process would
+	wait for those locks until it timed out, so later alerts in this transaction are written
+	in it too. The mark is cleared when the transaction commits or rolls back.
 	"""
 	if frappe.flags.hostel360_independent_depth or frappe.flags.hostel360_alerts_inline:
 		return

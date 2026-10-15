@@ -218,7 +218,7 @@ def pending_mess_reductions(user: str):
 			],
 		),
 		order_by="from_date asc",
-		limit_page_length=SECTION_LIMIT,
+		limit=SECTION_LIMIT,
 	)
 
 
@@ -226,22 +226,45 @@ def pending_indents(user: str):
 	if not frappe.db.exists("DocType", INDENT):
 		return None
 	try:
-		from hostel360.hostel_mess.doctype.mess_indent.mess_indent import INDENT_APPROVER_ROLES
+		from hostel360.hostel_mess.doctype.mess_indent.mess_indent import (
+			INDENT_APPROVER_ROLES,
+			INDENT_SENIOR_APPROVER_ROLES,
+		)
 	except ImportError:
 		INDENT_APPROVER_ROLES = set(ADMIN_ROLES) | {MESS_MANAGER_ROLE, WARDEN_ROLE}
-	if user != "Administrator" and not set(frappe.get_roles(user)) & set(INDENT_APPROVER_ROLES):
+		INDENT_SENIOR_APPROVER_ROLES = set(ADMIN_ROLES) | {WARDEN_ROLE}
+	roles = set(frappe.get_roles(user))
+	if user != "Administrator" and not roles & set(INDENT_APPROVER_ROLES):
 		return None
 	if not frappe.has_permission(INDENT, "read", user=user):
 		return None
+
+	filters = {"status": "Pending Approval", "docstatus": 1}
+	if user != "Administrator" and not roles & set(INDENT_SENIOR_APPROVER_ROLES):
+		# Whoever raised an indent does not also approve it; the Mess Indent refuses that, so
+		# such indents wait for someone else instead of offering buttons that would fail.
+		filters["owner"] = ["!=", user]
+		if frappe.get_meta(INDENT).has_field("requested_by"):
+			filters["requested_by"] = ["!=", user]
 	return frappe.get_list(
 		INDENT,
-		filters={"status": "Pending Approval", "docstatus": 1},
+		filters=filters,
 		fields=existing_fields(
 			INDENT,
-			["name", "mess", "posting_date", "required_by", "total_estimated_amount", "remarks", "owner", "creation"],
+			[
+				"name",
+				"mess",
+				"posting_date",
+				"required_by",
+				"total_estimated_amount",
+				"remarks",
+				"owner",
+				"requested_by",
+				"creation",
+			],
 		),
 		order_by="required_by asc",
-		limit_page_length=SECTION_LIMIT,
+		limit=SECTION_LIMIT,
 	)
 
 
@@ -268,7 +291,7 @@ def attention_grievances(user: str):
 			"creation",
 		],
 		order_by="escalation_level desc, sla_due_by asc",
-		limit_page_length=SECTION_LIMIT,
+		limit=SECTION_LIMIT,
 	)
 
 

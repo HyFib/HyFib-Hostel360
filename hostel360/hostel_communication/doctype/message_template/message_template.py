@@ -26,6 +26,13 @@ FINGERPRINT_FIELDS = (
 
 
 class MessageTemplate(Document):
+	def autoname(self):
+		# English templates keep the plain {event}-{channel} name from the DocType's naming
+		# rule; translations get the language as a suffix.
+		language = self.language or ev.DEFAULT_LANGUAGE
+		if language != ev.DEFAULT_LANGUAGE and self.event and self.channel:
+			self.name = ev.template_name(self.event, self.channel, language)
+
 	def validate(self):
 		if not ev.is_valid_event(self.event):
 			frappe.throw(_("Choose an event for this template."))
@@ -44,6 +51,10 @@ class MessageTemplate(Document):
 			self.event_label = ev.EVENT_LABELS[self.event]
 			self.available_variables = ", ".join(rendering.available_variables(self.event))
 		self.enabled = cint(self.enabled)
+		self.language = self.language or ev.DEFAULT_LANGUAGE
+		if self.language != ev.DEFAULT_LANGUAGE:
+			# A translation is sent as that language's version of the WhatsApp template.
+			self.whatsapp_language = self.language
 		self.body = (self.body or "").strip()
 		self.subject = (self.subject or "").strip() or None
 		self.template_parameters = (
@@ -73,7 +84,10 @@ class MessageTemplate(Document):
 				continue
 			try:
 				rendering.compile_check(text)
-				rendering.render(text, rendering.build_context(ev.get_sample_context(self.event)))
+				rendering.render(
+					text,
+					rendering.build_context(ev.get_sample_context(self.event), language=self.language),
+				)
 			except rendering.TemplateRenderError as e:
 				frappe.throw(_("{0} has an error: {1}").format(label, e), title=_("Template Error"))
 
@@ -90,6 +104,18 @@ class MessageTemplate(Document):
 			return
 		preview = self.render_preview()
 		stats = preview["stats"]
+		if (self.language or ev.DEFAULT_LANGUAGE) != ev.DEFAULT_LANGUAGE:
+			# Tamil is always Unicode; what matters is how many parts are billed.
+			if stats["segments"] > 1:
+				frappe.msgprint(
+					_(
+						"Tamil SMS are sent as Unicode, 70 characters a part. With sample values this SMS "
+						"is {0} characters and will be sent as {1} parts, each billed separately."
+					).format(stats["length"], stats["segments"]),
+					title=_("SMS Length"),
+					indicator="orange",
+				)
+			return
 		if stats["unicode"]:
 			frappe.msgprint(
 				_(
@@ -136,8 +162,8 @@ class MessageTemplate(Document):
 
 	@frappe.whitelist()
 	def get_default_wording(self) -> dict | None:
-		"""The wording Hostel360 ships for this event and channel (to restore an edited template)."""
+		"""The wording Hostel360 ships for this event, channel and language (to restore an edit)."""
 		from hostel360.hostel_communication.default_templates import get_default_template
 
 		self.check_permission("read")
-		return get_default_template(self.event, self.channel)
+		return get_default_template(self.event, self.channel, self.language)

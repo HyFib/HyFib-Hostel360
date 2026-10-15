@@ -58,7 +58,8 @@ class HostelPaymentTransaction(Document):
 	def validate(self):
 		if not self.currency:
 			self.currency = "INR"
-		if not self.hostel:
+		if self.is_new() or not self.hostel:
+			# Filed where the student lives (or last lived) when paying, never where a caller says.
 			from hostel360.hostel_fees.utils import get_student_hostel
 
 			self.hostel = get_student_hostel(self.student)

@@ -9,6 +9,7 @@
 # scheduler. On every run it makes sure the site's wiring matches this server:
 #   - Ops Alert Settings: ingest secret (same as agent.env), instance label, environment
 #   - an OCI notification token, and prints the endpoint for Terraform's alarm_https_endpoint
+#   - alert deliveries use the alerts job queue (hostel360_alert_queue), when bench defines it
 #   - Messaging Settings > Trusted Networks contains every campus egress address from
 #     CAMPUS_EGRESS_CIDRS in stack.env (Ansible: h360_campus_egress_cidrs), so the OTP
 #     per-address limit does not treat the campus gateway as one client. Addresses are only
@@ -141,6 +142,14 @@ if [[ ! -f "${data_dir}/sites/${site}/site_config.json" ]]; then
 	' bash "${site}"
 	h360_bench --site "${site}" enable-scheduler
 	log_notice "site created; the Administrator password is in ${password_file}"
+fi
+
+# Alert deliveries go to the dedicated queue once bench defines it (the configurator does,
+# on every start of the stack); a site created after the stack started gets it here.
+if [[ "$(jq -r '.workers.alerts // empty | type' "${data_dir}/sites/common_site_config.json" 2>/dev/null || true)" == object &&
+	"$(jq -r '.hostel360_alert_queue // ""' "${data_dir}/sites/${site}/site_config.json" 2>/dev/null || true)" != alerts ]]; then
+	h360_bench --site "${site}" set-config hostel360_alert_queue alerts >/dev/null
+	log_notice "alert deliveries use the alerts queue"
 fi
 
 # Operations wiring. The token for OCI notifications is created once and kept.

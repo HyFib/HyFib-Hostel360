@@ -91,6 +91,40 @@ prepare_bench() {
 	mkdir -p "${BENCH_DIR}/logs"
 }
 
+worker_queues() {
+	# worker_queues <a,b,c>: the queues bench knows (short, default, long and those defined
+	# under "workers" in common_site_config.json). bench refuses to start a worker for an
+	# undefined queue, and a crash-looping worker takes its other queues down with it, so
+	# an undefined one is left out with a warning instead; the application then delivers
+	# what it would have queued there by other means (alerts are sent inline).
+	env/bin/python - "$1" <<'PY'
+import json
+import sys
+
+known = {"short", "default", "long"}
+try:
+	with open("sites/common_site_config.json") as handle:
+		workers = json.load(handle).get("workers")
+	if isinstance(workers, dict):
+		known.update(workers)
+except (OSError, ValueError):
+	pass
+wanted = []
+for queue in sys.argv[1].split(","):
+	queue = queue.strip()
+	if queue and queue not in wanted:
+		wanted.append(queue)
+missing = [queue for queue in wanted if queue not in known]
+if missing:
+	print(
+		"h360-entrypoint: queue " + ", ".join(missing) + " is not defined in common_site_config.json "
+		"(workers); starting without it",
+		file=sys.stderr,
+	)
+print(",".join(queue for queue in wanted if queue in known) or "short,default")
+PY
+}
+
 require_site() {
 	if [[ -z "${SITE_NAME:-}" ]]; then
 		log "SITE_NAME is not set"
@@ -124,7 +158,7 @@ case "${role}" in
 		exec node "${BENCH_DIR}/apps/frappe/socketio.js" "$@"
 		;;
 	worker)
-		queues="${1:-${WORKER_QUEUES:-short,default}}"
+		queues="$(worker_queues "${1:-${WORKER_QUEUES:-short,default}}")"
 		log "starting worker for queues ${queues}"
 		exec bench worker --queue "${queues}"
 		;;

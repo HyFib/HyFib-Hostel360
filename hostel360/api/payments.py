@@ -53,7 +53,15 @@ def payu_return():
 	"""PayU posts the payer back here after paying (or failing); redirect them to their fees page."""
 	from hostel360.hostel_fees.services import confirm_gateway_return
 
-	outcome = confirm_gateway_return("PayU", _posted_fields(), source="checkout")
+	try:
+		outcome = confirm_gateway_return("PayU", _posted_fields(), source="checkout")
+	except Exception:
+		# The payer is waiting in their browser and an error page would leave them guessing.
+		# Whatever failed (a deadlock that rolled the receipt back, for example), the webhook
+		# and the 15-minute reconciliation settle the payment with PayU.
+		frappe.db.rollback()
+		frappe.log_error(title="PayU return could not be processed")
+		return fees_redirect(None, "pending")
 	return fees_redirect(outcome.transaction, portal_status(outcome))
 
 

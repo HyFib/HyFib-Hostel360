@@ -8,6 +8,7 @@ from hostel360.hostel_people.services import ensure_portal_user
 from hostel360.hostel_people.testing import (
 	allot,
 	beds_of,
+	make_desk_user,
 	make_guardian,
 	make_hostel,
 	make_room,
@@ -15,6 +16,7 @@ from hostel360.hostel_people.testing import (
 	random_mobile,
 	unique_code,
 )
+from hostel360.setup.roles import MESS_MANAGER_ROLE, OFFICE_ROLE
 
 
 class TestHostelStudent(IntegrationTestCase):
@@ -183,3 +185,13 @@ class TestHostelStudent(IntegrationTestCase):
 		user = ensure_portal_user("Hostel Student", student.name)
 		form.mark_validated()
 		self.assertEqual(frappe.db.get_value("Hostel Student", student.name, "user"), user)
+
+	def test_form_offers_unlock_sign_in_to_the_office(self):
+		student = make_student("Male")
+		offered = {}
+		for role in (OFFICE_ROLE, MESS_MANAGER_ROLE):
+			with self.set_user(make_desk_user(role)):
+				form = frappe.get_doc("Hostel Student", student.name)
+				form.run_method("onload")
+				offered[role] = form.get_onload().get("can_unlock_sign_in")
+		self.assertEqual(offered, {OFFICE_ROLE: True, MESS_MANAGER_ROLE: False})

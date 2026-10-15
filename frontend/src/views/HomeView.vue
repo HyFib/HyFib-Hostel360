@@ -77,6 +77,10 @@ const feesUnavailable = computed(() => Boolean(data.value) && (!data.value?.fees
 const room = computed(() => data.value?.room ?? null);
 const outstanding = computed(() => toNumber(data.value?.fees?.outstanding));
 const overdue = computed(() => toNumber(data.value?.fees?.overdue));
+/** Dues to pay and online payment open for this student (the dashboard's own answer wins). */
+const canPayOnline = computed(
+	() => !feesUnavailable.value && outstanding.value > 0 && paymentEnabled.value && data.value?.fees?.payment_enabled !== false,
+);
 const menu = computed(() => data.value?.today_menu ?? null);
 const notifications = computed(() => (data.value?.notifications ?? []).slice(0, 5));
 
@@ -187,12 +191,12 @@ function onNotificationClick(event: MouseEvent, item: PortalNotification) {
 					</div>
 				</div>
 				<div class="mt-4 flex flex-wrap gap-2">
-					<RouterLink v-if="!feesUnavailable && outstanding > 0 && paymentEnabled" :to="{ name: 'pay' }" class="btn-primary">
+					<RouterLink v-if="canPayOnline" :to="{ name: 'pay' }" class="btn-primary">
 						{{ t("home.pay") }}
 					</RouterLink>
 					<RouterLink
 						:to="{ name: 'fees' }"
-						:class="!feesUnavailable && outstanding > 0 && paymentEnabled ? 'btn-secondary' : 'btn-primary'"
+						:class="canPayOnline ? 'btn-secondary' : 'btn-primary'"
 					>
 						{{ t("home.viewFees") }}
 					</RouterLink>

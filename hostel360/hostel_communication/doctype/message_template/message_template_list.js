@@ -2,7 +2,7 @@
 // For license information, please see license.txt
 
 frappe.listview_settings["Message Template"] = {
-	add_fields: ["enabled", "channel"],
+	add_fields: ["enabled", "channel", "language"],
 	get_indicator(doc) {
 		return doc.enabled
 			? [__("Enabled"), "green", "enabled,=,1"]

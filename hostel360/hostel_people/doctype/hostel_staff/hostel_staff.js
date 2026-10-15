@@ -3,8 +3,16 @@
 
 // Fallback until the server answers; the server's DESIGNATION_ROLES is the source of truth.
 const H360_DESIGNATION_RULES = {
-	login: ["Deputy Warden", "Hostel Administrator", "Mess Manager", "Mess Staff", "Office Staff", "Warden"],
-	scoped: ["Deputy Warden", "Mess Staff", "Office Staff"],
+	login: [
+		"Deputy Warden",
+		"Hostel Administrator",
+		"Mess Manager",
+		"Mess Staff",
+		"Office Staff",
+		"Security",
+		"Warden",
+	],
+	scoped: ["Deputy Warden", "Mess Staff", "Office Staff", "Security"],
 };
 
 frappe.ui.form.on("Hostel Staff", {

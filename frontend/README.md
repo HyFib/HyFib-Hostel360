@@ -51,8 +51,8 @@ session):
 
 - `no_cache = 1` (module attribute and `context.no_cache = 1`)
 - `csrf_token`: `frappe.sessions.get_csrf_token()` for signed-in users, empty for guests
-- `boot_json`: JSON of `{site_name, institution_name, institution_short_name, logo, support_phone,
-  support_email, is_logged_in, kind, lang}` with `<`, `>` and `&` escaped as `<`, `>`,
+- `boot_json`: JSON of `{site_name, institution_name, institution_short_name, logo, office_phone,
+  office_email, support_phone, support_email, is_logged_in, kind, lang}` with `<`, `>` and `&` escaped as `<`, `>`,
   `&` (Frappe's Jinja does not autoescape)
 
 `hostel360/public/frontend/index.html` (same markup, empty values) is the offline shell the
@@ -98,6 +98,31 @@ is posted to PayU as a top-level form, see `utils/redirectCheckout.ts`). PayU se
 through `hostel360.api.payments.payu_return`, which redirects to `/hostel/fees?payment=<transaction>&status=…`;
 the fees page treats the status as a hint and shows what `get_payment_status` confirms.
 An invoice with a checkout still open stays payable: paying again resumes the same order.
+
+A `verify_payment` status of `Failed` means only that attempt failed (a declined card, a
+cancelled UPI request): the payment request stays open, the dues stay payable and paying again
+reuses the order, so the outcome says the dues are still open. Razorpay's `checkout.timeout`
+comes from the server and is passed through unchanged.
+
+Whether online payment is offered is decided per student by the server
+(`hostel_fees.services.online_payment_available`): each ward in `get_session` carries
+`payment_enabled`, and the store's `paymentEnabled` follows the selected ward. While the gateway
+uses test credentials only designated test payers may pay; `get_fees.payment_test_mode`,
+`create_payment.test_mode` and `test_mode` on payment results let the fees, pay and outcome
+screens say that no real money is taken and that the receipt is a test receipt.
+
+## Sessions the server closes
+
+Every portal call asks the sign-in rule again (`hostel360.auth.events.portal_login_blocked_reason`).
+When a record may no longer use the portal (registration not validated yet, rejected, vacated,
+no longer linked, or the portal switched off), the server answers `PortalAccessClosed` with the
+reason. The app then signs out on the device and shows `/access-closed`: the reason, the hostel
+office's phone and e-mail, and a way back to sign-in. The guard sends any other page there while
+the reason is known, so the person never meets an unexplained, empty sign-in form.
+
+The privacy notice is accepted before anything personal is shown: the server refuses profile,
+photo and notification calls with `PortalConsentRequired` until then, and the guard's order
+(consent, then confirm details) matches it.
 
 ## Languages
 

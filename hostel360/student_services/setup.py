@@ -6,9 +6,18 @@ for its events are installed by Hostel Communication. What runs here repairs rec
 before a rule existed; every step is idempotent, so it is safe on every migrate.
 """
 
+import json
+
 import frappe
+from frappe import _
 
 from hostel360.student_services.doctype.hostel_feedback.hostel_feedback import ANONYMOUS_OWNER
+from hostel360.student_services.doctype.hostel_grievance.hostel_grievance import (
+	CLOSED_MESSAGE,
+	ESCALATED_MESSAGE,
+	REFERRED_MESSAGE,
+	REGISTERED_MESSAGE,
+)
 
 # Records that carry the student's hostel for hostel-scoped access.
 HOSTEL_SCOPED_DOCTYPES = (
@@ -22,6 +31,7 @@ HOSTEL_SCOPED_DOCTYPES = (
 def install_defaults():
 	forget_anonymous_submitters()
 	fill_missing_hostels()
+	tag_system_timeline_entries()
 
 
 def forget_anonymous_submitters():
@@ -65,3 +75,43 @@ def fill_missing_hostels():
 				and coalesce(nullif(s.last_hostel, ''), nullif(s.current_hostel, '')) is not null
 			"""  # noqa: S608
 		)
+
+
+def tag_system_timeline_entries():
+	"""Grievance timeline entries the system wrote once took the language of whoever's request
+	wrote them, and kept no template to translate them from. The fixed ones are put back into
+	English and tagged, and so are escalations, so that every reader sees them in their own
+	language. Entries naming an assignee are left as they are: their text cannot be told apart
+	from a comment someone typed."""
+	if not frappe.get_meta("Hostel Grievance Update").has_field("message_template"):
+		return
+	languages = frappe.get_all("Language", filters={"enabled": 1, "name": ["!=", "en"]}, pluck="name")
+	for english in (REGISTERED_MESSAGE, REFERRED_MESSAGE, CLOSED_MESSAGE):
+		variants = tuple(sorted({english, *(_(english, lang=lang) for lang in languages)}))
+		frappe.db.sql(
+			"""
+			update `tabHostel Grievance Update`
+			set message = %(english)s, message_template = %(english)s
+			where ifnull(message_template, '') = '' and message in %(variants)s
+			""",
+			{"english": english, "variants": variants},
+		)
+
+	prefix = ESCALATED_MESSAGE.split("{0}")[0]
+	rows = frappe.db.sql(
+		"""
+		select name, message from `tabHostel Grievance Update`
+		where ifnull(message_template, '') = '' and update_by = 'Administrator' and message like %(pattern)s
+		""",
+		{"pattern": prefix.replace("%", "\\%").replace("_", "\\_") + "%"},
+		as_dict=True,
+	)
+	for row in rows:
+		level = row.message[len(prefix) :].rstrip(".")
+		if level.isdigit():
+			frappe.db.set_value(
+				"Hostel Grievance Update",
+				row.name,
+				{"message_template": ESCALATED_MESSAGE, "message_args": json.dumps([level])},
+				update_modified=False,
+			)

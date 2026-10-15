@@ -157,8 +157,18 @@ class _Run:
 				# The gateway answered but cannot read this order. A real payment could sit behind
 				# it, so it is never closed automatically: staff check the dashboard.
 				self.unreadable.append(name)
-				_record_unreadable(name, e, closed)
-				_commit()
+				try:
+					_record_unreadable(name, e, closed)
+					_commit()
+				except frappe.QueryDeadlockError:
+					# Its alert had to be written in this transaction and the server rolled it
+					# back; the next run records it again. The other transactions carry on.
+					frappe.db.rollback()
+					frappe.log_error(
+						title=f"Reconciliation of {name} failed",
+						reference_doctype=TRANSACTION,
+						reference_name=name,
+					)
 		except Exception:
 			_undo()
 			self.errors.append(name)

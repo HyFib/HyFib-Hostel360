@@ -39,5 +39,6 @@ h360_waf_cert_days: 825
 h360_waf_cert_renew_days: 30
 h360_uid_nginx: 101
 
-# OCI CLI (registry login, volume backups) in its own virtual environment
+# OCI CLI (registry login, volume backups) in its own virtual environment. At least 3.90.0:
+# h360-snapshot gives every ad-hoc volume backup a retention period (--retention-period).
 h360_oci_cli_version: "3.95.0"

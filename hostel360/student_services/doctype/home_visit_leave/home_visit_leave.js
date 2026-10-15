@@ -3,6 +3,8 @@
 
 const H360_LEAVE_APPROVER_ROLES = ["Hostel Warden", "Deputy Warden", "Hostel Administrator", "System Manager"];
 const H360_LEAVE_STAFF_ROLES = [...H360_LEAVE_APPROVER_ROLES, "Hostel Office Staff"];
+// Gate staff only read leaves; they record check-out and return at the server's time.
+const H360_LEAVE_GATE_ROLE = "Hostel Security";
 
 frappe.ui.form.on("Home Visit Leave", {
 	setup(frm) {
@@ -60,7 +62,9 @@ const h360_leave = {
 	add_actions(frm) {
 		const doc = frm.doc;
 		const is_approver = frappe.user.has_role(H360_LEAVE_APPROVER_ROLES);
-		const is_staff = frappe.user.has_role(H360_LEAVE_STAFF_ROLES);
+		const is_staff = frappe.user.has_role(H360_LEAVE_STAFF_ROLES) && frm.perm[0]?.write;
+		const at_gate = !is_staff && frappe.user.has_role(H360_LEAVE_GATE_ROLE);
+		const can_move = is_staff || at_gate;
 
 		if (is_approver && doc.status === "Pending Warden Approval") {
 			frm.add_custom_button(__("Approve"), () => h360_leave.decide(frm, true)).addClass("btn-primary");
@@ -68,14 +72,34 @@ const h360_leave = {
 		if (is_approver && ["Pending Warden Approval", "Pending Parent Approval"].includes(doc.status)) {
 			frm.add_custom_button(__("Reject"), () => h360_leave.decide(frm, false));
 		}
-		if (is_staff && doc.status === "Approved") {
+		if (can_move && doc.status === "Approved") {
 			frm.add_custom_button(__("Checked Out"), () =>
-				h360_leave.record_time(frm, "mark_checked_out", "checked_out_on", __("Checked Out At"))
+				at_gate
+					? h360_leave.record_now(
+							frm,
+							"mark_checked_out",
+							__("Record that {0} has left the hostel now?", [h360_leave.student_label(frm)])
+					  )
+					: h360_leave.record_time(frm, "mark_checked_out", "checked_out_on", __("Checked Out At"))
 			);
 		}
-		if (is_staff && ["Approved", "Checked Out", "Overdue"].includes(doc.status)) {
+		if (can_move && ["Checked Out", "Overdue"].includes(doc.status)) {
 			frm.add_custom_button(__("Returned"), () =>
-				h360_leave.record_time(frm, "mark_returned", "returned_on", __("Returned At"))
+				at_gate
+					? h360_leave.record_now(
+							frm,
+							"mark_returned",
+							__("Record that {0} is back in the hostel now?", [h360_leave.student_label(frm)])
+					  )
+					: h360_leave.record_time(frm, "mark_returned", "returned_on", __("Returned At"))
+			);
+		}
+		if (is_staff && doc.status === "Approved") {
+			// A student who left without being recorded at the gate.
+			frm.add_custom_button(
+				__("Returned"),
+				() => h360_leave.record_time(frm, "mark_returned", "returned_on", __("Returned At")),
+				__("More")
 			);
 		}
 		if (is_staff && ["Pending Parent Approval", "Pending Warden Approval", "Approved"].includes(doc.status)) {
@@ -119,6 +143,14 @@ const h360_leave = {
 			},
 		});
 		dialog.show();
+	},
+
+	student_label(frm) {
+		return frappe.utils.escape_html(frm.doc.student_name || frm.doc.student || "");
+	},
+
+	record_now(frm, method, question) {
+		frappe.confirm(question, () => frm.call({ method, doc: frm.doc, freeze: true }).then(() => frm.reload_doc()));
 	},
 
 	record_time(frm, method, argname, label) {

@@ -10,11 +10,12 @@ from hostel360.hostel_fees import notifications
 from hostel360.hostel_fees.constants import CASH, INVOICE, ONLINE, TRANSACTION, TX_SUCCESS
 from hostel360.hostel_fees.utils import (
 	DISPLAY_DATE_FORMAT,
+	assert_hostel_permitted,
 	get_portal_link,
-	get_student_hostel,
 	get_student_print_details,
 	is_migration,
 	money,
+	resolve_record_hostel,
 )
 from hostel360.setup.roles import ADMIN_ROLES
 from hostel360.utils.context import has_any_role
@@ -65,14 +66,16 @@ class HostelPayment(Document):
 
 	def validate(self):
 		self.set_missing_values()
+		assert_hostel_permitted(self)
 		self.validate_mode()
 		self.validate_dates()
 		self.validate_allocations()
+		self.check_invoice_access()
 		self.calculate_totals()
 
 	def set_missing_values(self):
-		if not self.hostel:
-			self.hostel = get_student_hostel(self.student)
+		# Current hostel, else the one the student left: hostel-scoped staff are filtered on it.
+		self.hostel = resolve_record_hostel(self)
 		if self.reference_no:
 			self.reference_no = self.reference_no.strip()
 		if self.mode_of_payment != ONLINE and not self.received_by:
@@ -184,6 +187,31 @@ class HostelPayment(Document):
 					title=_("Over-allocation"),
 				)
 
+	def check_invoice_access(self) -> None:
+		"""A receipt saved or cancelled from the desk may only touch invoices its author can change.
+
+		Allocation rows name invoices directly, and Frappe applies hostel User Permissions to the
+		receipt's own hostel only. An invoice stays with the hostel that issued it after the
+		student moves, so without this a hostel-scoped user could settle (or, by cancelling,
+		reopen) another hostel's invoice. Gateway receipts and the migration are system work.
+		"""
+		if self.flags.ignore_permissions or is_migration() or not self.allocations:
+			return
+		names = list({row.invoice for row in self.allocations if row.invoice})
+		hostels = dict(
+			frappe.get_all(INVOICE, filters={"name": ("in", names)}, fields=["name", "hostel"], as_list=True)
+		)
+		for row in self.allocations:
+			if row.invoice not in hostels or frappe.has_permission(INVOICE, "write", doc=row.invoice):
+				continue
+			frappe.throw(
+				_("Row {0}: invoice {1} belongs to hostel {2}, which is not one of your assigned hostels.").format(
+					row.idx, row.invoice, hostels[row.invoice] or _("(none)")
+				),
+				frappe.PermissionError,
+				title=_("Not permitted"),
+			)
+
 	def calculate_totals(self):
 		self.total_allocated = money(sum(money(row.allocated_amount) for row in self.allocations))
 		if not money(self.amount):
@@ -251,6 +279,8 @@ class HostelPayment(Document):
 				),
 				frappe.PermissionError,
 			)
+		# Cancelling reopens every allocated invoice.
+		self.check_invoice_access()
 
 	def on_cancel(self):
 		from hostel360.hostel_fees.transactions import lock_invoices

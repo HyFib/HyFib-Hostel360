@@ -166,18 +166,24 @@ def put_in_room(student: str, room: str) -> None:
 
 def make_block_deputy(hostel: str, blocks: list[str]) -> str:
 	"""A deputy warden assigned, through a Hostel Staff record, to some blocks of a hostel."""
+	return make_scoped_staff("Deputy Warden", hostel, blocks)
+
+
+def make_scoped_staff(designation: str, hostel: str, blocks: list[str] | None = None) -> str:
+	"""A desk user for a Hostel Staff record of ``designation``, posted to the hostel, or to
+	some of its blocks when ``blocks`` are given. Returns the user."""
 	suffix = uid(8).lower()
 	staff = frappe.get_doc(
 		{
 			"doctype": "Hostel Staff",
-			"staff_name": f"Deputy {suffix}",
-			"designation": "Deputy Warden",
-			"email": f"h360-deputy-{suffix}@example.com",
+			"staff_name": f"{designation} {suffix}",
+			"designation": designation,
+			"email": f"h360-staff-{suffix}@example.com",
 			"mobile_number": unique_mobile(),
 			"create_user": 1,
 			"send_welcome_email": 0,
 			"is_active": 1,
-			"assignments": [{"hostel": hostel, "block": block} for block in blocks],
+			"assignments": [{"hostel": hostel, "block": block} for block in blocks or [None]],
 		}
 	)
 	staff.insert(ignore_permissions=True)

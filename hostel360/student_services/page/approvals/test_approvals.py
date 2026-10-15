@@ -141,3 +141,39 @@ class TestApprovals(IntegrationTestCase):
 			approvals.decide("Bonafide Certificate Request", west_certificate, "approve")
 		self.assertEqual(approvals.decide("Home Visit Leave", self.leave, "approve")["status"], "Approved")
 
+
+	def make_pending_indent(self, raised_by: str, requested_by: str | None = None) -> str:
+		# Indents belong to Hostel Mess; only a submitted indent awaiting approval matters here.
+		doc = frappe.new_doc("Mess Indent")
+		doc.update(
+			{
+				"naming_series": "IND-.YYYY.-.#####",
+				"mess": "Mess " + frappe.generate_hash(length=6),
+				"posting_date": frappe.utils.nowdate(),
+				"required_by": frappe.utils.add_days(frappe.utils.nowdate(), 2),
+				"status": "Pending Approval",
+				"requested_by": requested_by or raised_by,
+			}
+		)
+		doc.name = "IND-TEST-" + frappe.generate_hash(length=8)
+		doc.owner = raised_by
+		doc.docstatus = 1
+		doc.db_insert()
+		return doc.name
+
+	def test_indents_raised_by_the_viewer_wait_for_someone_else(self):
+		if not frappe.db.exists("DocType", "Mess Indent"):
+			self.skipTest("Hostel Mess is not installed on this site")
+		manager = make_user([MESS_MANAGER_ROLE])
+		colleague = make_user([MESS_MANAGER_ROLE])
+		own = self.make_pending_indent(manager)
+		on_behalf = self.make_pending_indent(colleague, requested_by=manager)
+		theirs = self.make_pending_indent(colleague)
+
+		mine = self.names(self.inbox_as(manager), "indents")
+		self.assertNotIn(own, mine)
+		self.assertNotIn(on_behalf, mine)
+		self.assertIn(theirs, mine)
+		self.assertIn(own, self.names(self.inbox_as(colleague), "indents"))
+		# Wardens may decide indents whoever raised them.
+		self.assertTrue({own, on_behalf, theirs} <= self.names(self.inbox_as(self.warden), "indents"))

@@ -9,6 +9,8 @@
   "update_by",
   "update_by_name",
   "message",
+  "message_template",
+  "message_args",
   "is_internal",
   "status_change"
  ],
@@ -46,6 +48,24 @@
    "columns": 4
   },
   {
+   "fieldname": "message_template",
+   "fieldtype": "Small Text",
+   "label": "Message Template",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "For entries the system writes: the English text, translated when the timeline is read."
+  },
+  {
+   "fieldname": "message_args",
+   "fieldtype": "Small Text",
+   "label": "Message Values",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Values filled into the message template (JSON list)."
+  },
+  {
    "fieldname": "is_internal",
    "fieldtype": "Check",
    "label": "Internal Note",
@@ -67,7 +87,7 @@
  "index_web_pages_for_search": 0,
  "istable": 1,
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Student Services",
  "name": "Hostel Grievance Update",

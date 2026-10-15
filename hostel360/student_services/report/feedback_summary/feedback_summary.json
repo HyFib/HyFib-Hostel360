@@ -9,7 +9,7 @@
  "idx": 0,
  "is_standard": "Yes",
  "letter_head": "",
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Student Services",
  "name": "Feedback Summary",
@@ -37,9 +37,6 @@
   },
   {
    "role": "System Manager"
-  },
-  {
-   "role": "Mess Manager"
   }
  ]
 }

@@ -10,12 +10,14 @@ import datetime
 import html
 import re
 from contextlib import nullcontext
+from functools import partial
 from urllib.parse import urlparse
 
 import frappe
-from frappe.utils import cstr, flt, format_datetime, formatdate, get_url
+from frappe.utils import cstr, flt, formatdate, get_datetime, get_url
 
-from hostel360.hostel_communication.events import EVENT_CONTEXT
+from hostel360.hostel_communication.events import DEFAULT_LANGUAGE, EVENT_CONTEXT, normalize_language
+from hostel360.hostel_communication.labels import label
 
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?$")
 
@@ -42,6 +44,7 @@ COMMON_VARIABLES = (
 DEFAULT_SUPPORT_PHONE = "+91 96060 60596"
 DEFAULT_SUPPORT_EMAIL = "support@hyfib.com"
 DEFAULT_SHORT_NAME = "ACGCET"
+DATETIME_FORMAT = "dd-MM-yyyy hh:mm a"
 
 
 class TemplateRenderError(Exception):
@@ -98,13 +101,23 @@ def fdate(value) -> str:
 		return cstr(value)
 
 
-def fdatetime(value) -> str:
+def fdatetime(value, language: str | None = None) -> str:
+	"""Date and time in the template's language ("04-07-2026 04:00 PM").
+
+	The locale comes from the template, not from ``frappe.local.lang``: a delivery job takes
+	on the language of whoever queued it, and a warden's English message must not change
+	because a Tamil-speaking student applied for leave.
+	"""
 	if _is_blank(value):
 		return ""
 	if not _is_machine_date(value):
 		return cstr(value)
 	try:
-		return format_datetime(value, "dd-MM-yyyy hh:mm a")
+		import babel.dates
+
+		return babel.dates.format_datetime(
+			get_datetime(value), DATETIME_FORMAT, locale=normalize_language(language)
+		)
 	except Exception:
 		return cstr(value)
 
@@ -124,7 +137,20 @@ TEMPLATE_HELPERS = {
 	"fdate": fdate,
 	"fdatetime": fdatetime,
 	"short": short,
+	"label": label,
 }
+
+
+def helpers_for(language: str | None = None) -> dict:
+	"""Template helpers, with the language-dependent ones bound to ``language``."""
+	language = normalize_language(language)
+	if language == DEFAULT_LANGUAGE:
+		return dict(TEMPLATE_HELPERS)
+	return {
+		**TEMPLATE_HELPERS,
+		"fdatetime": partial(fdatetime, language=language),
+		"label": partial(label, language=language),
+	}
 
 
 # ---------------------------------------------------------------- context
@@ -199,8 +225,17 @@ def escape_values(value):
 	return value
 
 
-def build_context(context: dict | None, recipient: dict | None = None, *, html_safe: bool = False) -> dict:
-	"""Template context: institution details, the caller's values, recipient and helpers."""
+def build_context(
+	context: dict | None,
+	recipient: dict | None = None,
+	*,
+	html_safe: bool = False,
+	language: str | None = None,
+) -> dict:
+	"""Template context: institution details, the caller's values, recipient and helpers.
+
+	``language`` is the template's language; it decides how dates and fixed values read.
+	"""
 	recipient = recipient or {}
 	merged = get_base_context()
 	for key, value in to_plain(dict(context or {})).items():
@@ -214,7 +249,7 @@ def build_context(context: dict | None, recipient: dict | None = None, *, html_s
 		merged["recipient_kind"] = recipient.get("kind") or ""
 	if html_safe:
 		merged = escape_values(merged)
-	merged.update(TEMPLATE_HELPERS)
+	merged.update(helpers_for(language))
 	return merged
 
 
@@ -290,10 +325,15 @@ def plain_text(value: str) -> str:
 	return re.sub(r"\s+", " ", cstr(value)).strip()
 
 
+def is_unicode(text: str | None) -> bool:
+	"""True when the text needs UCS-2 (Unicode) SMS encoding, as Tamil text always does."""
+	return any(ch not in GSM_BASIC and ch not in GSM_EXTENDED for ch in text or "")
+
+
 def sms_stats(text: str) -> dict:
 	"""Length, encoding and segment count of an SMS body."""
 	text = text or ""
-	unicode = any(ch not in GSM_BASIC and ch not in GSM_EXTENDED for ch in text)
+	unicode = is_unicode(text)
 	if unicode:
 		length = len(text)
 		single, multi = 70, 67

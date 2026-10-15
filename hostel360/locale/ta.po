@@ -6,12 +6,12 @@ msgid ""
 msgstr ""
 "Project-Id-Version: HyFib Hostel360 VERSION\n"
 "Report-Msgid-Bugs-To: support@hyfib.com\n"
-"POT-Creation-Date: 2026-10-15 14:34+0000\n"
-"PO-Revision-Date: 2026-10-15 14:39+0000\n"
+"POT-Creation-Date: 2026-10-15 17:53+0000\n"
+"PO-Revision-Date: 2026-10-15 18:04+0000\n"
 "Last-Translator: HyFib Solutions <support@hyfib.com>\n"
 "Language: ta\n"
 "Language-Team: HyFib Solutions <support@hyfib.com>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1)\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -23,6 +23,10 @@ msgstr ""
 #: hostel360/hostel_mess/doctype/mess_bill_run/mess_bill_run.py:203
 #: hostel360/hostel_mess/doctype/mess_bill_run/mess_bill_run.py:491
 msgid " and {0} more"
+msgstr ""
+
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:209
+msgid "(none)"
 msgstr ""
 
 #: hostel360/hostel_mess/doctype/mess_extra_charge/mess_extra_charge.py:29
@@ -48,7 +52,7 @@ msgstr ""
 msgid ", which Hostel360 sets on every payment."
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:152
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:162
 msgid "... and {0} more"
 msgstr ""
 
@@ -141,11 +145,11 @@ msgstr ""
 msgid "A billed extra charge cannot be deleted."
 msgstr ""
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:82
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:83
 msgid "A bonafide certificate"
 msgstr "போனஃபைட் சான்றிதழ்"
 
-#: hostel360/hostel_fees/services.py:714
+#: hostel360/hostel_fees/services.py:719
 msgid "A checkout confirmation for transaction {0} carried an invalid signature or a different order. It was refused. Repeated occurrences may indicate tampering."
 msgstr ""
 
@@ -174,7 +178,7 @@ msgstr ""
 msgid "A gateway confirmation was refused; set so the refused payment is not retried on every reconciliation run."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:308
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:352
 msgid "A grievance can be reopened within {0} days of its resolution. Please raise a new one."
 msgstr "புகார் தீர்க்கப்பட்ட {0} நாட்களுக்குள் மட்டுமே அதை மீண்டும் திறக்க முடியும். புதிய புகாரை அளிக்கவும்."
 
@@ -202,15 +206,15 @@ msgstr ""
 msgid "A new application must be pending."
 msgstr "புதிய விண்ணப்பம் நிலுவை நிலையில் இருக்க வேண்டும்."
 
-#: hostel360/hostel_migration/purge.py:333
+#: hostel360/hostel_migration/purge.py:343
 msgid "A newer export, {0}, is not verified ({1})."
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:353
+#: hostel360/hostel_fees/services.py:358
 msgid "A payment for some of these dues is already in progress. Please complete it, or try again after {0} minutes."
 msgstr "இந்த நிலுவைகளில் சிலவற்றுக்கான பணம் செலுத்துதல் ஏற்கனவே நடைபெறுகிறது. அதை முடிக்கவும், அல்லது {0} நிமிடங்கள் கழித்து மீண்டும் முயற்சிக்கவும்."
 
-#: hostel360/hostel_fees/services.py:285
+#: hostel360/hostel_fees/services.py:290
 msgid "A payment for these dues is already in progress. Please wait a minute and try again."
 msgstr "இந்த நிலுவைகளுக்கான பணம் செலுத்துதல் ஏற்கனவே நடைபெறுகிறது. ஒரு நிமிடம் காத்திருந்து மீண்டும் முயற்சிக்கவும்."
 
@@ -222,7 +226,7 @@ msgstr ""
 msgid "A published mess bill cannot be deleted. Cancel its bill run instead."
 msgstr ""
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:119
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:124
 msgid "A request for a {0} certificate is already pending ({1})."
 msgstr "{0} சான்றிதழுக்கான கோரிக்கை ஏற்கனவே நிலுவையில் உள்ளது ({1})."
 
@@ -239,7 +243,7 @@ msgstr ""
 msgid "A resolve message needs a key."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:392
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:419
 msgid "A return cannot be recorded for a leave that is {0}."
 msgstr "{0} நிலையில் உள்ள விடுப்புக்குத் திரும்புதலைப் பதிவு செய்ய முடியாது."
 
@@ -261,7 +265,7 @@ msgstr ""
 msgid "A short note for the run list, e.g. \"Rehearsal 2 with June extract\"."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:84
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:98
 msgid "A subject is required for {0} templates."
 msgstr ""
 
@@ -281,11 +285,11 @@ msgstr ""
 msgid "A {0} confirmation for transaction {1} (student {2}) was refused: {3}. No receipt was issued. Check the payment in the gateway dashboard and refund or receipt it manually."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:215
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:254
 msgid "A {0} grievance cannot be assigned."
 msgstr "{0} நிலையில் உள்ள புகாரை ஒப்படைக்க முடியாது."
 
-#: hostel360/hostel_fees/services.py:659
+#: hostel360/hostel_fees/services.py:664
 msgid "A {0} post to Hostel360 failed hash verification and was ignored. A single occurrence usually means the merchant salt was changed; repeated occurrences may be an attempt to forge payment confirmations. Affected payments are still settled by reconciliation."
 msgstr ""
 
@@ -448,7 +452,7 @@ msgstr ""
 msgid "Action Taken"
 msgstr ""
 
-#: hostel360/student_services/page/approvals/approvals.js:256
+#: hostel360/student_services/page/approvals/approvals.js:259
 msgid "Action due by"
 msgstr ""
 
@@ -465,7 +469,9 @@ msgstr ""
 #: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.js:76
 #: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.js:97
 #: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:22
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:26
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:34
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:38
 #: hostel360/hostel_setup/doctype/hostel/hostel.js:54
 msgid "Actions"
 msgstr ""
@@ -637,12 +643,12 @@ msgstr ""
 #. Label of the address_line1 (Data) field in DocType 'Hostel Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "Address Line 1"
-msgstr ""
+msgstr "முகவரி வரி 1"
 
 #. Label of the address_line2 (Data) field in DocType 'Hostel Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "Address Line 2"
-msgstr ""
+msgstr "முகவரி வரி 2"
 
 #. Option for the 'Purpose' (Select) field in DocType 'Bonafide Certificate
 #. Request'
@@ -747,7 +753,7 @@ msgstr ""
 msgid "Alert suppressed"
 msgstr ""
 
-#: hostel360/hostel_operations/doctype/ops_alert/ops_alert.py:51
+#: hostel360/hostel_operations/doctype/ops_alert/ops_alert.py:78
 msgid "Alert {0} is already open for key {1}. Update that alert instead."
 msgstr ""
 
@@ -785,6 +791,7 @@ msgid "All Room Types"
 msgstr ""
 
 #: hostel360/hostel_fees/doctype/hostel_fee_structure/hostel_fee_structure.py:102
+#: hostel360/student_services/page/gate_pass/gate_pass.js:204
 msgid "All hostels"
 msgstr ""
 
@@ -798,7 +805,7 @@ msgstr ""
 msgid "Allergies, conditions or medication the warden should know about. Visible only to wardens and administrators."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:147
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:150
 msgid "Allocate the payment to at least one invoice."
 msgstr ""
 
@@ -808,7 +815,7 @@ msgstr ""
 msgid "Allocated Amount"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:198
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:226
 msgid "Allocated amounts ({0}) exceed the amount received ({1})."
 msgstr ""
 
@@ -828,7 +835,7 @@ msgstr ""
 msgid "Allot"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:120
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:148
 msgid "Allot Room"
 msgstr ""
 
@@ -857,7 +864,7 @@ msgstr ""
 msgid "Allotment From Date"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:126
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:154
 #: hostel360/hostel_setup/doctype/hostel_room/hostel_room.js:35
 msgid "Allotment History"
 msgstr ""
@@ -896,7 +903,7 @@ msgstr ""
 msgid "Already invoiced (skipped)"
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:437
+#: hostel360/hostel_fees/services.py:442
 msgid "Already paid"
 msgstr "ஏற்கனவே செலுத்தப்பட்டது"
 
@@ -952,13 +959,13 @@ msgstr ""
 msgid "Amount"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:193
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:221
 #: hostel360/hostel_mess/doctype/mess_expense/mess_expense.py:18
 #: hostel360/hostel_mess/doctype/mess_extra_charge/mess_extra_charge.py:35
 msgid "Amount must be greater than zero."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:207
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:235
 msgid "Amount not fully allocated"
 msgstr ""
 
@@ -976,7 +983,7 @@ msgstr ""
 msgid "An academic year cannot be longer than 400 days."
 msgstr ""
 
-#: hostel360/hostel_operations/doctype/ops_alert/ops_alert.py:26
+#: hostel360/hostel_operations/doctype/ops_alert/ops_alert.py:53
 msgid "An alert needs a key or a title."
 msgstr ""
 
@@ -990,7 +997,7 @@ msgstr ""
 msgid "An application must cover at least this many days (both dates included)."
 msgstr ""
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:132
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:137
 msgid "An approved certificate cannot be changed. Please raise a new request."
 msgstr "ஒப்புதல் பெற்ற சான்றிதழை மாற்ற முடியாது. புதிய கோரிக்கையை அனுப்பவும்."
 
@@ -1002,7 +1009,7 @@ msgstr "ஒப்புதல் பெற்ற கழிவை நீக்க
 msgid "An import is already running."
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:187
+#: hostel360/hostel_fees/services.py:191
 msgid "An invoice needs at least one fee item."
 msgstr "ஒரு கட்டணச்சீட்டில் குறைந்தது ஒரு கட்டண உருப்படி இருக்க வேண்டும்."
 
@@ -1132,8 +1139,8 @@ msgstr ""
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.js:15
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.js:64
 #: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.js:22
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:66
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:110
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:70
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:134
 #: hostel360/student_services/page/approvals/approvals.js:128
 msgid "Approve"
 msgstr ""
@@ -1142,7 +1149,7 @@ msgstr ""
 msgid "Approve Indent"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:95
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:119
 msgid "Approve Leave"
 msgstr ""
 
@@ -1167,7 +1174,8 @@ msgstr ""
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.json
 #: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.json
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
-#: hostel360/student_services/page/approvals/approvals.js:293
+#: hostel360/student_services/page/approvals/approvals.js:296
+#: hostel360/student_services/page/gate_pass/gate_pass.js:296
 #: hostel360/student_services/report/leave_register/leave_register.py:114
 msgid "Approved"
 msgstr "ஒப்புதல் பெற்றது"
@@ -1271,15 +1279,16 @@ msgstr ""
 msgid "Assigned To"
 msgstr ""
 
-#: hostel360/student_services/page/approvals/approvals.js:255
+#: hostel360/student_services/page/approvals/approvals.js:258
 msgid "Assigned to"
 msgstr ""
 
-#: hostel360/student_services/page/approvals/approvals.js:295
+#: hostel360/student_services/page/approvals/approvals.js:298
 msgid "Assigned to you"
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:228
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:43
+#: hostel360/student_services/doctype/hostel_grievance/test_hostel_grievance.py:312
 msgid "Assigned to {0}."
 msgstr "{0}-இடம் ஒப்படைக்கப்பட்டது."
 
@@ -1305,11 +1314,11 @@ msgstr ""
 msgid "Attach the file to import."
 msgstr ""
 
-#: hostel360/api/portal.py:1410
+#: hostel360/api/portal.py:1407
 msgid "Attachment"
 msgstr "இணைப்பு"
 
-#: hostel360/api/portal.py:586 hostel360/student_services/services.py:262
+#: hostel360/api/portal.py:559 hostel360/student_services/services.py:262
 msgid "Attachment {0} was not found. Please upload it again."
 msgstr "இணைப்பு {0} கிடைக்கவில்லை. மீண்டும் பதிவேற்றவும்."
 
@@ -1317,7 +1326,7 @@ msgstr "இணைப்பு {0} கிடைக்கவில்லை. ம�
 msgid "Attachment {0} was stored but its checksum does not match the source file."
 msgstr ""
 
-#: hostel360/api/portal.py:1453
+#: hostel360/api/portal.py:1450
 #: hostel360/hostel_migration/reconciliation.py:228
 #: hostel360/hostel_migration/reconciliation.py:344
 msgid "Attachments"
@@ -1400,7 +1409,7 @@ msgstr ""
 msgid "Auth Parameter Name"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:468
+#: hostel360/hostel_fees/transactions.py:467
 msgid "Authorised payment on {0} was not captured"
 msgstr ""
 
@@ -1483,7 +1492,12 @@ msgstr ""
 msgid "Awaiting approval."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:54
+#: hostel360/student_services/page/gate_pass/gate_pass.js:184
+#: hostel360/student_services/page/gate_pass/gate_pass.js:294
+msgid "Away"
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:56
 msgid "Away from the hostel. Expected back by {0}."
 msgstr ""
 
@@ -1858,7 +1872,7 @@ msgstr ""
 #. Label of the blood_group (Select) field in DocType 'Hostel Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "Blood Group"
-msgstr ""
+msgstr "இரத்த வகை"
 
 #: hostel360/hostel_people/doctype/student_bulk_import/student_bulk_import.py:575
 msgid "Blood Group {0} is not recognised."
@@ -1866,7 +1880,7 @@ msgstr ""
 
 #. Label of the body (Code) field in DocType 'Message Template'
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:65
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:76
 msgid "Body"
 msgstr ""
 
@@ -2003,7 +2017,7 @@ msgstr ""
 
 #: hostel360/www/verify-certificate.html:187
 msgid "Call"
-msgstr ""
+msgstr "அழைக்க"
 
 #. Description of the 'Heartbeat URL' (Data) field in DocType 'Ops Alert
 #. Settings'
@@ -2026,11 +2040,11 @@ msgstr ""
 msgid "Cancel Application"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:83
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:107
 msgid "Cancel Leave"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:124
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:125
 msgid "Cancel receipt {0} before marking the payment as refunded."
 msgstr ""
 
@@ -2038,7 +2052,7 @@ msgstr ""
 msgid "Cancel the receipt {0} before cancelling this indent."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:85
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:109
 msgid "Cancel this leave?"
 msgstr ""
 
@@ -2141,7 +2155,7 @@ msgstr ""
 #. Label of the category (Select) field in DocType 'Ops Alert'
 #. Label of the category (Select) field in DocType 'Support Ticket'
 #. Label of the category (Select) field in DocType 'Hostel Grievance'
-#: hostel360/api/portal.py:1447
+#: hostel360/api/portal.py:1444
 #: hostel360/hostel_fees/doctype/hostel_fee_head/hostel_fee_head.json
 #: hostel360/hostel_mess/doctype/mess_item/mess_item.json
 #: hostel360/hostel_mess/report/mess_consumption/mess_consumption.js:37
@@ -2154,7 +2168,7 @@ msgstr ""
 #: hostel360/hostel_operations/report/alert_history/alert_history.js:28
 #: hostel360/hostel_operations/report/alert_history/alert_history.py:28
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
-#: hostel360/student_services/page/approvals/approvals.js:252
+#: hostel360/student_services/page/approvals/approvals.js:255
 #: hostel360/student_services/report/grievance_summary/grievance_summary.js:30
 #: hostel360/student_services/report/grievance_summary/grievance_summary.py:83
 msgid "Category"
@@ -2169,7 +2183,7 @@ msgstr ""
 #: hostel360/student_services/report/bonafide_register/bonafide_register.py:77
 #: hostel360/www/verify-certificate.html:172
 msgid "Certificate No."
-msgstr ""
+msgstr "சான்றிதழ் எண்"
 
 #. Label of the certificate_number (Data) field in DocType 'Bonafide
 #. Certificate Request'
@@ -2177,7 +2191,7 @@ msgstr ""
 msgid "Certificate Number"
 msgstr ""
 
-#: hostel360/api/portal.py:1713
+#: hostel360/api/portal.py:1684
 msgid "Certificate request"
 msgstr "சான்றிதழ் கோரிக்கை"
 
@@ -2250,9 +2264,22 @@ msgstr ""
 msgid "Chargeable Days"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:243
+#: hostel360/student_services/page/gate_pass/gate_pass.js:321
+msgid "Check Out"
+msgstr ""
+
 #. Description of the 'Dry Run' (Check) field in DocType 'Migration Run'
 #: hostel360/hostel_migration/doctype/migration_run/migration_run.json
 msgid "Check every row and produce the full report, then roll everything back. Nothing is kept except this run's report."
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:345
+msgid "Check that this is the student, then record that they are back now."
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:344
+msgid "Check that this is the student, then record that they are leaving now."
 msgstr ""
 
 #: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.js:66
@@ -2263,15 +2290,23 @@ msgstr ""
 msgid "Check with Gateway"
 msgstr ""
 
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:400
+msgid "Check-out for this leave opens at {0}, {1} minutes before the leave starts."
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.py:306
+msgid "Check-out opens at {0} ({1} minutes before the leave starts)."
+msgstr ""
+
 #. Option for the 'Status' (Select) field in DocType 'Home Visit Leave'
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:72
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:76
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
 #: hostel360/student_services/report/leave_register/leave_register.py:84
 #: hostel360/student_services/report/students_on_leave/students_on_leave.py:71
 msgid "Checked Out"
 msgstr "வெளியேறியது"
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:73
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:83
 msgid "Checked Out At"
 msgstr ""
 
@@ -2299,11 +2334,11 @@ msgstr ""
 msgid "Checking every row..."
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:710
+#: hostel360/hostel_migration/purge.py:800
 msgid "Checking that nothing selected remains"
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:704
+#: hostel360/hostel_fees/services.py:709
 msgid "Checkout confirmation with an invalid signature was refused (payment {0})."
 msgstr ""
 
@@ -2339,7 +2374,7 @@ msgstr ""
 msgid "Choose a period of at most {0} days."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:31
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:38
 msgid "Choose an event for this template."
 msgstr ""
 
@@ -2355,14 +2390,14 @@ msgstr ""
 msgid "Choose the bed to transfer to."
 msgstr ""
 
-#: hostel360/auth/otp.py:567
+#: hostel360/auth/otp.py:592
 msgid "Choose whether you are signing in as a student or a parent."
 msgstr "நீங்கள் மாணவராக உள்நுழைகிறீர்களா அல்லது பெற்றோராக உள்நுழைகிறீர்களா என்பதைத் தேர்ந்தெடுக்கவும்."
 
 #. Label of the city (Data) field in DocType 'Hostel Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "City / Town"
-msgstr ""
+msgstr "நகரம் / ஊர்"
 
 #: hostel360/security/files.py:631
 msgid "ClamAV found {0} in {1}, uploaded by {2}. The file and {3} record(s) pointing to it were deleted."
@@ -2375,11 +2410,15 @@ msgstr ""
 
 #. Label of the cleanliness (Rating) field in DocType 'Hostel Feedback'
 #. Option for the 'Category' (Select) field in DocType 'Hostel Grievance'
-#: hostel360/api/portal.py:1675
+#: hostel360/api/portal.py:1646
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
 msgid "Cleanliness"
 msgstr "தூய்மை"
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:38
+msgid "Clear"
+msgstr ""
 
 #. Description of the 'Reportable to CERT-In' (Check) field in DocType
 #. 'Security Incident'
@@ -2421,11 +2460,11 @@ msgstr "முடிக்கப்பட்டது"
 msgid "Closed On"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:110
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:111
 msgid "Closed as expired: {0}"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:107
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:108
 msgid "Closed by {0}: {1}"
 msgstr ""
 
@@ -2492,12 +2531,12 @@ msgstr ""
 msgid "College Tour"
 msgstr "கல்விச் சுற்றுலா"
 
-#: hostel360/api/portal.py:1464
+#: hostel360/api/portal.py:1461
 msgid "Comment"
 msgstr "கருத்து"
 
 #. Label of the comments (Small Text) field in DocType 'Hostel Feedback'
-#: hostel360/api/portal.py:1678
+#: hostel360/api/portal.py:1649
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
 #: hostel360/student_services/report/feedback_summary/feedback_summary.py:139
 msgid "Comments"
@@ -2510,7 +2549,7 @@ msgstr ""
 
 #: hostel360/www/verify-certificate.html:178
 msgid "Compare these details with the printed certificate. The student's name is partly hidden to protect their privacy."
-msgstr ""
+msgstr "இந்த விவரங்களை அச்சிடப்பட்ட சான்றிதழுடன் ஒப்பிட்டுப் பாருங்கள். தனியுரிமையைப் பாதுகாக்க மாணவரின் பெயர் பகுதியளவு மறைக்கப்பட்டுள்ளது."
 
 #. Option for the 'Publish Status' (Select) field in DocType 'Hostel Fee
 #. Structure'
@@ -2585,7 +2624,7 @@ msgstr ""
 
 #. Label of the is_confidential (Check) field in DocType 'Hostel Grievance'
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
-#: hostel360/student_services/page/approvals/approvals.js:246
+#: hostel360/student_services/page/approvals/approvals.js:249
 msgid "Confidential"
 msgstr ""
 
@@ -2609,11 +2648,19 @@ msgstr ""
 msgid "Configure the payment gateway"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:323
+msgid "Confirm Check Out"
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:323
+msgid "Confirm Return"
+msgstr ""
+
 #: hostel360/hostel_operations/doctype/support_ticket/support_ticket.js:105
 msgid "Confirm and Close"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:71
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:99
 msgid "Confirm that {0}'s details match the admission records?"
 msgstr ""
 
@@ -2666,7 +2713,7 @@ msgstr ""
 msgid "Contact Phone"
 msgstr ""
 
-#: hostel360/api/portal.py:1215
+#: hostel360/api/portal.py:1217
 msgid "Contact during leave"
 msgstr "விடுப்பின்போது தொடர்பு எண்"
 
@@ -2751,7 +2798,7 @@ msgstr ""
 msgid "Could not reach the payment gateway. Please try again in a few minutes."
 msgstr "பணப் பரிமாற்ற நுழைவாயிலை அணுக முடியவில்லை. சில நிமிடங்களில் மீண்டும் முயற்சிக்கவும்."
 
-#: hostel360/hostel_migration/purge.py:666
+#: hostel360/hostel_migration/purge.py:756
 msgid "Counting what will be deleted"
 msgstr ""
 
@@ -2768,7 +2815,7 @@ msgstr ""
 msgid "Coverage (%)"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:122
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:150
 #: hostel360/hostel_setup/doctype/hostel/hostel.js:27
 #: hostel360/hostel_setup/doctype/hostel/hostel.js:32
 #: hostel360/hostel_setup/doctype/hostel_block/hostel_block.js:13
@@ -2830,7 +2877,7 @@ msgstr ""
 #. Description of the 'Create Desk Login' (Check) field in DocType 'Hostel
 #. Staff'
 #: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.json
-msgid "Creates a login with the roles for this designation. Two-factor authentication is mandatory. Not available for Security, Housekeeping and Other staff."
+msgid "Creates a login with the roles for this designation. Two-factor authentication is mandatory. Not available for Housekeeping and Other staff."
 msgstr ""
 
 #. Label of the credits_remarks (Small Text) field in DocType 'Mess Bill Run'
@@ -2904,7 +2951,7 @@ msgstr ""
 
 #. Label of the current_allotment (Link) field in DocType 'Hostel Student'
 #. Label of the current_allotment (Link) field in DocType 'Hostel Bed'
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:114
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:142
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 #: hostel360/hostel_setup/doctype/hostel_bed/hostel_bed.json
 msgid "Current Allotment"
@@ -2999,7 +3046,7 @@ msgstr ""
 msgid "Daily at 08:00, students and parents are reminded of dues falling due soon or overdue."
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:257
+#: hostel360/hostel_fees/reconciliation.py:267
 msgid "Daily reconciliation found no issues."
 msgstr ""
 
@@ -3170,11 +3217,11 @@ msgstr ""
 msgid "Degree Level"
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:704
+#: hostel360/hostel_migration/purge.py:794
 msgid "Deleting files, local backups and legacy extracts"
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:688
+#: hostel360/hostel_migration/purge.py:778
 msgid "Deleting records"
 msgstr ""
 
@@ -3327,7 +3374,7 @@ msgstr ""
 #. Description of the 'Hostel Assignments' (Section Break) field in DocType
 #. 'Hostel Staff'
 #: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.json
-msgid "Deputy wardens, office staff and mess staff only see records of the hostels listed here."
+msgid "Deputy wardens, office staff, mess staff and security staff only see records of the hostels listed here."
 msgstr ""
 
 #. Label of the description (Small Text) field in DocType 'Hostel Fee Head'
@@ -3340,7 +3387,7 @@ msgstr ""
 #. Label of the description (Small Text) field in DocType 'Hostel Block'
 #. Label of the description (Small Text) field in DocType 'Room Facility'
 #. Label of the description (Text) field in DocType 'Hostel Grievance'
-#: hostel360/api/portal.py:1169 hostel360/api/portal.py:1449
+#: hostel360/api/portal.py:1171 hostel360/api/portal.py:1446
 #: hostel360/hostel_fees/doctype/hostel_fee_head/hostel_fee_head.json
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice_item/hostel_fee_invoice_item.json
 #: hostel360/hostel_fees/doctype/hostel_fee_structure_item/hostel_fee_structure_item.json
@@ -3360,8 +3407,8 @@ msgid "Designation"
 msgstr ""
 
 #. Label of the login_section (Section Break) field in DocType 'Hostel Staff'
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:33
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:43
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:41
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:51
 #: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.json
 msgid "Desk Login"
 msgstr ""
@@ -3371,16 +3418,16 @@ msgstr ""
 msgid "Desk User"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:87
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:95
 msgid "Desk login {0} is active. Roles and hostel access follow this record."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:88
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:96
 msgid "Desk login {0} is disabled because this staff member is inactive."
 msgstr ""
 
 #. Label of the destination (Data) field in DocType 'Home Visit Leave'
-#: hostel360/api/portal.py:1213
+#: hostel360/api/portal.py:1215
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
 #: hostel360/student_services/page/approvals/approvals.js:191
 #: hostel360/student_services/report/leave_register/leave_register.py:77
@@ -3472,7 +3519,7 @@ msgstr ""
 #. Label of the district (Data) field in DocType 'Hostel Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "District"
-msgstr ""
+msgstr "மாவட்டம்"
 
 #. Label of the division_section (Section Break) field in DocType 'Mess Bill
 #. Run'
@@ -3715,18 +3762,18 @@ msgstr ""
 #: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.json
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "Email"
-msgstr ""
+msgstr "மின்னஞ்சல்"
 
 #. Label of the emergency_contact_name (Data) field in DocType 'Hostel Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "Emergency Contact Name"
-msgstr ""
+msgstr "அவசரத் தொடர்பு நபரின் பெயர்"
 
 #. Label of the emergency_contact_phone (Data) field in DocType 'Hostel
 #. Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "Emergency Contact Phone"
-msgstr ""
+msgstr "அவசரத் தொடர்பு எண்"
 
 #. Label of the employee_id (Data) field in DocType 'Hostel Staff'
 #: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.json
@@ -3773,6 +3820,10 @@ msgstr ""
 #. Label of the end_date (Date) field in DocType 'Hostel Academic Year'
 #: hostel360/hostel_setup/doctype/hostel_academic_year/hostel_academic_year.json
 msgid "End Date"
+msgstr ""
+
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:63
+msgid "English Version"
 msgstr ""
 
 #: hostel360/hostel_mess/doctype/mess_bill_run/mess_bill_run.js:29
@@ -3823,7 +3874,7 @@ msgstr ""
 msgid "Enter the amount received against at least one invoice."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:86
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:100
 msgid "Enter the approved WhatsApp template name."
 msgstr ""
 
@@ -3831,11 +3882,11 @@ msgstr ""
 msgid "Enter the institution's full name."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:129
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:132
 msgid "Enter the reference number for a {0} payment (UTR, DD or cheque number)."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:119
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:120
 msgid "Enter the refund reference and reason."
 msgstr ""
 
@@ -3847,7 +3898,7 @@ msgstr ""
 msgid "Enter the source folder."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:99
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:100
 msgid "Enter why the transaction is being closed."
 msgstr ""
 
@@ -3913,7 +3964,7 @@ msgstr ""
 msgid "Escalated"
 msgstr "உயர்நிலைக்கு அனுப்பப்பட்டது"
 
-#: hostel360/student_services/page/approvals/approvals.js:243
+#: hostel360/student_services/page/approvals/approvals.js:246
 msgid "Escalated (level {0})"
 msgstr ""
 
@@ -4094,7 +4145,7 @@ msgstr "காலாவதியானது"
 
 #: hostel360/www/verify-certificate.html:161
 msgid "Expired certificate"
-msgstr ""
+msgstr "காலாவதியான சான்றிதழ்"
 
 #: hostel360/hostel_operations/doctype/security_incident/security_incident.py:76
 msgid "Explain in the assessment notes why this incident is not reportable to CERT-In."
@@ -4154,7 +4205,7 @@ msgstr ""
 #. Label of the facilities (Table MultiSelect) field in DocType 'Hostel Room'
 #. Option for the 'Feedback Type' (Select) field in DocType 'Hostel Feedback'
 #. Label of the facilities (Rating) field in DocType 'Hostel Feedback'
-#: hostel360/api/portal.py:1677
+#: hostel360/api/portal.py:1648
 #: hostel360/hostel_setup/doctype/hostel/hostel.json
 #: hostel360/hostel_setup/doctype/hostel_room/hostel_room.json
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
@@ -4349,7 +4400,7 @@ msgstr ""
 #. Feedback'
 #. Label of a Sidebar Item
 #. Label of a Card Break in the Student Services Workspace
-#: hostel360/api/portal.py:1485
+#: hostel360/api/portal.py:1482
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.py:43
 #: hostel360/student_services/report/feedback_summary/feedback_summary.py:130
@@ -4381,7 +4432,7 @@ msgstr "வரவிருக்கும் மாதத்திற்கு�
 msgid "Feedback on {0} for {1} has already been submitted."
 msgstr "{1}-க்கான {0} பற்றிய கருத்துக்கணிப்பு ஏற்கனவே சமர்ப்பிக்கப்பட்டுள்ளது."
 
-#: hostel360/api/portal.py:1671
+#: hostel360/api/portal.py:1642
 msgid "Feedback type"
 msgstr "கருத்துக்கணிப்பு வகை"
 
@@ -4417,7 +4468,7 @@ msgstr ""
 msgid "Files"
 msgstr ""
 
-#: hostel360/api/portal.py:1503
+#: hostel360/api/portal.py:1500
 msgid "Files can only be uploaded for a grievance."
 msgstr "புகாருக்கு மட்டுமே கோப்புகளைப் பதிவேற்ற முடியும்."
 
@@ -4430,13 +4481,17 @@ msgstr "Hostel360 இணையதளத்திலிருந்து மட�
 msgid "Files in Export"
 msgstr ""
 
-#: hostel360/api/portal.py:1553
+#: hostel360/api/portal.py:1544
 msgid "Files of this type cannot be uploaded. Please upload a PDF, JPG, PNG or WEBP file."
 msgstr "இந்த வகைக் கோப்புகளைப் பதிவேற்ற முடியாது. PDF, JPG, PNG அல்லது WEBP கோப்பைப் பதிவேற்றவும்."
 
 #: hostel360/security/files.py:191
 msgid "Files of this type cannot be uploaded. Please upload a {0} file."
 msgstr "இந்த வகைக் கோப்புகளைப் பதிவேற்ற முடியாது. {0} கோப்பைப் பதிவேற்றவும்."
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:37
+msgid "Find a student by register number, name or room"
+msgstr ""
 
 #. Option for the 'Category' (Select) field in DocType 'Hostel Fee Head'
 #. Option for the 'Invoice Type' (Select) field in DocType 'Hostel Fee Invoice'
@@ -4509,7 +4564,7 @@ msgstr ""
 msgid "First response SLA breached"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:186
+#: hostel360/hostel_operations/support.py:194
 msgid "First response due by {0}; resolution due by {1}."
 msgstr ""
 
@@ -4561,7 +4616,7 @@ msgid "Folder on the server with one CSV or XLSX file per entity and an attachme
 msgstr ""
 
 #. Label of the food_quality (Rating) field in DocType 'Hostel Feedback'
-#: hostel360/api/portal.py:1674
+#: hostel360/api/portal.py:1645
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
 msgid "Food Quality"
 msgstr "உணவின் தரம்"
@@ -4575,6 +4630,12 @@ msgstr ""
 #. Label of the mess_menu (Link) field in DocType 'Mess Indent'
 #: hostel360/hostel_mess/doctype/mess_indent/mess_indent.json
 msgid "For Menu"
+msgstr ""
+
+#. Description of the 'Message Template' (Small Text) field in DocType 'Hostel
+#. Grievance Update'
+#: hostel360/student_services/doctype/hostel_grievance_update/hostel_grievance_update.json
+msgid "For entries the system writes: the English text, translated when the timeline is read."
 msgstr ""
 
 #. Description of the 'Academic Year' (Data) field in DocType 'Hostel Academic
@@ -4599,11 +4660,11 @@ msgstr ""
 msgid "For example: course completed, discontinued, moved to day scholar."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:66
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:74
 msgid "For reference. Wardens, administrators and mess managers see all hostels."
 msgstr ""
 
-#: hostel360/auth/otp.py:586
+#: hostel360/auth/otp.py:611
 msgid "For your security, sign-in for this number is paused after too many incorrect codes. Please try again in {0} minutes or contact the hostel office."
 msgstr "உங்கள் பாதுகாப்புக்காக, பல தவறான குறியீடுகள் உள்ளிடப்பட்டதால் இந்த எண்ணுக்கான உள்நுழைவு நிறுத்தி வைக்கப்பட்டுள்ளது. {0} நிமிடங்களில் மீண்டும் முயற்சிக்கவும் அல்லது விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
@@ -4623,7 +4684,7 @@ msgstr ""
 msgid "Friday"
 msgstr ""
 
-#: hostel360/api/portal.py:1211
+#: hostel360/api/portal.py:1213
 #: hostel360/hostel_mess/report/mess_reduction_register/mess_reduction_register.py:73
 #: hostel360/hostel_people/report/room_allotment_history/room_allotment_history.py:75
 msgid "From"
@@ -4634,7 +4695,7 @@ msgstr "தொடக்கம்"
 #. Label of the from_date (Date) field in DocType 'Mess Reduction Application'
 #. Label of the from_date (Date) field in DocType 'Monthly Performance Report'
 #. Label of the from_date (Date) field in DocType 'Room Allotment'
-#: hostel360/api/portal.py:1166
+#: hostel360/api/portal.py:1168
 #: hostel360/hostel_fees/report/fee_collection/fee_collection.js:8
 #: hostel360/hostel_fees/report/gateway_reconciliation/gateway_reconciliation.js:8
 #: hostel360/hostel_mess/doctype/mess_bill/mess_bill.json
@@ -4731,6 +4792,18 @@ msgstr ""
 msgid "Gas"
 msgstr ""
 
+#. Label of a Sidebar Item
+#. Label of a shortcut in the Student Services Workspace
+#: hostel360/student_services/page/gate_pass/gate_pass.js:7
+#: hostel360/student_services/sidebar/student_services/student_services.json
+#: hostel360/student_services/workspace/student_services/student_services.json
+msgid "Gate Pass"
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:484
+msgid "Gate staff record the current time only. Please ask the warden to correct a time."
+msgstr ""
+
 #. Label of the section_gateway (Section Break) field in DocType 'Hostel
 #. Payment Transaction'
 #. Label of the gateway (Data) field in DocType 'Hostel Payment Transaction'
@@ -4777,7 +4850,7 @@ msgstr ""
 msgid "Gateway Response"
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:184
+#: hostel360/hostel_fees/reconciliation.py:194
 msgid "Gateway checks succeeded again."
 msgstr ""
 
@@ -4902,7 +4975,7 @@ msgstr ""
 #. Label of the details_section (Section Break) field in DocType 'Hostel
 #. Grievance'
 #. Label of a Sidebar Item
-#: hostel360/api/portal.py:1291
+#: hostel360/api/portal.py:1288
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
 #: hostel360/student_services/sidebar/student_services/student_services.json
 msgid "Grievance"
@@ -4939,11 +5012,13 @@ msgstr ""
 msgid "Grievance Urgent Escalation Hours must be at least 1."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:286
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:44
+#: hostel360/student_services/doctype/hostel_grievance/test_hostel_grievance.py:314
 msgid "Grievance closed."
 msgstr "புகார் முடிக்கப்பட்டது."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:132
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:41
+#: hostel360/student_services/doctype/hostel_grievance/test_hostel_grievance.py:311
 msgid "Grievance registered."
 msgstr "புகார் பதிவு செய்யப்பட்டது."
 
@@ -5124,7 +5199,7 @@ msgstr "வீட்டுக்குச் செல்லுதல்"
 msgid "Home Visit Leave"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:289
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:299
 msgid "Home visit leave {0}"
 msgstr "வீட்டுக்குச் செல்லும் விடுப்பு {0}"
 
@@ -5233,7 +5308,7 @@ msgstr ""
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
-#: hostel360/student_services/page/approvals/approvals.js:253
+#: hostel360/student_services/page/approvals/approvals.js:256
 #: hostel360/student_services/report/bonafide_register/bonafide_register.js:20
 #: hostel360/student_services/report/bonafide_register/bonafide_register.py:73
 #: hostel360/student_services/report/feedback_summary/feedback_summary.js:22
@@ -5400,7 +5475,7 @@ msgstr ""
 msgid "Hostel Feedback"
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:447
+#: hostel360/hostel_fees/services.py:452
 msgid "Hostel Fees"
 msgstr "விடுதிக் கட்டணம்"
 
@@ -5434,7 +5509,7 @@ msgstr ""
 #: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.json
 #: hostel360/hostel_people/workspace/people_and_rooms/people_and_rooms.json
 msgid "Hostel Guardian"
-msgstr ""
+msgstr "பெற்றோர் / பாதுகாவலர்"
 
 #. Name of a DocType
 #. Label of a Sidebar Item
@@ -5471,7 +5546,7 @@ msgstr ""
 #. Label of the office_section (Section Break) field in DocType 'Hostel
 #. Settings'
 #: hostel360/hostel_setup/doctype/hostel_settings/hostel_settings.json
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:187
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:222
 #: hostel360/www/verify-certificate.html:120
 msgid "Hostel Office"
 msgstr "விடுதி அலுவலகம்"
@@ -5572,6 +5647,11 @@ msgstr ""
 msgid "Hostel Room Facility"
 msgstr ""
 
+#. Name of a role
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
+msgid "Hostel Security"
+msgstr ""
+
 #. Name of a DocType
 #. Label of a Sidebar Item
 #. Label of a Link in the Hostel Admin Workspace
@@ -5598,7 +5678,7 @@ msgstr ""
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 #: hostel360/hostel_people/workspace/people_and_rooms/people_and_rooms.json
 msgid "Hostel Student"
-msgstr ""
+msgstr "விடுதி மாணவர்"
 
 #. Name of a DocType
 #: hostel360/hostel_people/doctype/hostel_student_guardian/hostel_student_guardian.json
@@ -5651,19 +5731,19 @@ msgstr ""
 msgid "Hostel Website URL"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.py:171
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.py:172
 msgid "Hostel access of {0} was not changed because the account has other roles. Ask a System Manager to update it."
 msgstr ""
 
 #: hostel360/www/verify-certificate.html:121
 msgid "Hostel certificate verification"
-msgstr ""
+msgstr "விடுதிச் சான்றிதழ் சரிபார்ப்பு"
 
 #: hostel360/hostel_fees/gateways/payu.py:206
 msgid "Hostel dues {0}"
 msgstr "விடுதிக் கட்டண நிலுவை {0}"
 
-#: hostel360/hostel_fees/services.py:452
+#: hostel360/hostel_fees/services.py:457
 msgid "Hostel dues: {0}"
 msgstr "விடுதிக் கட்டண நிலுவை: {0}"
 
@@ -5712,6 +5792,10 @@ msgstr ""
 
 #: hostel360/hostel_migration/demo_data.py:343
 msgid "Hostels, blocks, floors and rooms"
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:204
+msgid "Hostels: {0}"
 msgstr ""
 
 #. Description of the 'Affected Systems' (Small Text) field in DocType
@@ -5913,7 +5997,7 @@ msgstr ""
 msgid "In-App"
 msgstr ""
 
-#: hostel360/api/portal.py:411 hostel360/api/portal.py:416
+#: hostel360/api/portal.py:384 hostel360/api/portal.py:389
 #: hostel360/hostel_people/doctype/hostel_staff/hostel_staff_list.js:4
 #: hostel360/hostel_people/doctype/room_allotment/room_allotment.py:175
 #: hostel360/hostel_setup/doctype/hostel/hostel_list.js:4
@@ -6207,7 +6291,7 @@ msgstr "விண்ணப்பதாரர் சரியில்லை."
 msgid "Invalid notification token."
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:711
+#: hostel360/hostel_fees/services.py:716
 msgid "Invalid payment confirmation for {0}"
 msgstr ""
 
@@ -6256,23 +6340,23 @@ msgstr ""
 msgid "Invoice has payments"
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:185
+#: hostel360/hostel_fees/services.py:189
 msgid "Invoice type must be one of {0}."
 msgstr "கட்டணச்சீட்டு வகை {0}-இல் ஒன்றாக இருக்க வேண்டும்."
 
-#: hostel360/hostel_fees/services.py:397
+#: hostel360/hostel_fees/services.py:402
 msgid "Invoice {0} is already paid."
 msgstr "கட்டணச்சீட்டு {0} ஏற்கனவே செலுத்தப்பட்டுள்ளது."
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:152
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:155
 msgid "Invoice {0} is listed more than once."
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:395
+#: hostel360/hostel_fees/services.py:400
 msgid "Invoice {0} is not open for payment."
 msgstr "கட்டணச்சீட்டு {0} பணம் செலுத்துவதற்குத் திறந்திருக்கவில்லை."
 
-#: hostel360/hostel_fees/services.py:392
+#: hostel360/hostel_fees/services.py:397
 msgid "Invoice {0} was not found for this student."
 msgstr "இந்த மாணவருக்குக் கட்டணச்சீட்டு {0} கிடைக்கவில்லை."
 
@@ -6288,7 +6372,7 @@ msgstr ""
 #. Label of the section_invoices (Section Break) field in DocType 'Hostel
 #. Payment Transaction'
 #. Label of the invoices (Table) field in DocType 'Hostel Payment Transaction'
-#: hostel360/api/portal.py:1016
+#: hostel360/api/portal.py:1010
 #: hostel360/hostel_fees/doctype/hostel_fee_structure/hostel_fee_structure.json
 #: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.json
 msgid "Invoices"
@@ -6363,7 +6447,7 @@ msgstr "வழங்கப்பட்டது"
 
 #: hostel360/www/verify-certificate.html:175
 msgid "Issued on"
-msgstr ""
+msgstr "வழங்கிய தேதி"
 
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.js:220
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice_list.js:220
@@ -6427,7 +6511,7 @@ msgstr ""
 
 #. Description of the 'Body' (Code) field in DocType 'Message Template'
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
-msgid "Jinja template. Helpers: rupees(amount), format_inr(amount), fdate(date), fdatetime(datetime), short(text, length). SMS: keep under 160 characters, plain English, and register the same wording on the DLT portal."
+msgid "Jinja template. Helpers: rupees(amount), format_inr(amount), fdate(date), fdatetime(datetime), short(text, length), label(value) (a status or category in this template's language). English SMS: keep under 160 characters in plain English and register the same wording on the DLT portal. Tamil SMS are sent as Unicode, 70 characters a part."
 msgstr ""
 
 #. Option for the 'Category' (Select) field in DocType 'Ops Alert'
@@ -6449,6 +6533,11 @@ msgstr ""
 #. Option for the 'UOM' (Select) field in DocType 'Mess Item'
 #: hostel360/hostel_mess/doctype/mess_item/mess_item.json
 msgid "Kg"
+msgstr ""
+
+#. Label of the language (Select) field in DocType 'Message Template'
+#: hostel360/hostel_communication/doctype/message_template/message_template.json
+msgid "Language"
 msgstr ""
 
 #. Label of the last_checked_on (Datetime) field in DocType 'Hostel Payment
@@ -6577,8 +6666,8 @@ msgstr ""
 #. Label of a Sidebar Item
 #. Label of a Card Break in the Student Services Workspace
 #. Label of a shortcut in the Student Services Workspace
-#: hostel360/api/portal.py:1228 hostel360/api/portal.py:1267
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:72
+#: hostel360/api/portal.py:1230 hostel360/api/portal.py:1264
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:82
 #: hostel360/student_services/page/approvals/approvals.js:18
 #: hostel360/student_services/report/leave_register/leave_register.py:69
 #: hostel360/student_services/report/students_on_leave/students_on_leave.py:86
@@ -6598,6 +6687,15 @@ msgstr ""
 #. Leave'
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
 msgid "Leave Details"
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:410
+msgid "Leave Ended"
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:403
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:426
+msgid "Leave Not Started"
 msgstr ""
 
 #. Name of a report
@@ -6633,23 +6731,23 @@ msgstr ""
 msgid "Leave applied by a student goes to the parent for approval before the warden."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:296
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:306
 msgid "Leave approved, but the mess reduction could not be applied: {0}"
 msgstr "விடுப்புக்கு ஒப்புதல் அளிக்கப்பட்டது, ஆனால் உணவகக் கட்டணக் கழிவை வழங்க முடியவில்லை: {0}"
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:135
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:145
 msgid "Leave cannot start in the past. Please check the leaving date and time."
 msgstr "விடுப்பு கடந்த காலத்தில் தொடங்க முடியாது. புறப்படும் தேதியையும் நேரத்தையும் சரிபார்க்கவும்."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:125
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:135
 msgid "Leave dates cannot be changed once the leave is {0}. Cancel it and apply again."
 msgstr "விடுப்பு {0} ஆன பிறகு அதன் தேதிகளை மாற்ற முடியாது. அதை ரத்து செய்து மீண்டும் விண்ணப்பிக்கவும்."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:181
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:191
 msgid "Leave needs a parent's approval, but no parent or guardian who can approve leave is linked to this student. Please contact the hostel office."
 msgstr "விடுப்புக்குப் பெற்றோரின் ஒப்புதல் தேவை, ஆனால் விடுப்புக்கு ஒப்புதல் அளிக்கக்கூடிய பெற்றோர் அல்லது பாதுகாவலர் எவரும் இந்த மாணவருடன் இணைக்கப்படவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:367
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:377
 msgid "Leave {0} of {1} was cancelled, but its mess reduction {2} is still in force."
 msgstr ""
 
@@ -6668,6 +6766,10 @@ msgstr ""
 msgid "Leaving On"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:183
+msgid "Leaving today"
+msgstr ""
+
 #. Group in Mess Stock Entry's connections
 #: hostel360/hostel_mess/doctype/mess_stock_entry/mess_stock_entry.json
 msgid "Ledger"
@@ -6682,6 +6784,10 @@ msgstr ""
 msgid "Left blank, it is set to Ground Floor, First Floor and so on."
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:238
+msgid "Left {0}"
+msgstr ""
+
 #: hostel360/hostel_migration/reconciliation.py:212
 msgid "Legacy"
 msgstr ""
@@ -6694,6 +6800,11 @@ msgstr ""
 #: hostel360/hostel_migration/reconciliation.py:345
 #: hostel360/hostel_migration/reconciliation.py:363
 msgid "Legacy ID"
+msgstr ""
+
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:47
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:53
+msgid "Let {0} sign in again on {1} straight away? Do this only after confirming who you are speaking to, for example by calling back on the registered number."
 msgstr ""
 
 #. Label of the level (Int) field in DocType 'Ops Escalation Level'
@@ -6723,7 +6834,7 @@ msgstr ""
 msgid "Line of the source file (header is line 1)."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:37
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:65
 msgid "Link this guardian from the Guardians table of a student."
 msgstr ""
 
@@ -6737,6 +6848,7 @@ msgid "Live payments"
 msgstr ""
 
 #: hostel360/student_services/page/approvals/approvals.js:56
+#: hostel360/student_services/page/gate_pass/gate_pass.js:159
 msgid "Loading..."
 msgstr ""
 
@@ -6821,7 +6933,7 @@ msgstr ""
 msgid "Make Current"
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:317
+#: hostel360/hostel_migration/purge.py:323
 msgid "Make a complete export with h360-export, verify it on this site with 'bench --site {0} h360-verify-export --path ...', and run this again (or pass --force-without-export, which the certificate records)."
 msgstr ""
 
@@ -6903,6 +7015,11 @@ msgstr ""
 msgid "Mark Refunded"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:246
+#: hostel360/student_services/page/gate_pass/gate_pass.js:321
+msgid "Mark Returned"
+msgstr ""
+
 #: hostel360/hostel_people/page/room_board/room_board.js:395
 msgid "Mark Vacant"
 msgstr ""
@@ -6925,7 +7042,7 @@ msgstr ""
 msgid "Markdown Report"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:134
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:135
 msgid "Marked as refunded: {0}"
 msgstr ""
 
@@ -7434,7 +7551,7 @@ msgstr ""
 msgid "Mess managers receive a weekly list of items at or below their reorder level."
 msgstr ""
 
-#: hostel360/api/portal.py:1179
+#: hostel360/api/portal.py:1181
 msgid "Mess reduction"
 msgstr "உணவகக் கட்டணக் கழிவு"
 
@@ -7442,15 +7559,15 @@ msgstr "உணவகக் கட்டணக் கழிவு"
 msgid "Mess reduction is available only to active residents."
 msgstr "உணவகக் கட்டணக் கழிவு செயலில் உள்ள விடுதிவாசிகளுக்கு மட்டுமே."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:271
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:281
 msgid "Mess reduction was not applied: {0} mess day(s) away is less than the minimum of {1}."
 msgstr "உணவகக் கட்டணக் கழிவு வழங்கப்படவில்லை: வெளியே இருந்த {0} உணவக நாள்(கள்) குறைந்தபட்ச அளவான {1}-ஐ விடக் குறைவு."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:340
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:350
 msgid "Mess reduction {0} could not be cancelled automatically: {1}"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:344
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:354
 msgid "Mess reduction {0} was cancelled with the leave."
 msgstr "உணவகக் கட்டணக் கழிவு {0} விடுப்புடன் சேர்த்து ரத்து செய்யப்பட்டது."
 
@@ -7477,7 +7594,7 @@ msgstr ""
 #. Label of the message (Small Text) field in DocType 'Ops Backup Record'
 #. Label of the message (Text) field in DocType 'Hostel Grievance Update'
 #: hostel360/hostel_communication/doctype/message_log/message_log.json
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:55
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:99
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
 #: hostel360/hostel_operations/doctype/ops_backup_record/ops_backup_record.json
 #: hostel360/student_services/doctype/hostel_grievance_update/hostel_grievance_update.json
@@ -7512,10 +7629,13 @@ msgstr ""
 #. Name of a DocType
 #. Label of a Sidebar Item
 #. Label of a Link in the Hostel Admin Workspace
+#. Label of the message_template (Small Text) field in DocType 'Hostel
+#. Grievance Update'
 #: hostel360/hostel_communication/doctype/message_log/message_log.json
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
 #: hostel360/hostel_communication/sidebar/messaging/messaging.json
 #: hostel360/hostel_setup/workspace/hostel_admin/hostel_admin.json
+#: hostel360/student_services/doctype/hostel_grievance_update/hostel_grievance_update.json
 msgid "Message Template"
 msgstr ""
 
@@ -7526,6 +7646,12 @@ msgstr ""
 #. Label of the message_type (Data) field in DocType 'Ops Ingest Receipt'
 #: hostel360/hostel_operations/doctype/ops_ingest_receipt/ops_ingest_receipt.json
 msgid "Message Type"
+msgstr ""
+
+#. Label of the message_args (Small Text) field in DocType 'Hostel Grievance
+#. Update'
+#: hostel360/student_services/doctype/hostel_grievance_update/hostel_grievance_update.json
+msgid "Message Values"
 msgstr ""
 
 #: hostel360/hostel_communication/doctype/message_log/message_log.js:14
@@ -7852,7 +7978,8 @@ msgstr ""
 #: hostel360/hostel_operations/doctype/ops_alert/ops_alert.js:41
 #: hostel360/hostel_operations/doctype/ops_alert/ops_alert.js:64
 #: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.js:54
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:88
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:102
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:112
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.js:61
 msgid "More"
 msgstr ""
@@ -7939,6 +8066,10 @@ msgstr ""
 msgid "Next Retry On"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:256
+msgid "Next approved leave: {0} to {1}"
+msgstr ""
+
 #: hostel360/hostel_migration/reconciliation.py:162
 #: hostel360/hostel_migration/reconciliation.py:274
 msgid "No"
@@ -7960,6 +8091,14 @@ msgstr ""
 msgid "No Floor"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:188
+msgid "No approved leave starts today."
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:249
+msgid "No approved leave today"
+msgstr ""
+
 #: hostel360/hostel_operations/reports.py:332
 msgid "No availability measurements were recorded this month; {0} critical incidents were logged."
 msgstr ""
@@ -7970,22 +8109,26 @@ msgstr ""
 
 #: hostel360/student_services/verification.py:77
 msgid "No certificate matches this code."
-msgstr ""
+msgstr "இந்தக் குறியீட்டுக்குப் பொருந்தும் சான்றிதழ் எதுவும் இல்லை."
 
 #: hostel360/www/verify-certificate.html:151
 msgid "No certificate matches this code. Check the code for typing mistakes; codes are case-sensitive. If it still does not match, the certificate was not issued by this hostel."
+msgstr "இந்தக் குறியீட்டுக்குப் பொருந்தும் சான்றிதழ் எதுவும் இல்லை. குறியீட்டில் தட்டச்சுப் பிழை உள்ளதா எனச் சரிபார்க்கவும்; குறியீட்டில் பெரிய, சிறிய எழுத்துகள் வேறுபடும். அப்போதும் பொருந்தவில்லை என்றால், அந்தச் சான்றிதழ் இந்த விடுதியால் வழங்கப்படவில்லை."
+
+#: hostel360/student_services/page/gate_pass/gate_pass.py:314
+msgid "No check-out was recorded for this leave."
 msgstr ""
 
 #: hostel360/hostel_operations/report/uptime_and_incidents/uptime_and_incidents.py:106
 msgid "No data"
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:408
-#: hostel360/hostel_fees/transactions.py:509
+#: hostel360/hostel_fees/services.py:413
+#: hostel360/hostel_fees/transactions.py:508
 msgid "No gateway order was created."
 msgstr "பணப் பரிமாற்ற நுழைவாயிலில் ஆர்டர் எதுவும் உருவாக்கப்படவில்லை."
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:147
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:150
 msgid "No invoices"
 msgstr ""
 
@@ -8005,11 +8148,12 @@ msgstr "விடுதி {0}-க்கு உணவகம் எதுவு�
 msgid "No outstanding invoices for this student"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:554
+#: hostel360/hostel_fees/transactions.py:553
 msgid "No payment was completed within {0} minutes."
 msgstr "{0} நிமிடங்களுக்குள் பணம் செலுத்துதல் எதுவும் முடிக்கப்படவில்லை."
 
-#: hostel360/api/portal.py:882
+#: hostel360/api/portal.py:869
+#: hostel360/student_services/page/gate_pass/gate_pass.py:102
 msgid "No photo is on record."
 msgstr "புகைப்படம் எதுவும் பதிவில் இல்லை."
 
@@ -8017,11 +8161,15 @@ msgstr "புகைப்படம் எதுவும் பதிவில�
 msgid "No rooms yet. Add rooms to a hostel and their beds appear here."
 msgstr ""
 
-#: hostel360/api/portal.py:380
+#: hostel360/student_services/page/gate_pass/gate_pass.js:171
+msgid "No student in your hostels matches {0}."
+msgstr ""
+
+#: hostel360/api/portal.py:358
 msgid "No student is linked to your account yet. Please contact the hostel office."
 msgstr "உங்கள் கணக்குடன் இன்னும் எந்த மாணவரும் இணைக்கப்படவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
-#: hostel360/hostel_migration/purge.py:300
+#: hostel360/hostel_migration/purge.py:306
 msgid "No verified exit export is on record for this site."
 msgstr ""
 
@@ -8029,7 +8177,11 @@ msgstr ""
 msgid "No webhook secret is set. Payments will still be confirmed from the checkout and by the reconciliation job every 15 minutes, but configuring the webhook confirms them instantly."
 msgstr ""
 
-#: hostel360/student_services/page/approvals/approvals.js:255
+#: hostel360/student_services/page/gate_pass/gate_pass.js:189
+msgid "Nobody is away on leave right now."
+msgstr ""
+
+#: hostel360/student_services/page/approvals/approvals.js:258
 msgid "Nobody yet"
 msgstr ""
 
@@ -8047,8 +8199,8 @@ msgstr ""
 msgid "Nos"
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:114
-#: hostel360/student_services/utils.py:326
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:126
+#: hostel360/student_services/utils.py:388
 msgid "Not Allowed"
 msgstr "அனுமதி இல்லை"
 
@@ -8093,7 +8245,7 @@ msgstr ""
 #. Leave'
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
 msgid "Not Required"
-msgstr ""
+msgstr "தேவையில்லை"
 
 #. Option for the 'Reconciliation' (Select) field in DocType 'Migration Run'
 #. Option for the 'Status' (Select) field in DocType 'Migration Run Entity'
@@ -8114,15 +8266,15 @@ msgstr ""
 msgid "Not Yet Due"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:56
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:84
 msgid "Not allotted"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:91
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:94
 msgid "Not an online payment"
 msgstr ""
 
-#: hostel360/api/portal.py:417
+#: hostel360/api/portal.py:390
 msgid "Not available"
 msgstr "கிடைக்காது"
 
@@ -8137,17 +8289,22 @@ msgstr ""
 
 #: hostel360/www/verify-certificate.html:149
 msgid "Not found"
+msgstr "கிடைக்கவில்லை"
+
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:74
+msgid "Not linked to any student yet."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:46
-msgid "Not linked to any student yet."
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:212
+#: hostel360/hostel_fees/utils.py:122
+msgid "Not permitted"
 msgstr ""
 
 #: hostel360/api/ops.py:524
 msgid "Not permitted."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:357
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:45
 msgid "Not resolved in time; escalated to level {0}."
 msgstr "உரிய நேரத்தில் தீர்க்கப்படவில்லை; நிலை {0}-க்கு உயர்த்தப்பட்டது."
 
@@ -8181,19 +8338,19 @@ msgstr ""
 msgid "Nothing is waiting for your decision."
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:112
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:118
 msgid "Nothing recorded on {0}: this export was made on {1}."
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:119
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:127
 msgid "Nothing recorded: log {0} belongs to {1}."
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:110
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:116
 msgid "Nothing recorded: no readable manifest was found."
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:144
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:152
 msgid "Nothing recorded: the export failed verification and is not in this site's export log."
 msgstr ""
 
@@ -8213,7 +8370,7 @@ msgstr ""
 
 #. Label of the notification_section (Section Break) field in DocType 'Ops
 #. Alert'
-#: hostel360/api/portal.py:1734
+#: hostel360/api/portal.py:1707
 #: hostel360/hostel_operations/doctype/ops_alert/ops_alert.json
 msgid "Notifications"
 msgstr "அறிவிப்புகள்"
@@ -8385,7 +8542,7 @@ msgstr ""
 #. Description of the 'Trusted Networks' (Small Text) field in DocType
 #. 'Messaging Settings'
 #: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.json
-msgid "One IP address or CIDR range per line, for example the campus Wi-Fi gateway. These networks are exempt from the per-IP limit; per-number limits still apply."
+msgid "One IP address or CIDR range per line, for example the campus Wi-Fi gateway. These networks are exempt from the per-IP code limit and get a far higher sign-in flood ceiling (100,000 requests an hour instead of 3,000); per-number limits still apply."
 msgstr ""
 
 #. Description of the 'Template Parameters' (Small Text) field in DocType
@@ -8467,7 +8624,7 @@ msgstr ""
 msgid "Online Transaction"
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:254
+#: hostel360/hostel_fees/services.py:259
 msgid "Online payment is being tested and is not open yet. Please pay at the hostel office."
 msgstr "இணையவழிப் பணம் செலுத்துதல் சோதனையில் உள்ளது, இன்னும் திறக்கப்படவில்லை. விடுதி அலுவலகத்தில் செலுத்தவும்."
 
@@ -8484,11 +8641,11 @@ msgstr "இணையவழிப் பணம் செலுத்துதல�
 msgid "Online payment is not enabled. Please pay at the hostel office."
 msgstr "இணையவழிப் பணம் செலுத்துதல் இயக்கப்படவில்லை. விடுதி அலுவலகத்தில் செலுத்தவும்."
 
-#: hostel360/hostel_fees/services.py:255
+#: hostel360/hostel_fees/services.py:260
 msgid "Online payment unavailable"
 msgstr "இணையவழிப் பணம் செலுத்துதல் கிடைக்கவில்லை"
 
-#: hostel360/hostel_fees/transactions.py:330
+#: hostel360/hostel_fees/transactions.py:329
 msgid "Online payment {0} exceeds the dues it was meant for"
 msgstr ""
 
@@ -8496,7 +8653,7 @@ msgstr ""
 msgid "Online payment {0} failed verification"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:408
+#: hostel360/hostel_fees/transactions.py:407
 msgid "Online payment {0} was refunded at the gateway"
 msgstr ""
 
@@ -8504,24 +8661,28 @@ msgstr ""
 msgid "Online receipts are issued automatically by the payment gateway. Choose the mode the money was received in."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:88
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:91
 msgid "Online receipts are issued automatically when a gateway payment succeeds. Choose the mode the money was received in."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:249
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:277
 msgid "Online receipts can be cancelled only by a Hostel Administrator, after the refund is processed in the gateway dashboard."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:118
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:121
 msgid "Online transaction {0} already has receipt {1}."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:101
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:104
 msgid "Online transaction {0} does not belong to this student."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:114
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:117
 msgid "Online transaction {0} has not succeeded."
+msgstr ""
+
+#: hostel360/hostel_operations/support.py:461
+msgid "Only HyFib Operations can assign support tickets."
 msgstr ""
 
 #: hostel360/api/ops.py:487
@@ -8558,7 +8719,7 @@ msgstr ""
 msgid "Only a Mess Manager can place orders."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:171
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:181
 msgid "Only a parent or guardian linked to the student and allowed to approve leave can apply."
 msgstr "மாணவருடன் இணைக்கப்பட்டு, விடுப்புக்கு ஒப்புதல் அளிக்க அனுமதி பெற்ற பெற்றோர் அல்லது பாதுகாவலர் மட்டுமே விண்ணப்பிக்க முடியும்."
 
@@ -8574,7 +8735,7 @@ msgstr ""
 msgid "Only a registered parent or guardian can apply on a student's behalf."
 msgstr "பதிவு செய்யப்பட்ட பெற்றோர் அல்லது பாதுகாவலர் மட்டுமே மாணவருக்காக விண்ணப்பிக்க முடியும்."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:305
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:349
 msgid "Only a resolved grievance can be reopened."
 msgstr "தீர்க்கப்பட்ட புகாரை மட்டுமே மீண்டும் திறக்க முடியும்."
 
@@ -8591,7 +8752,7 @@ msgstr ""
 msgid "Only an active allotment can be transferred."
 msgstr ""
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:179
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:184
 msgid "Only an approved certificate can be handed over."
 msgstr "ஒப்புதல் பெற்ற சான்றிதழை மட்டுமே வழங்க முடியும்."
 
@@ -8599,20 +8760,24 @@ msgstr "ஒப்புதல் பெற்ற சான்றிதழை ம
 msgid "Only an approved indent can be marked as ordered."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:385
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:395
 msgid "Only approved leaves can be checked out (this one is {0})."
 msgstr "ஒப்புதல் பெற்ற விடுப்புகளுக்கு மட்டுமே வெளியேறுதலைப் பதிவு செய்ய முடியும் (இது {0})."
+
+#: hostel360/student_services/page/gate_pass/gate_pass.py:124
+msgid "Only gate staff and wardens can use the gate pass."
+msgstr ""
 
 #: hostel360/student_services/services.py:94
 msgid "Only hostel staff can apply for leave on a student's behalf."
 msgstr "விடுதிப் பணியாளர்கள் மட்டுமே மாணவருக்காக விடுப்புக்கு விண்ணப்பிக்க முடியும்."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:204
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:445
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:243
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:508
 msgid "Only hostel staff can do this."
 msgstr "விடுதிப் பணியாளர்கள் மட்டுமே இதைச் செய்ய முடியும்."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:304
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:314
 msgid "Only leaves that have not started can be cancelled (this one is {0})."
 msgstr "இன்னும் தொடங்காத விடுப்புகளை மட்டுமே ரத்து செய்ய முடியும் (இது {0})."
 
@@ -8626,11 +8791,11 @@ msgstr ""
 msgid "Only one guardian can be the primary contact."
 msgstr "ஒரே ஒரு பாதுகாவலர் மட்டுமே முதன்மைத் தொடர்பாக இருக்க முடியும்."
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:126
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:129
 msgid "Only online receipts can be linked to an online transaction."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:101
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:102
 msgid "Only open (Initiated or Pending) transactions can be closed."
 msgstr ""
 
@@ -8638,7 +8803,7 @@ msgstr ""
 msgid "Only open alerts can be acknowledged. {0} is {1}."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:261
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:302
 msgid "Only open grievances can be resolved (this one is {0})."
 msgstr "திறந்துள்ள புகார்களை மட்டுமே தீர்க்க முடியும் (இது {0})."
 
@@ -8652,23 +8817,23 @@ msgstr ""
 msgid "Only possible for online payments that exceeded the dues at the time they were confirmed."
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:212
+#: hostel360/hostel_operations/support.py:220
 msgid "Only resolved or closed tickets can be re-opened."
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:200
+#: hostel360/hostel_operations/support.py:208
 msgid "Only resolved tickets can be closed."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:121
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:122
 msgid "Only successful payments can be marked as refunded."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:112
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:124
 msgid "Only the Warden or a Hostel Administrator can remove the confidentiality of a grievance."
 msgstr "புகாரின் ரகசியத்தன்மையைக் காப்பாளர் அல்லது விடுதி நிர்வாகி மட்டுமே நீக்க முடியும்."
 
-#: hostel360/student_services/utils.py:195
+#: hostel360/student_services/utils.py:257
 msgid "Only the Warden, a Hostel Administrator or a Deputy Warden of {0} can decide this request."
 msgstr "காப்பாளர், விடுதி நிர்வாகி அல்லது {0}-இன் துணைக் காப்பாளர் மட்டுமே இந்தக் கோரிக்கையில் முடிவெடுக்க முடியும்."
 
@@ -8676,15 +8841,15 @@ msgstr "காப்பாளர், விடுதி நிர்வாகி
 msgid "Only the ingest secret and the OCI notification token can be rotated."
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:202
+#: hostel360/hostel_operations/support.py:210
 msgid "Only the person who raised the ticket can close it."
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:214
+#: hostel360/hostel_operations/support.py:222
 msgid "Only the person who raised the ticket can re-open it."
 msgstr ""
 
-#: hostel360/api/portal.py:1296
+#: hostel360/api/portal.py:1293
 msgid "Only the student or the person who raised this grievance can rate it."
 msgstr "மாணவர் அல்லது இந்தப் புகாரை அளித்தவர் மட்டுமே இதை மதிப்பிட முடியும்."
 
@@ -8790,7 +8955,7 @@ msgstr ""
 msgid "Open Support Tickets"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:31
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:39
 msgid "Open User"
 msgstr ""
 
@@ -8919,7 +9084,7 @@ msgstr ""
 msgid "Optional: entity names to load, one per line or comma separated. Leave empty to load every entity in the mapping's load order."
 msgstr ""
 
-#: hostel360/api/portal.py:1038
+#: hostel360/api/portal.py:1032
 msgid "Order ID"
 msgstr "ஆர்டர் எண்"
 
@@ -9064,13 +9229,13 @@ msgstr ""
 msgid "Over the last hour, once at least 10 messages were attempted."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:184
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:228
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:187
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:256
 msgid "Over-allocation"
 msgstr ""
 
 #. Label of the overall (Rating) field in DocType 'Hostel Feedback'
-#: hostel360/api/portal.py:1673
+#: hostel360/api/portal.py:1644
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
 msgid "Overall"
 msgstr "ஒட்டுமொத்தம்"
@@ -9080,6 +9245,7 @@ msgstr "ஒட்டுமொத்தம்"
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.json
 #: hostel360/hostel_fees/report/fee_dues/fee_dues.py:202
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
+#: hostel360/student_services/page/gate_pass/gate_pass.js:290
 #: hostel360/student_services/report/students_on_leave/students_on_leave.py:58
 #: hostel360/student_services/report/students_on_leave/students_on_leave.py:101
 msgid "Overdue"
@@ -9107,6 +9273,10 @@ msgstr ""
 msgid "Overdue Since"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:289
+msgid "Overdue by {0} h"
+msgstr ""
+
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.py:127
 msgid "Overlapping Application"
 msgstr "ஒன்றுடன் ஒன்று மோதும் விண்ணப்பம்"
@@ -9115,7 +9285,7 @@ msgstr "ஒன்றுடன் ஒன்று மோதும் விண்
 msgid "Overlapping Bill Run"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:153
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:163
 msgid "Overlapping Leave"
 msgstr "ஒன்றுடன் ஒன்று மோதும் விடுப்பு"
 
@@ -9139,7 +9309,7 @@ msgstr ""
 #. Label of the pincode (Data) field in DocType 'Hostel Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "PIN Code"
-msgstr ""
+msgstr "அஞ்சல் குறியீடு (PIN)"
 
 #. Option for the 'HTTP Method' (Select) field in DocType 'Messaging Settings'
 #: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.json
@@ -9181,7 +9351,7 @@ msgstr ""
 msgid "Paid but no active receipt"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:314
+#: hostel360/hostel_fees/transactions.py:313
 msgid "Paid online through {0}{1}."
 msgstr "{0} மூலம் இணையவழியில் செலுத்தப்பட்டது{1}."
 
@@ -9190,11 +9360,17 @@ msgstr "{0} மூலம் இணையவழியில் செலுத்
 msgid "Paid with the gateway's test credentials: no real money was received. Kept out of collection reports."
 msgstr ""
 
+#. Description of the 'Unicode Parameter' (Data) field in DocType 'Messaging
+#. Settings'
+#: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.json
+msgid "Parameter that marks a Unicode (for example Tamil) message, if your gateway needs one. Leave blank if it detects Unicode itself."
+msgstr ""
+
 #. Option for the 'Applied By' (Select) field in DocType 'Home Visit Leave'
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
 #: hostel360/student_services/report/leave_register/leave_register.py:80
 msgid "Parent"
-msgstr ""
+msgstr "பெற்றோர்"
 
 #. Label of the parent_guardian (Link) field in DocType 'Home Visit Leave'
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
@@ -9282,7 +9458,7 @@ msgstr ""
 msgid "Payload Format"
 msgstr ""
 
-#: hostel360/api/portal.py:1035 hostel360/api/portal.py:1054
+#: hostel360/api/portal.py:1029 hostel360/api/portal.py:1049
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.js:81
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice_list.js:81
 msgid "Payment"
@@ -9300,7 +9476,7 @@ msgstr ""
 msgid "Payment Gateway"
 msgstr ""
 
-#: hostel360/api/portal.py:1037
+#: hostel360/api/portal.py:1031
 msgid "Payment ID"
 msgstr "பணம் செலுத்திய எண்"
 
@@ -9330,15 +9506,15 @@ msgstr ""
 msgid "Payment Settings"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:141
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:144
 msgid "Payment date cannot be in the future."
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:214
+#: hostel360/hostel_fees/reconciliation.py:224
 msgid "Payment gateway cannot read transaction {0}"
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:174
+#: hostel360/hostel_fees/reconciliation.py:184
 msgid "Payment gateway checks are failing"
 msgstr ""
 
@@ -9347,7 +9523,7 @@ msgid "Payment gateway {0} is not supported."
 msgstr "பணப் பரிமாற்ற நுழைவாயில் {0} ஆதரிக்கப்படவில்லை."
 
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.py:207
-#: hostel360/hostel_fees/services.py:286 hostel360/hostel_fees/services.py:357
+#: hostel360/hostel_fees/services.py:291 hostel360/hostel_fees/services.py:362
 msgid "Payment in progress"
 msgstr "பணம் செலுத்துதல் நடைபெறுகிறது"
 
@@ -9360,7 +9536,7 @@ msgstr ""
 msgid "Payment transaction {0} was not found."
 msgstr "பணப் பரிவர்த்தனை {0} கிடைக்கவில்லை."
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:67
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:68
 msgid "Payment transactions are part of the audit trail and cannot be deleted."
 msgstr ""
 
@@ -9376,7 +9552,7 @@ msgstr ""
 msgid "Payment webhook with an invalid signature was rejected"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:471
+#: hostel360/hostel_fees/transactions.py:470
 msgid "Payment {0} of {1} on order {2} (student {3}) is authorised but was not captured because {4}. The gateway refunds it automatically unless it is captured from the dashboard."
 msgstr ""
 
@@ -9496,7 +9672,7 @@ msgstr ""
 msgid "Period must be a month written as YYYY-MM, for example {0}."
 msgstr "காலம் YYYY-MM வடிவில் ஒரு மாதமாக இருக்க வேண்டும், எடுத்துக்காட்டாக {0}."
 
-#: hostel360/api/portal.py:1669
+#: hostel360/api/portal.py:1640
 msgid "Period must be a month written as YYYY-MM."
 msgstr "காலம் YYYY-MM வடிவில் ஒரு மாதமாக இருக்க வேண்டும்."
 
@@ -9540,6 +9716,10 @@ msgstr ""
 msgid "Photo"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:282
+msgid "Photo of {0}"
+msgstr ""
+
 #. Label of an action in the Onboarding Step 'Publish the mess menu'
 #: hostel360/hostel_setup/onboarding_step/publish_mess_menu/publish_mess_menu.json
 msgid "Plan a Menu"
@@ -9571,7 +9751,7 @@ msgstr "அதிகபட்சம் {0} கோப்புகளை மட்
 msgid "Please attach files from the Hostel360 portal."
 msgstr "Hostel360 இணையதளத்திலிருந்து கோப்புகளை இணைக்கவும்."
 
-#: hostel360/api/portal.py:831
+#: hostel360/api/portal.py:818
 msgid "Please choose English or Tamil."
 msgstr "ஆங்கிலம் அல்லது தமிழைத் தேர்ந்தெடுக்கவும்."
 
@@ -9579,39 +9759,39 @@ msgstr "ஆங்கிலம் அல்லது தமிழைத் தே
 msgid "Please choose a file to upload."
 msgstr "பதிவேற்ற ஒரு கோப்பைத் தேர்ந்தெடுக்கவும்."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:328
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:372
 msgid "Please choose a rating between 1 and 5 stars."
 msgstr "1 முதல் 5 நட்சத்திரங்களுக்குள் மதிப்பீட்டைத் தேர்ந்தெடுக்கவும்."
 
-#: hostel360/api/portal.py:577
+#: hostel360/api/portal.py:550
 msgid "Please choose at most {0} items for {1}."
 msgstr "{1}-க்கு அதிகபட்சம் {0} உருப்படிகளைத் தேர்ந்தெடுக்கவும்."
 
-#: hostel360/api/portal.py:384
+#: hostel360/api/portal.py:362
 msgid "Please choose the student this request is for."
 msgstr "இந்தக் கோரிக்கை எந்த மாணவருக்கானது என்பதைத் தேர்ந்தெடுக்கவும்."
 
-#: hostel360/api/portal.py:1270
+#: hostel360/api/portal.py:1267
 msgid "Please choose to approve or reject the leave."
 msgstr "விடுப்புக்கு ஒப்புதல் அளிக்கவா அல்லது நிராகரிக்கவா என்பதைத் தேர்ந்தெடுக்கவும்."
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:85
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:86
 msgid "Please describe the purpose of the certificate."
 msgstr "சான்றிதழின் நோக்கத்தை விவரிக்கவும்."
 
-#: hostel360/hostel_operations/support.py:64
+#: hostel360/hostel_operations/support.py:72
 msgid "Please describe the resolution before marking the ticket {0}."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:430
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:493
 msgid "Please enter a message."
 msgstr "ஒரு செய்தியை உள்ளிடவும்."
 
-#: hostel360/student_services/page/approvals/approvals.js:268
+#: hostel360/student_services/page/approvals/approvals.js:271
 msgid "Please enter a reason for rejecting."
 msgstr ""
 
-#: hostel360/auth/otp.py:577
+#: hostel360/auth/otp.py:602
 msgid "Please enter a valid 10-digit mobile number."
 msgstr "சரியான 10 இலக்க மொபைல் எண்ணை உள்ளிடவும்."
 
@@ -9619,7 +9799,7 @@ msgstr "சரியான 10 இலக்க மொபைல் எண்ணை
 msgid "Please enter the reason for vacating."
 msgstr ""
 
-#: hostel360/auth/otp.py:474
+#: hostel360/auth/otp.py:499
 msgid "Please enter the {0}-digit code sent to your phone."
 msgstr "உங்கள் தொலைபேசிக்கு அனுப்பப்பட்ட {0} இலக்கக் குறியீட்டை உள்ளிடவும்."
 
@@ -9627,7 +9807,7 @@ msgstr "உங்கள் தொலைபேசிக்கு அனுப்�
 msgid "Please find attached the Hostel360 server performance report for {0}."
 msgstr ""
 
-#: hostel360/api/portal.py:542
+#: hostel360/api/portal.py:515
 msgid "Please give a rating for {0}."
 msgstr "{0}-க்கு மதிப்பீடு அளிக்கவும்."
 
@@ -9639,16 +9819,16 @@ msgstr "விண்ணப்பத்தை நிராகரிப்பத�
 msgid "Please give a reason for rejecting the indent."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:226
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:249
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:236
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:259
 msgid "Please give a reason for rejecting the leave."
 msgstr "விடுப்பை நிராகரிப்பதற்கான காரணத்தைக் குறிப்பிடவும்."
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:166
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:171
 msgid "Please give a reason for rejecting the request."
 msgstr "கோரிக்கையை நிராகரிப்பதற்கான காரணத்தைக் குறிப்பிடவும்."
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:177
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:182
 msgid "Please give a reason for the rejection."
 msgstr "நிராகரிப்புக்கான காரணத்தைக் குறிப்பிடவும்."
 
@@ -9656,11 +9836,11 @@ msgstr "நிராகரிப்புக்கான காரணத்த�
 msgid "Please give an overall rating."
 msgstr "ஒட்டுமொத்த மதிப்பீட்டை அளிக்கவும்."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:432
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:495
 msgid "Please keep the message under {0} characters."
 msgstr "செய்தியை {0} எழுத்துகளுக்குள் வைக்கவும்."
 
-#: hostel360/api/portal.py:397 hostel360/api/portal.py:1239
+#: hostel360/api/portal.py:410
 msgid "Please read and accept the privacy notice to continue."
 msgstr "தொடர, தனியுரிமை அறிவிப்பைப் படித்து ஏற்றுக்கொள்ளவும்."
 
@@ -9668,19 +9848,19 @@ msgstr "தொடர, தனியுரிமை அறிவிப்பைப
 msgid "Please save the settings before sending a test message."
 msgstr ""
 
-#: hostel360/student_services/page/approvals/approvals.js:268
+#: hostel360/student_services/page/approvals/approvals.js:271
 msgid "Please say what was done."
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:217
+#: hostel360/hostel_operations/support.py:225
 msgid "Please say why the ticket is being re-opened."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:284
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:325
 msgid "Please say why this grievance is being closed without a resolution."
 msgstr "தீர்வு இல்லாமல் இந்தப் புகார் ஏன் முடிக்கப்படுகிறது என்பதைக் குறிப்பிடவும்."
 
-#: hostel360/student_services/utils.py:80
+#: hostel360/student_services/utils.py:95
 msgid "Please select a student."
 msgstr "ஒரு மாணவரைத் தேர்ந்தெடுக்கவும்."
 
@@ -9688,7 +9868,7 @@ msgstr "ஒரு மாணவரைத் தேர்ந்தெடுக்�
 msgid "Please select the student giving this feedback."
 msgstr "இந்தக் கருத்துக்கணிப்பை அளிக்கும் மாணவரைத் தேர்ந்தெடுக்கவும்."
 
-#: hostel360/api/portal.py:214
+#: hostel360/api/portal.py:229
 msgid "Please slow down"
 msgstr "சற்றுப் பொறுமையாக"
 
@@ -9696,7 +9876,7 @@ msgstr "சற்றுப் பொறுமையாக"
 msgid "Please upload the file from your device instead of a link."
 msgstr "இணைப்புக்குப் (link) பதிலாக உங்கள் சாதனத்திலிருந்து கோப்பைப் பதிவேற்றவும்."
 
-#: hostel360/auth/otp.py:323
+#: hostel360/auth/otp.py:335
 msgid "Please wait {0} seconds before requesting another code."
 msgstr "மற்றொரு குறியீட்டைக் கோருவதற்கு முன் {0} வினாடிகள் காத்திருக்கவும்."
 
@@ -9746,15 +9926,15 @@ msgstr ""
 msgid "Portal User"
 msgstr ""
 
-#: hostel360/api/portal.py:234
+#: hostel360/api/portal.py:247
 msgid "Portal access"
 msgstr "இணையதள அணுகல்"
 
-#: hostel360/api/portal.py:261 hostel360/auth/events.py:79
+#: hostel360/auth/events.py:79
 msgid "Portal access for this hostel record has been closed. Please contact the hostel office."
 msgstr "இந்த விடுதிப் பதிவுக்கான இணையதள அணுகல் நிறுத்தப்பட்டுள்ளது. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
-#: hostel360/api/portal.py:270 hostel360/auth/events.py:104
+#: hostel360/auth/events.py:104
 msgid "Portal access for this parent record has been closed. Please contact the hostel office."
 msgstr "இந்தப் பெற்றோர் பதிவுக்கான இணையதள அணுகல் நிறுத்தப்பட்டுள்ளது. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
@@ -9763,7 +9943,7 @@ msgstr "இந்தப் பெற்றோர் பதிவுக்கா�
 msgid "Portal and Workflow"
 msgstr ""
 
-#: hostel360/api/auth.py:95
+#: hostel360/api/auth.py:111
 msgid "Portal sign-in is temporarily unavailable. Please try again shortly."
 msgstr "இணையதள உள்நுழைவு தற்காலிகமாகக் கிடைக்கவில்லை. சிறிது நேரத்தில் மீண்டும் முயற்சிக்கவும்."
 
@@ -9836,7 +10016,7 @@ msgstr ""
 msgid "Preview"
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:73
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:117
 msgid "Preview with sample values"
 msgstr ""
 
@@ -9858,7 +10038,7 @@ msgstr ""
 msgid "Previous allotment {0} is not active."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:55
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:83
 msgid "Primary"
 msgstr ""
 
@@ -9882,14 +10062,14 @@ msgstr ""
 
 #. Label of the priority (Select) field in DocType 'Support Ticket'
 #. Label of the priority (Select) field in DocType 'Hostel Grievance'
-#: hostel360/api/portal.py:1450
+#: hostel360/api/portal.py:1447
 #: hostel360/hostel_operations/doctype/support_ticket/support_ticket.json
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
 #: hostel360/student_services/report/grievance_summary/grievance_summary.js:50
 msgid "Priority"
 msgstr "முன்னுரிமை"
 
-#: hostel360/hostel_operations/support.py:182
+#: hostel360/hostel_operations/support.py:190
 msgid "Priority: {0}. Category: {1}."
 msgstr ""
 
@@ -9926,7 +10106,7 @@ msgstr ""
 msgid "Privacy Notice Version is required."
 msgstr ""
 
-#: hostel360/api/portal.py:399 hostel360/api/portal.py:1241
+#: hostel360/api/portal.py:412
 msgid "Privacy notice"
 msgstr "தனியுரிமை அறிவிப்பு"
 
@@ -9970,11 +10150,11 @@ msgstr ""
 msgid "Profile confirmed by {0}"
 msgstr ""
 
-#: hostel360/api/portal.py:864
+#: hostel360/api/portal.py:851
 msgid "Profile details"
 msgstr "சுயவிவர விவரங்கள்"
 
-#: hostel360/api/portal.py:866
+#: hostel360/api/portal.py:853
 msgid "Profile details are not valid."
 msgstr "சுயவிவர விவரங்கள் சரியாக இல்லை."
 
@@ -10151,7 +10331,7 @@ msgstr ""
 
 #. Label of the purpose (Select) field in DocType 'Bonafide Certificate
 #. Request'
-#: hostel360/api/portal.py:1701
+#: hostel360/api/portal.py:1672
 #: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.json
 #: hostel360/student_services/report/bonafide_register/bonafide_register.js:29
 #: hostel360/student_services/report/bonafide_register/bonafide_register.py:74
@@ -10165,7 +10345,7 @@ msgstr "நோக்கம்"
 msgid "Purpose Details"
 msgstr ""
 
-#: hostel360/api/portal.py:1702
+#: hostel360/api/portal.py:1673
 msgid "Purpose details"
 msgstr "நோக்க விவரங்கள்"
 
@@ -10192,7 +10372,7 @@ msgstr ""
 
 #: hostel360/www/verify-certificate.html:186
 msgid "Questions about a certificate?"
-msgstr ""
+msgstr "சான்றிதழ் குறித்துக் கேள்விகளா?"
 
 #. Option for the 'Status' (Select) field in DocType 'Message Log'
 #. Option for the 'Publish Status' (Select) field in DocType 'Hostel Fee
@@ -10240,11 +10420,11 @@ msgstr ""
 msgid "Raised By User"
 msgstr ""
 
-#: hostel360/student_services/page/approvals/approvals.js:234
+#: hostel360/student_services/page/approvals/approvals.js:235
 msgid "Raised by"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:183
+#: hostel360/hostel_operations/support.py:191
 msgid "Raised by {0}{1}."
 msgstr ""
 
@@ -10259,7 +10439,7 @@ msgstr ""
 msgid "Rate Rounding Difference"
 msgstr ""
 
-#: hostel360/api/portal.py:1484
+#: hostel360/api/portal.py:1481
 msgid "Rating"
 msgstr "மதிப்பீடு"
 
@@ -10269,7 +10449,7 @@ msgstr "மதிப்பீடு"
 msgid "Ratings"
 msgstr ""
 
-#: hostel360/student_services/utils.py:384
+#: hostel360/student_services/utils.py:446
 msgid "Ratings must be between 1 and 5 stars."
 msgstr "மதிப்பீடுகள் 1 முதல் 5 நட்சத்திரங்களுக்குள் இருக்க வேண்டும்."
 
@@ -10297,18 +10477,18 @@ msgstr ""
 msgid "Re-opened: the problem came back within {0} minutes of being resolved."
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:228
+#: hostel360/hostel_operations/support.py:236
 msgid "Re-opened: {0}"
 msgstr ""
 
 #. Label of the reason (Select) field in DocType 'Mess Reduction Application'
 #. Label of the reason (Small Text) field in DocType 'Home Visit Leave'
-#: hostel360/api/portal.py:1168 hostel360/api/portal.py:1214
-#: hostel360/api/portal.py:1474
+#: hostel360/api/portal.py:1170 hostel360/api/portal.py:1216
+#: hostel360/api/portal.py:1471
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.json
 #: hostel360/hostel_mess/report/mess_reduction_register/mess_reduction_register.js:29
 #: hostel360/hostel_mess/report/mess_reduction_register/mess_reduction_register.py:76
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:89
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:117
 #: hostel360/hostel_people/doctype/room_allotment/room_allotment.js:105
 #: hostel360/hostel_people/page/room_board/room_board.js:546
 #: hostel360/hostel_people/report/room_allotment_history/room_allotment_history.py:80
@@ -10325,7 +10505,7 @@ msgid "Reason for Rejection"
 msgstr ""
 
 #: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.js:30
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:106
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:130
 msgid "Reason for rejection"
 msgstr ""
 
@@ -10337,7 +10517,7 @@ msgstr ""
 #. Label of a Sidebar Item
 #. Label of the stock_entry (Link) field in DocType 'Mess Indent'
 #. Option for the 'Entry Type' (Select) field in DocType 'Mess Stock Entry'
-#: hostel360/api/portal.py:1099
+#: hostel360/api/portal.py:1101
 #: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.js:50
 #: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.json
 #: hostel360/hostel_fees/report/fee_collection/fee_collection.py:139
@@ -10371,11 +10551,11 @@ msgstr ""
 msgid "Receipt and Audit"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:125
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:126
 msgid "Receipt still active"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:333
+#: hostel360/hostel_fees/transactions.py:332
 msgid "Receipt {0} for student {1} has {2} unallocated because the invoices were paid or cancelled while the payment was in progress. Adjust it against other dues or refund it."
 msgstr ""
 
@@ -10384,7 +10564,7 @@ msgstr ""
 msgid "Receipt {0} for {1} has been issued."
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:743
+#: hostel360/hostel_fees/services.py:748
 msgid "Receipt {0} is not available."
 msgstr "ரசீது {0} கிடைக்கவில்லை."
 
@@ -10459,6 +10639,10 @@ msgstr ""
 msgid "Recipient User"
 msgstr ""
 
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:54
+msgid "Recipients whose account language is Tamil get this template while it is enabled. The English template of this event and channel decides whether the message is sent at all."
+msgstr ""
+
 #: hostel360/hostel_mess/doctype/mess_bill_run/mess_bill_run.py:253
 msgid "Recompute Required"
 msgstr ""
@@ -10506,6 +10690,14 @@ msgstr ""
 msgid "Record counts"
 msgstr ""
 
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:81
+msgid "Record that {0} has left the hostel now?"
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:92
+msgid "Record that {0} is back in the hostel now?"
+msgstr ""
+
 #: hostel360/hostel_operations/doctype/security_incident/security_incident.js:97
 msgid "Record the time of each report here, with the CERT-In acknowledgement number. Closing the incident needs both reports and an assessment note."
 msgstr ""
@@ -10529,11 +10721,11 @@ msgstr ""
 msgid "Recorded From"
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:159
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:169
 msgid "Recorded on {0}: export {1} FAILED verification."
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:160
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:170
 msgid "Recorded on {0}: export {1} is verified."
 msgstr ""
 
@@ -10597,13 +10789,14 @@ msgstr ""
 msgid "Reference of ACGCET's written confirmation that the export was received."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:138
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:42
 msgid "Referred to the Warden for immediate action."
 msgstr "உடனடி நடவடிக்கைக்காகக் காப்பாளரிடம் அனுப்பப்பட்டது."
 
 #: hostel360/hostel_operations/page/ops_status/ops_status.js:33
 #: hostel360/hostel_people/page/room_board/room_board.js:35
 #: hostel360/student_services/page/approvals/approvals.js:37
+#: hostel360/student_services/page/gate_pass/gate_pass.js:50
 msgid "Refresh"
 msgstr ""
 
@@ -10642,7 +10835,7 @@ msgstr ""
 msgid "Refunded but receipt still active"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:130
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:131
 msgid "Refunded by {0}: {1}"
 msgstr ""
 
@@ -10660,15 +10853,15 @@ msgstr ""
 msgid "Register Number"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:204
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:209
 msgid "Register Number can be at most 30 characters long."
 msgstr "பதிவு எண் அதிகபட்சம் 30 எழுத்துகள் வரை மட்டுமே இருக்கலாம்."
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:202
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:207
 msgid "Register Number is required."
 msgstr "பதிவு எண் தேவை."
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:206
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:211
 msgid "Register Number may contain only letters, digits, hyphens and slashes."
 msgstr "பதிவு எண்ணில் எழுத்துகள், இலக்கங்கள், இணைப்புக்கோடுகள், சாய்வுக்கோடுகள் மட்டுமே இருக்கலாம்."
 
@@ -10676,18 +10869,22 @@ msgstr "பதிவு எண்ணில் எழுத்துகள், �
 msgid "Register number repeats row {0}."
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:36
+msgid "Register number, name or room"
+msgstr ""
+
 #. Title of an Onboarding Step
 #: hostel360/hostel_setup/onboarding_step/register_hostel_staff/register_hostel_staff.json
 msgid "Register staff with two-factor sign-in"
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:25
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:33
 msgid "Register this exact wording on the DLT portal, replacing each {{ ... }} with {#var#}. Keep SMS in plain English characters (write Rs. instead of the rupee symbol) so it fits in a single message."
 msgstr ""
 
 #. Description of the Onboarding Step 'Register staff with two-factor sign-in'
 #: hostel360/hostel_setup/onboarding_step/register_hostel_staff/register_hostel_staff.json
-msgid "Register wardens, office and mess staff and tick **Create User** to give them a desk login. Every Hostel360 desk role requires two-factor authentication, so each person links an authenticator app the first time they sign in. Deputy wardens, office and mess staff only see the hostels they are assigned to."
+msgid "Register wardens, office, mess and security staff and tick **Create Desk Login** to give them a desk login. Every Hostel360 desk role requires two-factor authentication, so each person links an authenticator app the first time they sign in. Deputy wardens, office, mess and security staff only see the hostels they are assigned to; security staff only record students leaving and returning at the gate."
 msgstr ""
 
 #. Description of the 'Mobile Number' (Data) field in DocType 'Hostel Guardian'
@@ -10695,20 +10892,20 @@ msgstr ""
 msgid "Registered mobile number used for parent portal login."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:43
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:71
 msgid "Registration is pending validation. The student can sign in and confirm details, but full portal features open only after validation."
 msgstr ""
 
-#: hostel360/api/portal.py:430
+#: hostel360/api/portal.py:403
 msgid "Registration not validated yet"
 msgstr "பதிவு இன்னும் சரிபார்க்கப்படவில்லை"
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:48
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:187
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:76
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:192
 msgid "Registration rejected: {0}"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:153
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:158
 msgid "Registration validated"
 msgstr ""
 
@@ -10716,12 +10913,12 @@ msgstr ""
 #: hostel360/hostel_mess/doctype/mess_indent/mess_indent.js:132
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.js:16
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.js:64
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:83
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:103
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:111
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:131
 #: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.js:28
 #: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.js:34
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:69
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:110
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:73
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:134
 #: hostel360/student_services/page/approvals/approvals.js:127
 msgid "Reject"
 msgstr ""
@@ -10730,7 +10927,7 @@ msgstr ""
 msgid "Reject Indent"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:95
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:119
 msgid "Reject Leave"
 msgstr ""
 
@@ -10738,7 +10935,7 @@ msgstr ""
 msgid "Reject Mess Reduction"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:102
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:130
 msgid "Reject Registration"
 msgstr ""
 
@@ -10766,7 +10963,7 @@ msgstr ""
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student_list.js:5
 #: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.json
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
-#: hostel360/student_services/page/approvals/approvals.js:294
+#: hostel360/student_services/page/approvals/approvals.js:297
 #: hostel360/student_services/report/bonafide_register/bonafide_register.py:99
 #: hostel360/student_services/report/leave_register/leave_register.py:116
 msgid "Rejected"
@@ -10792,7 +10989,7 @@ msgstr ""
 
 #. Label of the relation (Select) field in DocType 'Hostel Guardian'
 #. Label of the relation (Select) field in DocType 'Hostel Student Guardian'
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:62
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:90
 #: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.json
 #: hostel360/hostel_people/doctype/hostel_student_guardian/hostel_student_guardian.json
 #: hostel360/hostel_people/report/student_register/student_register.py:115
@@ -10811,7 +11008,7 @@ msgstr ""
 #. Label of the remarks (Small Text) field in DocType 'Room Allotment'
 #. Label of the remarks (Small Text) field in DocType 'Hostel Bed'
 #. Label of the remarks (Small Text) field in DocType 'Hostel Room'
-#: hostel360/api/portal.py:1271
+#: hostel360/api/portal.py:1268
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.js:108
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.json
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice_list.js:108
@@ -10831,11 +11028,11 @@ msgstr ""
 #: hostel360/hostel_setup/doctype/hostel_bed/hostel_bed.json
 #: hostel360/hostel_setup/doctype/hostel_room/hostel_room.json
 #: hostel360/student_services/page/approvals/approvals.js:125
-#: hostel360/student_services/page/approvals/approvals.js:235
+#: hostel360/student_services/page/approvals/approvals.js:238
 msgid "Remarks"
 msgstr "குறிப்புகள்"
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:106
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:130
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.js:150
 msgid "Remarks (optional)"
 msgstr ""
@@ -10911,11 +11108,11 @@ msgstr ""
 msgid "Replace the meals entered here with the previous week's menu?"
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:88
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:132
 msgid "Replace the subject, body and parameters with the default wording? Save the form to keep the change."
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:421
+#: hostel360/hostel_fees/services.py:426
 msgid "Replaced by a new payment request."
 msgstr "புதிய பணம் செலுத்தும் கோரிக்கையால் மாற்றப்பட்டது."
 
@@ -11096,7 +11293,7 @@ msgstr ""
 msgid "Required when the incident is marked not reportable or closed."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:63
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:71
 msgid "Required: this designation only sees records of the hostels listed here. Add a block to limit it to the students of that block."
 msgstr ""
 
@@ -11106,7 +11303,7 @@ msgstr ""
 msgid "Resend Cooldown (Seconds)"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:36
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:44
 msgid "Resend Welcome Email"
 msgstr ""
 
@@ -11131,7 +11328,7 @@ msgstr ""
 msgid "Residence"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:56
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:84
 msgid "Resident of {0}, room {1}, bed {2}."
 msgstr ""
 
@@ -11246,7 +11443,7 @@ msgstr ""
 #: hostel360/hostel_operations/doctype/support_ticket/support_ticket_list.js:11
 #: hostel360/hostel_operations/report/alert_history/alert_history.py:33
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
-#: hostel360/student_services/page/approvals/approvals.js:296
+#: hostel360/student_services/page/approvals/approvals.js:299
 #: hostel360/student_services/report/grievance_summary/grievance_summary.py:111
 msgid "Resolved"
 msgstr "தீர்க்கப்பட்டது"
@@ -11330,15 +11527,15 @@ msgstr ""
 msgid "Retry Now"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:93
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:103
 msgid "Return date and time must be after the leaving date and time."
 msgstr "திரும்பும் தேதியும் நேரமும் புறப்படும் தேதி, நேரத்திற்குப் பிறகு இருக்க வேண்டும்."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:45
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:47
 msgid "Return overdue since {0}. Contact the student on {1}."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:395
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:422
 msgid "Return time cannot be before the check-out time."
 msgstr "திரும்பும் நேரம் வெளியேறிய நேரத்திற்கு முன் இருக்கக்கூடாது."
 
@@ -11348,13 +11545,15 @@ msgid "Return to Supplier"
 msgstr ""
 
 #. Option for the 'Status' (Select) field in DocType 'Home Visit Leave'
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:77
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:87
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:100
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
 #: hostel360/student_services/report/leave_register/leave_register.py:85
 msgid "Returned"
 msgstr "திரும்பியது"
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:78
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:94
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:101
 msgid "Returned At"
 msgstr ""
 
@@ -11397,7 +11596,7 @@ msgstr ""
 #. Label of the room (Link) field in DocType 'Bonafide Certificate Request'
 #. Label of the room (Link) field in DocType 'Home Visit Leave'
 #. Label of the room (Link) field in DocType 'Hostel Grievance'
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:62
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:90
 #: hostel360/hostel_people/doctype/room_allotment/room_allotment.json
 #: hostel360/hostel_people/report/room_allotment_history/room_allotment_history.js:21
 #: hostel360/hostel_people/report/room_allotment_history/room_allotment_history.py:72
@@ -11491,6 +11690,11 @@ msgstr ""
 msgid "Room and Furniture"
 msgstr "அறை மற்றும் தளவாடங்கள்"
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:225
+#: hostel360/student_services/page/gate_pass/gate_pass.js:335
+msgid "Room {0}"
+msgstr ""
+
 #: hostel360/hostel_setup/doctype/hostel_room/hostel_room.py:194
 msgid "Room {0} has allotment history and cannot be deleted. Untick Is Active instead."
 msgstr ""
@@ -11554,7 +11758,7 @@ msgstr ""
 msgid "Row Checksum"
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:172
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:175
 msgid "Row {0}: allocated amount must be greater than zero."
 msgstr ""
 
@@ -11583,15 +11787,19 @@ msgstr ""
 msgid "Row {0}: guardian {1} is listed more than once."
 msgstr "வரிசை {0}: பாதுகாவலர் {1} ஒன்றுக்கு மேற்பட்ட முறை பட்டியலிடப்பட்டுள்ளார்."
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:167
-msgid "Row {0}: invoice {1} does not belong to this student."
-msgstr ""
-
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:220
-msgid "Row {0}: invoice {1} is no longer open for payment."
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:208
+msgid "Row {0}: invoice {1} belongs to hostel {2}, which is not one of your assigned hostels."
 msgstr ""
 
 #: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:170
+msgid "Row {0}: invoice {1} does not belong to this student."
+msgstr ""
+
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:248
+msgid "Row {0}: invoice {1} is no longer open for payment."
+msgstr ""
+
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:173
 msgid "Row {0}: invoice {1} is not submitted."
 msgstr ""
 
@@ -11599,7 +11807,7 @@ msgstr ""
 msgid "Row {0}: item {1} does not exist."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:225
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:253
 msgid "Row {0}: only {1} is now outstanding on invoice {2}. Refresh the allocation."
 msgstr ""
 
@@ -11639,7 +11847,7 @@ msgstr ""
 msgid "Row {0}: {1} is listed more than once."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:178
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:181
 msgid "Row {0}: {1} is more than the {2} outstanding on invoice {3}."
 msgstr ""
 
@@ -11745,11 +11953,11 @@ msgstr ""
 msgid "SLA Compliance (%)"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:361
+#: hostel360/hostel_operations/support.py:369
 msgid "SLA breached - support ticket {0}: {1}"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:355
+#: hostel360/hostel_operations/support.py:363
 msgid "SLA breached for support ticket {0}: {1}."
 msgstr ""
 
@@ -11786,8 +11994,9 @@ msgstr ""
 msgid "SMS Gateway"
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:100
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:108
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:115
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:126
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:134
 msgid "SMS Length"
 msgstr ""
 
@@ -11829,7 +12038,7 @@ msgid "Saturday"
 msgstr ""
 
 #: hostel360/hostel_mess/doctype/mess_indent/mess_indent.js:154
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:132
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:164
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.js:122
 msgid "Save"
 msgstr ""
@@ -11851,9 +12060,14 @@ msgstr ""
 msgid "Save the settings to generate a token."
 msgstr ""
 
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:39
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:45
+msgid "Save your changes first. The saved mobile number is the one that gets unlocked."
+msgstr ""
+
 #: hostel360/www/verify-certificate.html:127
 msgid "Scan the QR code on the certificate, or type the 16-character verification code printed beside it."
-msgstr ""
+msgstr "சான்றிதழில் உள்ள QR குறியீட்டை ஸ்கேன் செய்யவும், அல்லது அதன் அருகே அச்சிடப்பட்டுள்ள 16 எழுத்துச் சரிபார்ப்புக் குறியீட்டைத் தட்டச்சு செய்யவும்."
 
 #. Label of the scheduler_stale_minutes (Int) field in DocType 'Ops Alert
 #. Settings'
@@ -11921,7 +12135,7 @@ msgstr ""
 
 #. Description of the 'Designation' (Select) field in DocType 'Hostel Staff'
 #: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.json
-msgid "Security, Housekeeping and Other staff are recorded for contact purposes only and do not get a desk login."
+msgid "Security staff get a gate login for their assigned hostels, used only to record students leaving and returning on approved leave. Housekeeping and Other staff are recorded for contact purposes only and do not get a desk login."
 msgstr ""
 
 #: hostel360/hostel_operations/reports.py:348
@@ -11937,7 +12151,7 @@ msgstr ""
 msgid "Select a mess."
 msgstr ""
 
-#: hostel360/api/portal.py:1018 hostel360/hostel_fees/services.py:371
+#: hostel360/api/portal.py:1012 hostel360/hostel_fees/services.py:376
 msgid "Select at least one invoice to pay."
 msgstr "செலுத்துவதற்குக் குறைந்தது ஒரு கட்டணச்சீட்டைத் தேர்ந்தெடுக்கவும்."
 
@@ -12092,7 +12306,6 @@ msgstr ""
 #. Application'
 #. Label of the naming_series (Select) field in DocType 'Mess Stock Entry'
 #. Label of the naming_series (Select) field in DocType 'Migration Run'
-#. Label of the naming_series (Select) field in DocType 'Ops Alert'
 #. Label of the naming_series (Select) field in DocType 'Ops Backup Record'
 #. Label of the naming_series (Select) field in DocType 'Security Incident'
 #. Label of the naming_series (Select) field in DocType 'Support Ticket'
@@ -12114,7 +12327,6 @@ msgstr ""
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.json
 #: hostel360/hostel_mess/doctype/mess_stock_entry/mess_stock_entry.json
 #: hostel360/hostel_migration/doctype/migration_run/migration_run.json
-#: hostel360/hostel_operations/doctype/ops_alert/ops_alert.json
 #: hostel360/hostel_operations/doctype/ops_backup_record/ops_backup_record.json
 #: hostel360/hostel_operations/doctype/security_incident/security_incident.json
 #: hostel360/hostel_operations/doctype/support_ticket/support_ticket.json
@@ -12200,6 +12412,10 @@ msgstr ""
 msgid "Shared token in the OCI Notifications HTTPS subscription URL."
 msgstr ""
 
+#: hostel360/security/sharing.py:106
+msgid "Sharing Not Allowed"
+msgstr ""
+
 #. Description of the 'Hostel Code' (Data) field in DocType 'Hostel'
 #: hostel360/hostel_setup/doctype/hostel/hostel.json
 msgid "Short code used in room and bed numbers, e.g. BH1"
@@ -12232,6 +12448,10 @@ msgstr ""
 msgid "Showing the first rows and every row with an error."
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:194
+msgid "Showing the first {0}. Search to find a student who is not listed."
+msgstr ""
+
 #: hostel360/student_services/page/approvals/approvals.js:110
 msgid "Showing the oldest {0} items in each list. Decide these to see more."
 msgstr ""
@@ -12248,7 +12468,7 @@ msgstr ""
 msgid "Shown on the payment page, e.g. \"ACGCET Hostels\"."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:91
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:119
 msgid "Shown to office staff. Tell the student what to correct."
 msgstr ""
 
@@ -12268,15 +12488,20 @@ msgstr ""
 msgid "Sign-in codes are set to go by {0}, which is not enabled. Students and parents will not receive codes until it is configured."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:33
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:40
 msgid "Sign-in codes can only be sent by SMS or WhatsApp."
 msgstr ""
 
-#: hostel360/api/auth.py:54
+#: hostel360/api/auth.py:70
 msgid "Sign-in is only possible from the portal."
 msgstr "இணையதளத்திலிருந்து மட்டுமே உள்நுழைய முடியும்."
 
-#: hostel360/api/portal.py:1039
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:54
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:60
+msgid "Sign-in unlocked for {0}. A new code can be requested now."
+msgstr ""
+
+#: hostel360/api/portal.py:1033
 msgid "Signature"
 msgstr "கையொப்பம்"
 
@@ -12480,7 +12705,7 @@ msgstr ""
 
 #. Label of the staff_behaviour (Rating) field in DocType 'Hostel Feedback'
 #. Option for the 'Category' (Select) field in DocType 'Hostel Grievance'
-#: hostel360/api/portal.py:1676
+#: hostel360/api/portal.py:1647
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
 msgid "Staff Behaviour"
@@ -12571,7 +12796,7 @@ msgstr ""
 #. Label of the state (Data) field in DocType 'Hostel Student'
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "State"
-msgstr ""
+msgstr "மாநிலம்"
 
 #. Label of the status (Select) field in DocType 'Message Log'
 #. Label of the status (Select) field in DocType 'Hostel Fee Invoice'
@@ -12800,7 +13025,7 @@ msgstr ""
 #. Feedback'
 #. Label of the student (Link) field in DocType 'Hostel Feedback'
 #. Label of the student (Link) field in DocType 'Hostel Grievance'
-#: hostel360/api/portal.py:366
+#: hostel360/api/portal.py:344
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.js:20
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.json
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice_list.js:20
@@ -12818,7 +13043,7 @@ msgstr ""
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.json
 #: hostel360/hostel_mess/report/mess_reduction_register/mess_reduction_register.js:20
 #: hostel360/hostel_mess/report/mess_reduction_register/mess_reduction_register.py:59
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:62
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:90
 #: hostel360/hostel_people/doctype/room_allotment/room_allotment.json
 #: hostel360/hostel_people/page/room_board/room_board.js:432
 #: hostel360/hostel_people/report/room_allotment_history/room_allotment_history.js:30
@@ -12828,7 +13053,7 @@ msgstr ""
 #: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.json
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.json
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
-#: hostel360/student_services/page/approvals/approvals.js:254
+#: hostel360/student_services/page/approvals/approvals.js:257
 #: hostel360/student_services/report/bonafide_register/bonafide_register.js:33
 #: hostel360/student_services/report/bonafide_register/bonafide_register.py:69
 #: hostel360/student_services/report/feedback_summary/feedback_summary.py:134
@@ -12929,13 +13154,17 @@ msgstr ""
 msgid "Student Services"
 msgstr ""
 
+#: hostel360/hostel_fees/utils.py:117
+msgid "Student {0} belongs to hostel {1}, which is not one of your assigned hostels."
+msgstr ""
+
 #: hostel360/hostel_mess/doctype/mess_extra_charge/mess_extra_charge.py:21
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.py:63
 #: hostel360/hostel_people/doctype/room_allotment/room_allotment.py:81
 msgid "Student {0} does not exist."
 msgstr "மாணவர் {0} இல்லை."
 
-#: hostel360/student_services/utils.py:85
+#: hostel360/student_services/utils.py:100
 msgid "Student {0} was not found."
 msgstr "மாணவர் {0} கிடைக்கவில்லை."
 
@@ -13033,11 +13262,11 @@ msgstr ""
 #. Label of the subject (Data) field in DocType 'Message Template'
 #. Label of the subject (Data) field in DocType 'Support Ticket'
 #. Label of the subject (Data) field in DocType 'Hostel Grievance'
-#: hostel360/api/portal.py:1448
+#: hostel360/api/portal.py:1445
 #: hostel360/hostel_communication/doctype/message_log/message_log.json
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:48
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:92
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:65
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:76
 #: hostel360/hostel_operations/doctype/support_ticket/support_ticket.json
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
 msgid "Subject"
@@ -13052,7 +13281,11 @@ msgstr ""
 msgid "Submit the report before sending it."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:32
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:40
+msgid "Submit this wording in WhatsApp Manager as the Tamil (ta) version of the template named below, with the template parameters as {{1}}, {{2}} and so on, in the order listed. Enable this template once Meta has approved it; until then Tamil readers get the English message."
+msgstr ""
+
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:47
 msgid "Submit this wording in WhatsApp Manager with the template parameters as {{1}}, {{2}} and so on, in the order listed below."
 msgstr ""
 
@@ -13196,11 +13429,11 @@ msgstr ""
 msgid "Support and Privacy"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:135
+#: hostel360/hostel_operations/support.py:143
 msgid "Support ticket {0} re-opened: {1}"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:93
+#: hostel360/hostel_operations/support.py:101
 msgid "Support ticket {0}: {1}"
 msgstr ""
 
@@ -13298,6 +13531,18 @@ msgstr ""
 msgid "Taken from the student's current allotment when the leave is applied."
 msgstr ""
 
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:111
+msgid "Tamil SMS are sent as Unicode, 70 characters a part. With sample values this SMS is {0} characters and will be sent as {1} parts, each billed separately."
+msgstr ""
+
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:63
+msgid "Tamil Version"
+msgstr ""
+
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:26
+msgid "Tamil readers get this SMS instead of the English one once it is enabled and has its own DLT Template ID (or MSG91 Flow Template ID). Register this exact wording on the DLT portal as a Unicode template, replacing each {{ ... }} with {#var#}. Unicode SMS carry 70 characters a part."
+msgstr ""
+
 #. Label of the target (Data) field in DocType 'Ops Alert Channel'
 #: hostel360/hostel_operations/doctype/ops_alert_channel/ops_alert_channel.json
 #: hostel360/hostel_operations/report/uptime_and_incidents/uptime_and_incidents.py:90
@@ -13337,8 +13582,8 @@ msgstr ""
 msgid "Technical Details"
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:78
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:135
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:92
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:161
 msgid "Template Error"
 msgstr ""
 
@@ -13350,9 +13595,9 @@ msgstr ""
 
 #. Label of the template_parameters (Small Text) field in DocType 'Message
 #. Template'
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:68
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:112
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:69
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:80
 msgid "Template Parameters"
 msgstr ""
 
@@ -13405,7 +13650,7 @@ msgstr ""
 msgid "Test notification from Hostel360"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:515
+#: hostel360/hostel_fees/transactions.py:514
 msgid "Test-mode payment closed because the gateway now uses live keys."
 msgstr "நுழைவாயில் இப்போது நேரடிச் சாவிகளைப் பயன்படுத்துவதால் சோதனை முறைப் பணம் செலுத்துதல் மூடப்பட்டது."
 
@@ -13440,7 +13685,7 @@ msgstr ""
 msgid "The WhatsApp Phone Number ID is a number shown in the Meta developer console."
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:201
+#: hostel360/hostel_migration/purge.py:203
 msgid "The acknowledgement reference contains control characters."
 msgstr ""
 
@@ -13480,11 +13725,11 @@ msgstr ""
 msgid "The amount for {0} is more than its outstanding {1}."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:204
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:232
 msgid "The amount received ({0}) must equal the total allocated to invoices ({1})."
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:291
+#: hostel360/hostel_fees/services.py:296
 msgid "The amount to pay must be at least ₹1."
 msgstr "செலுத்த வேண்டிய தொகை குறைந்தது ₹1 ஆக இருக்க வேண்டும்."
 
@@ -13515,15 +13760,15 @@ msgstr "{0}-இன் கணக்குகள் அதே நேரத்த�
 msgid "The certificate can be downloaded once the request is approved."
 msgstr "கோரிக்கைக்கு ஒப்புதல் கிடைத்ததும் சான்றிதழைப் பதிவிறக்கலாம்."
 
-#: hostel360/auth/otp.py:515
+#: hostel360/auth/otp.py:540
 msgid "The code is incorrect. You have {0} more attempt left."
 msgstr "குறியீடு தவறு. இன்னும் {0} முயற்சி மட்டுமே உள்ளது."
 
-#: hostel360/auth/otp.py:517
+#: hostel360/auth/otp.py:542
 msgid "The code is incorrect. You have {0} more attempts left."
 msgstr "குறியீடு தவறு. இன்னும் {0} முயற்சிகள் உள்ளன."
 
-#: hostel360/auth/otp.py:617
+#: hostel360/auth/otp.py:642
 msgid "The code was entered incorrectly too many times. Please request a new code."
 msgstr "குறியீடு பலமுறை தவறாக உள்ளிடப்பட்டது. புதிய குறியீட்டைக் கோரவும்."
 
@@ -13531,7 +13776,7 @@ msgstr "குறியீடு பலமுறை தவறாக உள்ள
 msgid "The confirmation URL is not an OCI Notifications address."
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:250
+#: hostel360/hostel_fees/reconciliation.py:260
 msgid "The daily reconciliation found online payments whose receipts or gateway records do not match. Open the Gateway Reconciliation report for details."
 msgstr ""
 
@@ -13563,7 +13808,7 @@ msgstr ""
 msgid "The export name is required."
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:752
+#: hostel360/hostel_fees/services.py:757
 msgid "The fee structure for this student has not been published yet."
 msgstr "இந்த மாணவருக்கான கட்டண அமைப்பு இன்னும் வெளியிடப்படவில்லை."
 
@@ -13583,7 +13828,7 @@ msgstr ""
 msgid "The file is empty."
 msgstr ""
 
-#: hostel360/api/portal.py:1557 hostel360/security/files.py:200
+#: hostel360/api/portal.py:1548 hostel360/security/files.py:200
 msgid "The file is empty. Please choose the file again."
 msgstr "கோப்பு காலியாக உள்ளது. கோப்பை மீண்டும் தேர்ந்தெடுக்கவும்."
 
@@ -13593,19 +13838,19 @@ msgstr "கோப்பு காலியாக உள்ளது. கோப�
 msgid "The folder, archive or encrypted archive that was checked."
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:217
+#: hostel360/hostel_fees/reconciliation.py:227
 msgid "The gateway answered but could not find or read the order of transaction {0} ({1}). Check it in the gateway dashboard. If no money was taken, close it with 'Close as Expired'; if it was paid, record the receipt manually."
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:208
+#: hostel360/hostel_fees/reconciliation.py:218
 msgid "The gateway could not read this order: {0}"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:411
+#: hostel360/hostel_fees/transactions.py:410
 msgid "The gateway reports {0} of {1} refunded for transaction {2} (student {3}). Receipt {4} still shows the full amount: cancel or adjust it so collections match the money kept."
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:402
+#: hostel360/hostel_fees/transactions.py:401
 msgid "The gateway reports {0} refunded on payment {1} ({2})."
 msgstr ""
 
@@ -13613,7 +13858,7 @@ msgstr ""
 msgid "The gateway reports {0} refunded on this payment."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:89
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:90
 msgid "The gateway shows no new completed payment for this transaction."
 msgstr ""
 
@@ -13641,7 +13886,7 @@ msgstr ""
 msgid "The legacy ID appears more than once in the file."
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:68
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:72
 msgid "The manifest checksum is required."
 msgstr ""
 
@@ -13669,36 +13914,36 @@ msgstr ""
 msgid "The monthly limit ({0} days) is lower than the minimum days per application ({1}); no application could be accepted."
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:306
+#: hostel360/hostel_migration/purge.py:312
 msgid "The newest verified exit export, {0}, was made on {1}, {2} days ago; it may be at most {3} days old."
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:310
+#: hostel360/hostel_migration/purge.py:316
 msgid "The newest verified exit export, {0}, was made without the uploaded files."
 msgstr ""
 
-#: hostel360/api/portal.py:254 hostel360/auth/events.py:91
+#: hostel360/auth/events.py:91
 msgid "The parent portal is not available right now. Please try again later."
 msgstr "பெற்றோர் இணையதளம் தற்போது கிடைக்கவில்லை. பின்னர் மீண்டும் முயற்சிக்கவும்."
 
-#: hostel360/api/portal.py:280 hostel360/auth/events.py:108
+#: hostel360/auth/events.py:108
 msgid "The parent portal opens once your ward's hostel registration has been validated by the hostel office."
 msgstr "உங்கள் பிள்ளையின் விடுதிப் பதிவை விடுதி அலுவலகம் சரிபார்த்ததும் பெற்றோர் இணையதளம் திறக்கும்."
 
-#: hostel360/hostel_fees/services.py:539
+#: hostel360/hostel_fees/services.py:544
 msgid "The payment confirmation is incomplete. Please contact the hostel office if money was debited."
 msgstr "பணம் செலுத்திய உறுதிப்படுத்தல் முழுமையாக இல்லை. பணம் பிடிக்கப்பட்டிருந்தால் விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
-#: hostel360/hostel_fees/services.py:562
-#: hostel360/hostel_fees/transactions.py:539
-#: hostel360/hostel_fees/transactions.py:550
-#: hostel360/hostel_fees/transactions.py:561
+#: hostel360/hostel_fees/services.py:567
+#: hostel360/hostel_fees/transactions.py:538
+#: hostel360/hostel_fees/transactions.py:549
+#: hostel360/hostel_fees/transactions.py:560
 #: hostel360/hostel_fees/webhooks.py:109
 msgid "The payment did not go through."
 msgstr "பணம் செலுத்துதல் நிறைவடையவில்லை."
 
-#: hostel360/api/portal.py:1086 hostel360/hostel_fees/services.py:573
-#: hostel360/hostel_fees/services.py:680
+#: hostel360/api/portal.py:1088 hostel360/hostel_fees/services.py:578
+#: hostel360/hostel_fees/services.py:685
 msgid "The payment did not go through. You can try again."
 msgstr "பணம் செலுத்துதல் நிறைவடையவில்லை. மீண்டும் முயற்சிக்கலாம்."
 
@@ -13746,7 +13991,7 @@ msgstr "தனியுரிமை அறிவிப்பு மாற்ற�
 msgid "The process running this migration stopped before finishing (for example a server restart)."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:109
+#: hostel360/hostel_fees/doctype/hostel_payment/hostel_payment.py:112
 msgid "The receipt amount must equal the online transaction amount {0}."
 msgstr ""
 
@@ -13774,11 +14019,11 @@ msgstr ""
 msgid "The results could not be saved; see the Error Log."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:131
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:157
 msgid "The sample context must be a JSON object."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:129
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:155
 msgid "The sample context must be valid JSON."
 msgstr ""
 
@@ -13799,7 +14044,7 @@ msgstr ""
 msgid "The short name must be 2 to 20 characters, e.g. ACGCET."
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:267
+#: hostel360/hostel_migration/purge.py:269
 msgid "The site to confirm ({0}) is not this site ({1}); nothing was done."
 msgstr ""
 
@@ -13815,7 +14060,7 @@ msgstr ""
 msgid "The stock of {0} changed while this entry was being saved, because another entry for it was posted at the same moment. Please submit it again."
 msgstr ""
 
-#: hostel360/api/portal.py:253 hostel360/auth/events.py:66
+#: hostel360/auth/events.py:66
 msgid "The student portal is not available right now. Please try again later."
 msgstr "மாணவர் இணையதளம் தற்போது கிடைக்கவில்லை. பின்னர் மீண்டும் முயற்சிக்கவும்."
 
@@ -13831,12 +14076,16 @@ msgstr ""
 msgid "The student's hostel when the record was made; kept after the student moves out."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:135
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:161
 msgid "The template could not be rendered: {0}"
 msgstr ""
 
 #: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.py:162
 msgid "The test message could not be sent. Open the latest Message Log entry to see why."
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:574
+msgid "The time cannot be in the future."
 msgstr ""
 
 #: hostel360/hostel_people/doctype/room_allotment/room_allotment.py:145
@@ -13877,7 +14126,7 @@ msgstr ""
 msgid "There are no failed rows in this import."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:84
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:128
 msgid "There is no default wording for this event and channel."
 msgstr ""
 
@@ -13885,7 +14134,11 @@ msgstr ""
 msgid "There is no earlier menu for {0} to copy."
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:152
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:80
+msgid "There is no template in that language for this event and channel."
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:162
 msgid "These dates overlap leave {0}, which is {1}."
 msgstr "இந்தத் தேதிகள் விடுப்பு {0} ({1}) உடன் மோதுகின்றன."
 
@@ -13893,7 +14146,7 @@ msgstr "இந்தத் தேதிகள் விடுப்பு {0} ({
 msgid "These dates overlap {0} application {1} ({2} to {3})."
 msgstr "இந்தத் தேதிகள் {0} விண்ணப்பம் {1} ({2} முதல் {3} வரை) உடன் மோதுகின்றன."
 
-#: hostel360/hostel_fees/services.py:434
+#: hostel360/hostel_fees/services.py:439
 msgid "These dues were just paid (transaction {0}). Please refresh to see your receipt."
 msgstr "இந்த நிலுவைகள் இப்போதுதான் செலுத்தப்பட்டன (பரிவர்த்தனை {0}). உங்கள் ரசீதைப் பார்க்கப் பக்கத்தைப் புதுப்பிக்கவும்."
 
@@ -13908,7 +14161,7 @@ msgstr ""
 msgid "This Month's Collection"
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:95
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:121
 msgid "This SMS contains characters outside the standard SMS alphabet (for example the rupee symbol or curly quotes), so each part is limited to 70 characters. Use Rs. and plain quotes to keep it to a single SMS."
 msgstr ""
 
@@ -13916,7 +14169,7 @@ msgstr ""
 msgid "This application is already {0}."
 msgstr "இந்த விண்ணப்பம் ஏற்கனவே {0}."
 
-#: hostel360/api/portal.py:1414
+#: hostel360/api/portal.py:1411
 msgid "This attachment was not found."
 msgstr "இந்த இணைப்பு கிடைக்கவில்லை."
 
@@ -13926,19 +14179,19 @@ msgstr ""
 
 #: hostel360/student_services/verification.py:75
 msgid "This certificate is genuine and valid."
-msgstr ""
+msgstr "இந்தச் சான்றிதழ் உண்மையானது, செல்லுபடியாகும்."
 
 #: hostel360/student_services/verification.py:76
 msgid "This certificate is genuine but its validity has ended."
-msgstr ""
+msgstr "இந்தச் சான்றிதழ் உண்மையானது, ஆனால் அதன் செல்லுபடிக் காலம் முடிந்துவிட்டது."
 
 #: hostel360/www/verify-certificate.html:166
 msgid "This certificate was issued by the hostel office and is within its validity period."
-msgstr ""
+msgstr "இந்தச் சான்றிதழ் விடுதி அலுவலகத்தால் வழங்கப்பட்டது; இது செல்லுபடிக் காலத்திற்குள் உள்ளது."
 
 #: hostel360/www/verify-certificate.html:168
 msgid "This certificate was issued by the hostel office, but its validity ended on {0}."
-msgstr ""
+msgstr "இந்தச் சான்றிதழ் விடுதி அலுவலகத்தால் வழங்கப்பட்டது, ஆனால் அதன் செல்லுபடிக் காலம் {0} அன்று முடிந்துவிட்டது."
 
 #: hostel360/hostel_mess/stock.py:573
 msgid "This change would leave too little {0} at {1} for {2} dated {3}, which takes out {4} {5}. Post the receipt with an earlier date, or cancel the later entry first."
@@ -13948,7 +14201,7 @@ msgstr ""
 msgid "This charge is already billed in {0} and cannot be changed."
 msgstr ""
 
-#: hostel360/auth/otp.py:487
+#: hostel360/auth/otp.py:512
 msgid "This code is not valid or has expired. Please request a new code."
 msgstr "இந்தக் குறியீடு செல்லாது அல்லது காலாவதியாகிவிட்டது. புதிய குறியீட்டைக் கோரவும்."
 
@@ -13956,11 +14209,11 @@ msgstr "இந்தக் குறியீடு செல்லாது அ
 msgid "This fee head is inactive and cannot be used on new invoices or fee structures."
 msgstr ""
 
-#: hostel360/api/portal.py:1567 hostel360/security/files.py:213
+#: hostel360/api/portal.py:1557 hostel360/security/files.py:213
 msgid "This file does not look like a valid {0} file. It may be damaged or renamed. Please upload the original file."
 msgstr "இந்தக் கோப்பு சரியான {0} கோப்பாகத் தெரியவில்லை. அது சேதமடைந்திருக்கலாம் அல்லது பெயர் மாற்றப்பட்டிருக்கலாம். அசல் கோப்பைப் பதிவேற்றவும்."
 
-#: hostel360/api/portal.py:1560
+#: hostel360/api/portal.py:1551
 msgid "This file is too large. Please upload a file smaller than {0} MB."
 msgstr "இந்தக் கோப்பு மிகப் பெரியது. {0} MB-க்குக் குறைவான கோப்பைப் பதிவேற்றவும்."
 
@@ -13968,11 +14221,11 @@ msgstr "இந்தக் கோப்பு மிகப் பெரியத
 msgid "This file is {0} MB. Please upload a file smaller than {1} MB."
 msgstr "இந்தக் கோப்பு {0} MB. {1} MB-க்குக் குறைவான கோப்பைப் பதிவேற்றவும்."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:241
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:282
 msgid "This grievance is closed."
 msgstr "இந்தப் புகார் முடிக்கப்பட்டுவிட்டது."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:336
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:380
 msgid "This grievance is closed. Please raise a new one if the problem continues."
 msgstr "இந்தப் புகார் முடிக்கப்பட்டுவிட்டது. பிரச்சினை தொடர்ந்தால் புதிய புகாரை அளிக்கவும்."
 
@@ -13982,7 +14235,7 @@ msgstr "இந்தப் புகார் முடிக்கப்பட�
 msgid "This guardian may approve home visit leave."
 msgstr ""
 
-#: hostel360/api/portal.py:419
+#: hostel360/api/portal.py:392
 msgid "This hostel registration was not validated. Please contact the hostel office."
 msgstr "இந்த விடுதிப் பதிவு சரிபார்க்கப்படவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
@@ -13998,19 +14251,19 @@ msgstr ""
 msgid "This is a test message from Hostel360. If you received it, messaging is set up correctly."
 msgstr ""
 
-#: hostel360/api/portal.py:226
+#: hostel360/api/portal.py:252
 msgid "This is available to parents and guardians only."
 msgstr "இது பெற்றோர் மற்றும் பாதுகாவலர்களுக்கு மட்டுமே."
 
-#: hostel360/api/portal.py:227
+#: hostel360/api/portal.py:253
 msgid "This is available to students only."
 msgstr "இது மாணவர்களுக்கு மட்டுமே."
 
-#: hostel360/api/portal.py:408
+#: hostel360/api/portal.py:381
 msgid "This is not available while your hostel record is marked {0}. You can still view and pay your fees. Please contact the hostel office for anything else."
 msgstr "உங்கள் விடுதிப் பதிவு {0} எனக் குறிக்கப்பட்டிருக்கும் வரை இது கிடைக்காது. உங்கள் கட்டணத்தைப் பார்க்கவும் செலுத்தவும் தொடர்ந்து முடியும். மற்றவற்றுக்கு விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
-#: hostel360/api/portal.py:413
+#: hostel360/api/portal.py:386
 msgid "This is not available while {0}'s hostel record is marked {1}. You can still view and pay the fees. Please contact the hostel office for anything else."
 msgstr "{0} அவர்களின் விடுதிப் பதிவு {1} எனக் குறிக்கப்பட்டிருக்கும் வரை இது கிடைக்காது. கட்டணத்தைப் பார்க்கவும் செலுத்தவும் தொடர்ந்து முடியும். மற்றவற்றுக்கு விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
@@ -14018,20 +14271,32 @@ msgstr "{0} அவர்களின் விடுதிப் பதிவு
 msgid "This is the current academic year. New students and allotments use it by default."
 msgstr ""
 
-#: hostel360/api/portal.py:833
+#: hostel360/api/portal.py:820
 msgid "This language is not available on the server yet. Please contact the hostel office."
 msgstr "இந்த மொழி சேவையகத்தில் இன்னும் கிடைக்கவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:245
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:247
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:407
+msgid "This leave ended at {0}. The student needs a new leave to go out."
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:255
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:257
 msgid "This leave has already been decided (it is {0})."
 msgstr "இந்த விடுப்பில் ஏற்கனவே முடிவு எடுக்கப்பட்டுவிட்டது (இது {0})."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:222
+#: hostel360/student_services/page/gate_pass/gate_pass.py:304
+msgid "This leave has ended. The student needs a new leave to go out."
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:425
+msgid "This leave has not started yet. Cancel it instead if the student is not going."
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:232
 msgid "This leave is not waiting for a parent's approval (it is {0})."
 msgstr "இந்த விடுப்பு பெற்றோரின் ஒப்புதலுக்காகக் காத்திருக்கவில்லை (இது {0})."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:244
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:254
 msgid "This leave is still waiting for the parent's approval."
 msgstr "இந்த விடுப்பு இன்னும் பெற்றோரின் ஒப்புதலுக்காகக் காத்திருக்கிறது."
 
@@ -14051,15 +14316,15 @@ msgstr ""
 msgid "This migration keeps every change it makes. Has a dry run of the same files and mapping completed cleanly?"
 msgstr ""
 
-#: hostel360/auth/otp.py:541
+#: hostel360/auth/otp.py:566
 msgid "This number is not registered for the {0} portal."
 msgstr "இந்த எண் {0} இணையதளத்திற்குப் பதிவு செய்யப்படவில்லை."
 
-#: hostel360/hostel_fees/services.py:583
+#: hostel360/hostel_fees/services.py:588
 msgid "This payment request had already closed, so the amount will be returned to you by the payment gateway within a few days. Please start a new payment. Reference {0}."
 msgstr "இந்தப் பணம் செலுத்தும் கோரிக்கை ஏற்கனவே மூடப்பட்டுவிட்டதால், தொகை சில நாட்களில் பணப் பரிமாற்ற நுழைவாயிலால் உங்களுக்குத் திருப்பி அளிக்கப்படும். புதிதாகப் பணம் செலுத்தவும். குறிப்பு எண் {0}."
 
-#: hostel360/api/portal.py:1084
+#: hostel360/api/portal.py:1086
 msgid "This payment was refunded. Please contact the hostel office if you need help."
 msgstr "இந்தப் பணம் திருப்பி அளிக்கப்பட்டது. உதவி தேவைப்பட்டால் விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
@@ -14067,8 +14332,8 @@ msgstr "இந்தப் பணம் திருப்பி அளிக்
 msgid "This reduction has already started. Please contact the hostel office to change it."
 msgstr "இந்தக் கழிவு ஏற்கனவே தொடங்கிவிட்டது. மாற்ற விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:147
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:163
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:152
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:168
 msgid "This request has already been decided (it is {0})."
 msgstr "இந்தக் கோரிக்கையில் ஏற்கனவே முடிவு எடுக்கப்பட்டுவிட்டது (இது {0})."
 
@@ -14084,7 +14349,7 @@ msgstr ""
 msgid "This run is in progress. The page refreshes when it finishes."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.py:184
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.py:185
 msgid "This staff member has no desk login yet."
 msgstr ""
 
@@ -14093,15 +14358,19 @@ msgstr ""
 msgid "This student has no outstanding dues."
 msgstr ""
 
-#: hostel360/api/portal.py:376
+#: hostel360/student_services/page/gate_pass/gate_pass.py:96
+msgid "This student is not in your hostels."
+msgstr ""
+
+#: hostel360/api/portal.py:354
 msgid "This student is not linked to your account."
 msgstr "இந்த மாணவர் உங்கள் கணக்குடன் இணைக்கப்படவில்லை."
 
-#: hostel360/hostel_operations/support.py:220
+#: hostel360/hostel_operations/support.py:228
 msgid "This ticket was resolved more than {0} days ago. Please raise a new ticket."
 msgstr ""
 
-#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:80
+#: hostel360/hostel_fees/doctype/hostel_payment_transaction/hostel_payment_transaction.py:81
 msgid "This transaction is already {0}."
 msgstr ""
 
@@ -14110,7 +14379,7 @@ msgstr ""
 msgid "Thursday"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:127
+#: hostel360/hostel_operations/support.py:135
 msgid "Ticket {0}: {1}"
 msgstr ""
 
@@ -14157,7 +14426,7 @@ msgstr ""
 msgid "Title"
 msgstr ""
 
-#: hostel360/api/portal.py:1212
+#: hostel360/api/portal.py:1214
 #: hostel360/hostel_mess/report/mess_reduction_register/mess_reduction_register.py:74
 #: hostel360/hostel_people/report/room_allotment_history/room_allotment_history.py:76
 msgid "To"
@@ -14168,7 +14437,7 @@ msgstr "முடிவு"
 #. Label of the to_date (Date) field in DocType 'Mess Reduction Application'
 #. Label of the to_date (Date) field in DocType 'Monthly Performance Report'
 #. Label of the to_date (Date) field in DocType 'Room Allotment'
-#: hostel360/api/portal.py:1167
+#: hostel360/api/portal.py:1169
 #: hostel360/hostel_fees/report/fee_collection/fee_collection.js:15
 #: hostel360/hostel_fees/report/gateway_reconciliation/gateway_reconciliation.js:15
 #: hostel360/hostel_mess/doctype/mess_bill/mess_bill.json
@@ -14193,11 +14462,19 @@ msgstr "முடிவுத் தேதி"
 msgid "To Period"
 msgstr ""
 
+#: hostel360/student_services/page/gate_pass/gate_pass.js:308
+msgid "Today {0}"
+msgstr ""
+
 #. Label of a number card in the Fees Workspace
 #. Label of a number card in the Hostel Admin Workspace
 #: hostel360/hostel_fees/workspace/fees/fees.json
 #: hostel360/hostel_setup/workspace/hostel_admin/hostel_admin.json
 msgid "Today's Collection"
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:309
+msgid "Tomorrow {0}"
 msgstr ""
 
 #: hostel360/hostel_mess/doctype/mess_reduction_application/mess_reduction_application.py:137
@@ -14206,21 +14483,21 @@ msgstr "மிகக் குறுகிய காலம்"
 
 #: hostel360/www/verify-certificate.html:142
 msgid "Too many certificates were checked from your network. Please try again in a few minutes."
-msgstr ""
+msgstr "உங்கள் இணைய இணைப்பிலிருந்து பல சான்றிதழ்கள் சரிபார்க்கப்பட்டுள்ளன. சில நிமிடங்கள் கழித்து மீண்டும் முயற்சிக்கவும்."
 
 #: hostel360/www/verify-certificate.html:140
 msgid "Too many checks"
-msgstr ""
+msgstr "அதிகமான சரிபார்ப்புகள்"
 
-#: hostel360/auth/otp.py:330
+#: hostel360/auth/otp.py:342
 msgid "Too many codes have been requested for this number. Please try again in an hour."
 msgstr "இந்த எண்ணுக்குப் பல குறியீடுகள் கோரப்பட்டுள்ளன. ஒரு மணி நேரம் கழித்து மீண்டும் முயற்சிக்கவும்."
 
-#: hostel360/auth/otp.py:610
+#: hostel360/auth/otp.py:635
 msgid "Too many incorrect codes have been entered from your network. Please try again later."
 msgstr "உங்கள் இணைய இணைப்பிலிருந்து பல தவறான குறியீடுகள் உள்ளிடப்பட்டுள்ளன. பின்னர் மீண்டும் முயற்சிக்கவும்."
 
-#: hostel360/auth/otp.py:316
+#: hostel360/auth/otp.py:328
 msgid "Too many sign-in codes have been requested from your network. Please try again later."
 msgstr "உங்கள் இணைய இணைப்பிலிருந்து பல உள்நுழைவுக் குறியீடுகள் கோரப்பட்டுள்ளன. பின்னர் மீண்டும் முயற்சிக்கவும்."
 
@@ -14533,8 +14810,18 @@ msgstr ""
 msgid "Under Maintenance"
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:61
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:105
 msgid "Unicode"
+msgstr ""
+
+#. Label of the sms_param_unicode (Data) field in DocType 'Messaging Settings'
+#: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.json
+msgid "Unicode Parameter"
+msgstr ""
+
+#. Label of the sms_unicode_value (Data) field in DocType 'Messaging Settings'
+#: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.json
+msgid "Unicode Parameter Value"
 msgstr ""
 
 #. Description of the 'Room Number' (Data) field in DocType 'Hostel Room'
@@ -14555,8 +14842,10 @@ msgstr ""
 msgid "Unknown action {0}."
 msgstr ""
 
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:480
 #: hostel360/student_services/page/approvals/approvals.py:51
 #: hostel360/student_services/page/approvals/approvals.py:94
+#: hostel360/student_services/page/gate_pass/gate_pass.py:79
 msgid "Unknown action."
 msgstr ""
 
@@ -14566,6 +14855,11 @@ msgstr ""
 
 #: hostel360/api/ops.py:250
 msgid "Unknown message type {0}."
+msgstr ""
+
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:26
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:38
+msgid "Unlock Sign-in"
 msgstr ""
 
 #. Label of the unmonitored_minutes (Int) field in DocType 'Monthly Performance
@@ -14630,8 +14924,8 @@ msgstr ""
 msgid "Updates not marked internal are shown to the student on the portal."
 msgstr ""
 
-#: hostel360/api/portal.py:1554 hostel360/api/portal.py:1557
-#: hostel360/api/portal.py:1561 hostel360/api/portal.py:1571
+#: hostel360/api/portal.py:1545 hostel360/api/portal.py:1548
+#: hostel360/api/portal.py:1552 hostel360/api/portal.py:1561
 #: hostel360/security/files.py:437 hostel360/security/files.py:467
 msgid "Upload Not Allowed"
 msgstr "பதிவேற்ற அனுமதி இல்லை"
@@ -14676,7 +14970,7 @@ msgstr ""
 
 #. Option for the 'Priority' (Select) field in DocType 'Hostel Grievance'
 #: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.json
-#: hostel360/student_services/page/approvals/approvals.js:245
+#: hostel360/student_services/page/approvals/approvals.js:248
 msgid "Urgent"
 msgstr "அவசரம்"
 
@@ -14694,7 +14988,7 @@ msgstr ""
 msgid "Usage: {0} active residents, {1} portal logins and {2} online payments totalling {3}."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:243
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:284
 msgid "Use Resolve or Close to finish a grievance."
 msgstr "புகாரை முடிக்கத் தீர்வு அல்லது முடிவு செயலைப் பயன்படுத்தவும்."
 
@@ -14775,7 +15069,7 @@ msgstr ""
 msgid "Vacate Reason"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:179
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:184
 msgid "Vacate the room allotment before rejecting this registration."
 msgstr ""
 
@@ -14834,13 +15128,13 @@ msgstr ""
 
 #: hostel360/www/verify-certificate.html:158
 msgid "Valid certificate"
-msgstr ""
+msgstr "செல்லுபடியாகும் சான்றிதழ்"
 
 #: hostel360/www/verify-certificate.html:176
 msgid "Valid till"
-msgstr ""
+msgstr "செல்லுபடி இறுதித் தேதி"
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:67
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:95
 msgid "Validate"
 msgstr ""
 
@@ -14876,7 +15170,7 @@ msgstr "சரிபார்க்கப்பட்டது"
 msgid "Validated automatically once a linked student is validated."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:27
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:30
 msgid "Validated automatically when a linked student is validated."
 msgstr ""
 
@@ -14892,7 +15186,7 @@ msgstr ""
 
 #. Label of the validation_section (Section Break) field in DocType 'Hostel
 #. Student'
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:62
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.js:90
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 #: hostel360/hostel_people/report/student_register/student_register.js:20
 #: hostel360/hostel_people/report/student_register/student_register.py:113
@@ -14947,6 +15241,18 @@ msgstr ""
 msgid "Value of stock issued to the kitchen in the period, at moving-average cost."
 msgstr ""
 
+#. Description of the 'Unicode Parameter Value' (Data) field in DocType
+#. 'Messaging Settings'
+#: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.json
+msgid "Value sent in the Unicode parameter, only with messages that contain Unicode characters."
+msgstr ""
+
+#. Description of the 'Message Values' (Small Text) field in DocType 'Hostel
+#. Grievance Update'
+#: hostel360/student_services/doctype/hostel_grievance_update/hostel_grievance_update.json
+msgid "Values filled into the message template (JSON list)."
+msgstr ""
+
 #. Option for the 'Category' (Select) field in DocType 'Mess Item'
 #: hostel360/hostel_mess/doctype/mess_item/mess_item.json
 msgid "Vegetables"
@@ -14960,8 +15266,8 @@ msgstr ""
 #. Label of the verification_tab (Tab Break) field in DocType 'Hostel Student'
 #: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.json
 #: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.json
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:78
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:106
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:134
 #: hostel360/hostel_people/doctype/hostel_student/hostel_student.json
 msgid "Verification"
 msgstr ""
@@ -14983,7 +15289,7 @@ msgstr ""
 #: hostel360/www/verify-certificate.html:130
 #: hostel360/www/verify-certificate.html:132
 msgid "Verification code"
-msgstr ""
+msgstr "சரிபார்ப்புக் குறியீடு"
 
 #. Option for the 'Status' (Select) field in DocType 'Exit Export Log'
 #: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.json
@@ -15015,22 +15321,23 @@ msgstr ""
 
 #: hostel360/www/verify-certificate.html:133
 msgid "Verify"
-msgstr ""
+msgstr "சரிபார்"
 
 #: hostel360/www/verify-certificate.html:8
 #: hostel360/www/verify_certificate.py:14
 msgid "Verify Certificate"
-msgstr ""
+msgstr "சான்றிதழ் சரிபார்ப்பு"
 
 #: hostel360/www/verify-certificate.html:126
 msgid "Verify a bonafide certificate"
-msgstr ""
+msgstr "போனஃபைட் சான்றிதழைச் சரிபார்க்கவும்"
 
-#: hostel360/api/portal.py:815
+#: hostel360/api/portal.py:802
 msgid "Version"
 msgstr "பதிப்பு"
 
 #: hostel360/hostel_communication/doctype/message_template/message_template.js:19
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:65
 #: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.js:6
 #: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.js:7
 #: hostel360/hostel_fees/doctype/hostel_fee_invoice/hostel_fee_invoice.js:304
@@ -15046,8 +15353,8 @@ msgstr "பதிப்பு"
 #: hostel360/hostel_mess/doctype/mess_stock_entry/mess_stock_entry.js:26
 #: hostel360/hostel_mess/doctype/mess_stock_entry/mess_stock_entry.js:33
 #: hostel360/hostel_mess/doctype/mess_supplier/mess_supplier.js:10
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:116
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:131
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:144
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.js:159
 #: hostel360/hostel_people/doctype/room_allotment/room_allotment.js:185
 #: hostel360/hostel_people/doctype/room_allotment/room_allotment.js:193
 #: hostel360/hostel_setup/doctype/hostel/hostel.js:37
@@ -15102,7 +15409,7 @@ msgstr ""
 msgid "Waiting Since"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:51
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:53
 msgid "Waiting for the parent's approval on the portal."
 msgstr ""
 
@@ -15185,15 +15492,15 @@ msgstr ""
 msgid "Water"
 msgstr "தண்ணீர்"
 
-#: hostel360/hostel_fees/services.py:526
+#: hostel360/hostel_fees/services.py:531
 msgid "We could not confirm this payment yet. If money was debited, the hostel office will confirm it. Please quote reference {0}."
 msgstr "இந்தப் பணம் செலுத்துதலை இன்னும் உறுதிசெய்ய முடியவில்லை. பணம் பிடிக்கப்பட்டிருந்தால், விடுதி அலுவலகம் அதை உறுதிசெய்யும். குறிப்பு எண் {0}-ஐக் குறிப்பிடவும்."
 
-#: hostel360/auth/otp.py:531
+#: hostel360/auth/otp.py:556
 msgid "We could not find an active hostel record for this number. Please contact the hostel office."
 msgstr "இந்த எண்ணுக்குச் செயலில் உள்ள விடுதிப் பதிவு எதுவும் கிடைக்கவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
-#: hostel360/api/auth.py:99
+#: hostel360/api/auth.py:115
 msgid "We could not open your portal account. Please contact the hostel office."
 msgstr "உங்கள் இணையதளக் கணக்கைத் திறக்க முடியவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
@@ -15201,7 +15508,7 @@ msgstr "உங்கள் இணையதளக் கணக்கைத் த
 msgid "We could not verify this payment, so no receipt has been issued. If money was debited it will be refunded or confirmed by the hostel office. Please quote reference {0}."
 msgstr "இந்தப் பணம் செலுத்துதலைச் சரிபார்க்க முடியாததால் ரசீது வழங்கப்படவில்லை. பணம் பிடிக்கப்பட்டிருந்தால், அது திருப்பி அளிக்கப்படும் அல்லது விடுதி அலுவலகத்தால் உறுதிசெய்யப்படும். குறிப்பு எண் {0}-ஐக் குறிப்பிடவும்."
 
-#: hostel360/hostel_fees/services.py:729
+#: hostel360/hostel_fees/services.py:734
 msgid "We could not verify this payment. If money was debited it will be confirmed automatically or refunded. Please quote reference {0}."
 msgstr "இந்தப் பணம் செலுத்துதலைச் சரிபார்க்க முடியவில்லை. பணம் பிடிக்கப்பட்டிருந்தால், அது தானாக உறுதிசெய்யப்படும் அல்லது திருப்பி அளிக்கப்படும். குறிப்பு எண் {0}-ஐக் குறிப்பிடவும்."
 
@@ -15240,7 +15547,7 @@ msgstr ""
 msgid "Wednesday"
 msgstr ""
 
-#: hostel360/api/portal.py:1131
+#: hostel360/api/portal.py:1133
 msgid "Week"
 msgstr "வாரம்"
 
@@ -15267,7 +15574,7 @@ msgstr ""
 msgid "Weekly"
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:41
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:49
 msgid "Welcome email queued"
 msgstr ""
 
@@ -15416,7 +15723,7 @@ msgstr ""
 msgid "With Test Mode off, students will be charged real money. Use live credentials."
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:105
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:131
 msgid "With sample values this SMS is {0} characters and will be sent as {1} parts."
 msgstr ""
 
@@ -15430,7 +15737,7 @@ msgstr ""
 
 #. Description of a DocType
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
-msgid "Wording for each event and channel. Templates are rendered with Jinja."
+msgid "Wording for each event, channel and language (English and Tamil). Templates are rendered with Jinja."
 msgstr ""
 
 #. Description of the 'Test Mode' (Check) field in DocType 'Messaging Settings'
@@ -15438,7 +15745,7 @@ msgstr ""
 msgid "Write messages to the Message Log without sending them. Use while templates are being approved."
 msgstr ""
 
-#: hostel360/hostel_migration/purge.py:291
+#: hostel360/hostel_migration/purge.py:297
 msgid "Write the certificate outside the site's folder ({0}); that folder is removed when the site is dropped."
 msgstr ""
 
@@ -15490,11 +15797,15 @@ msgstr ""
 msgid "Yes"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:224
+#: hostel360/student_services/page/gate_pass/gate_pass.js:310
+msgid "Yesterday {0}"
+msgstr ""
+
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:234
 msgid "You are not allowed to approve leave for this student."
 msgstr "இந்த மாணவரின் விடுப்புக்கு ஒப்புதல் அளிக்க உங்களுக்கு அனுமதி இல்லை."
 
-#: hostel360/api/portal.py:1294
+#: hostel360/api/portal.py:1291
 msgid "You are not permitted to access Grievance {0}."
 msgstr "புகார் {0}-ஐ அணுக உங்களுக்கு அனுமதி இல்லை."
 
@@ -15506,7 +15817,7 @@ msgstr "இந்தப் பக்கத்தை அணுக உங்கள
 msgid "You are not permitted to access this student's records."
 msgstr "இந்த மாணவரின் பதிவுகளை அணுக உங்களுக்கு அனுமதி இல்லை."
 
-#: hostel360/api/portal.py:359
+#: hostel360/api/portal.py:337
 msgid "You are not permitted to access {0} {1}."
 msgstr "{0} {1}-ஐ அணுக உங்களுக்கு அனுமதி இல்லை."
 
@@ -15526,8 +15837,8 @@ msgstr "இந்த விண்ணப்பத்தை ரத்து செ
 msgid "You are not permitted to cancel this leave."
 msgstr "இந்த விடுப்பை ரத்து செய்ய உங்களுக்கு அனுமதி இல்லை."
 
-#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.py:102
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:193
+#: hostel360/hostel_people/doctype/hostel_guardian/hostel_guardian.py:107
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:198
 msgid "You are not permitted to create portal users."
 msgstr ""
 
@@ -15535,27 +15846,35 @@ msgstr ""
 msgid "You are not permitted to decide mess reduction applications."
 msgstr "உணவகக் கட்டணக் கழிவு விண்ணப்பங்களில் முடிவெடுக்க உங்களுக்கு அனுமதி இல்லை."
 
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:475
+msgid "You are not permitted to record check-out or return for this leave."
+msgstr ""
+
 #: hostel360/hostel_people/services.py:207
 msgid "You are not permitted to record consent for this guardian."
 msgstr "இந்தப் பாதுகாவலருக்கான ஒப்புதலைப் பதிவு செய்ய உங்களுக்கு அனுமதி இல்லை."
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:174
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:179
 msgid "You are not permitted to reject students."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:210
+#: hostel360/hostel_fees/utils.py:121
+msgid "You are not permitted to save this {0}."
+msgstr ""
+
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:249
 msgid "You are not permitted to update this grievance."
 msgstr "இந்தப் புகாரை மாற்ற உங்களுக்கு அனுமதி இல்லை."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:422
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:455
 msgid "You are not permitted to update this leave."
 msgstr "இந்த விடுப்பை மாற்ற உங்களுக்கு அனுமதி இல்லை."
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:177
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:182
 msgid "You are not permitted to update this request."
 msgstr "இந்தக் கோரிக்கையை மாற்ற உங்களுக்கு அனுமதி இல்லை."
 
-#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:143
+#: hostel360/hostel_people/doctype/hostel_student/hostel_student.py:148
 msgid "You are not permitted to validate students."
 msgstr ""
 
@@ -15571,15 +15890,15 @@ msgstr ""
 msgid "You are not permitted to view leave records."
 msgstr ""
 
-#: hostel360/api/portal.py:370
+#: hostel360/api/portal.py:348
 msgid "You can only see your own records."
 msgstr "உங்கள் சொந்தப் பதிவுகளை மட்டுமே பார்க்க முடியும்."
 
-#: hostel360/hostel_fees/services.py:373
+#: hostel360/hostel_fees/services.py:378
 msgid "You can pay at most {0} invoices at a time."
 msgstr "ஒரே நேரத்தில் அதிகபட்சம் {0} கட்டணச்சீட்டுகளுக்கு மட்டுமே செலுத்த முடியும்."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:326
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:370
 msgid "You can rate a grievance once it is resolved."
 msgstr "புகார் தீர்க்கப்பட்ட பிறகே அதை மதிப்பிட முடியும்."
 
@@ -15591,11 +15910,11 @@ msgstr ""
 msgid "You do not have access to any hostel yet."
 msgstr ""
 
-#: hostel360/api/portal.py:212
+#: hostel360/api/portal.py:227
 msgid "You have done this too many times in a short while. Please wait a few minutes and try again."
 msgstr "குறுகிய நேரத்தில் இதைப் பலமுறை செய்துள்ளீர்கள். சில நிமிடங்கள் காத்திருந்து மீண்டும் முயற்சிக்கவும்."
 
-#: hostel360/api/portal.py:1608
+#: hostel360/api/portal.py:1579
 msgid "You have uploaded many files that are not attached to a request yet. Please submit your request first."
 msgstr "எந்தக் கோரிக்கையுடனும் இன்னும் இணைக்கப்படாத பல கோப்புகளைப் பதிவேற்றியுள்ளீர்கள். முதலில் உங்கள் கோரிக்கையைச் சமர்ப்பிக்கவும்."
 
@@ -15607,21 +15926,21 @@ msgstr ""
 msgid "You're all caught up"
 msgstr ""
 
-#: hostel360/api/portal.py:263 hostel360/auth/events.py:83
+#: hostel360/auth/events.py:83
 msgid "Your hostel registration has not been validated by the hostel office yet. You can sign in once it has been validated."
 msgstr "உங்கள் விடுதிப் பதிவை விடுதி அலுவலகம் இன்னும் சரிபார்க்கவில்லை. சரிபார்க்கப்பட்டதும் நீங்கள் உள்நுழையலாம்."
 
-#: hostel360/api/portal.py:421
+#: hostel360/api/portal.py:394
 msgid "Your hostel registration is waiting for validation by the hostel office. This will be available once it is validated."
 msgstr "உங்கள் விடுதிப் பதிவு விடுதி அலுவலகத்தின் சரிபார்ப்புக்காகக் காத்திருக்கிறது. சரிபார்க்கப்பட்டதும் இது கிடைக்கும்."
 
-#: hostel360/api/portal.py:1088 hostel360/hostel_fees/services.py:590
-#: hostel360/hostel_fees/services.py:682
+#: hostel360/api/portal.py:1090 hostel360/hostel_fees/services.py:595
+#: hostel360/hostel_fees/services.py:687
 msgid "Your payment is being processed. The receipt will appear here shortly."
 msgstr "உங்கள் பணம் செலுத்துதல் செயலாக்கப்படுகிறது. ரசீது விரைவில் இங்கே தோன்றும்."
 
-#: hostel360/api/portal.py:259 hostel360/api/portal.py:316
-#: hostel360/auth/events.py:75 hostel360/auth/events.py:100
+#: hostel360/api/portal.py:289 hostel360/auth/events.py:75
+#: hostel360/auth/events.py:100
 msgid "Your portal account is not linked to a hostel record. Please contact the hostel office."
 msgstr "உங்கள் இணையதளக் கணக்கு எந்த விடுதிப் பதிவுடனும் இணைக்கப்படவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
 
@@ -15672,6 +15991,13 @@ msgstr ""
 msgid "bonafide_decided"
 msgstr ""
 
+#. Option for the 'Event' (Select) field in DocType 'Message Log'
+#. Option for the 'Event' (Select) field in DocType 'Message Template'
+#: hostel360/hostel_communication/doctype/message_log/message_log.json
+#: hostel360/hostel_communication/doctype/message_template/message_template.json
+msgid "bonafide_requested"
+msgstr ""
+
 #: hostel360/hostel_operations/page/ops_status/ops_status.js:115
 msgid "checked {0}"
 msgstr ""
@@ -15697,6 +16023,7 @@ msgstr ""
 msgid "dry run, nothing was kept"
 msgstr ""
 
+#. Option for the 'Language' (Select) field in DocType 'Message Template'
 #. Option for the 'WhatsApp Template Language' (Select) field in DocType
 #. 'Message Template'
 #. Option for the 'Operations Alert Template Language' (Select) field in
@@ -15704,6 +16031,11 @@ msgstr ""
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
 #: hostel360/hostel_communication/doctype/messaging_settings/messaging_settings.json
 msgid "en"
+msgstr ""
+
+#. Description of the 'Language' (Select) field in DocType 'Message Template'
+#: hostel360/hostel_communication/doctype/message_template/message_template.json
+msgid "en = English, ta = Tamil. The English template decides whether this event is sent on this channel at all. Recipients whose account language is Tamil get the Tamil template while it is enabled (and, for SMS, registered); everyone else gets the English one."
 msgstr ""
 
 #. Option for the 'WhatsApp Template Language' (Select) field in DocType
@@ -15742,7 +16074,7 @@ msgstr ""
 msgid "fee_reminder"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:334
+#: hostel360/hostel_operations/support.py:342
 msgid "first response was due by {0}"
 msgstr ""
 
@@ -15789,6 +16121,13 @@ msgstr ""
 #. Option for the 'Event' (Select) field in DocType 'Message Template'
 #: hostel360/hostel_communication/doctype/message_log/message_log.json
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
+msgid "leave_checked_out"
+msgstr ""
+
+#. Option for the 'Event' (Select) field in DocType 'Message Log'
+#. Option for the 'Event' (Select) field in DocType 'Message Template'
+#: hostel360/hostel_communication/doctype/message_log/message_log.json
+#: hostel360/hostel_communication/doctype/message_template/message_template.json
 msgid "leave_decided"
 msgstr ""
 
@@ -15810,6 +16149,13 @@ msgstr ""
 #. Option for the 'Event' (Select) field in DocType 'Message Template'
 #: hostel360/hostel_communication/doctype/message_log/message_log.json
 #: hostel360/hostel_communication/doctype/message_template/message_template.json
+msgid "leave_returned"
+msgstr ""
+
+#. Option for the 'Event' (Select) field in DocType 'Message Log'
+#. Option for the 'Event' (Select) field in DocType 'Message Template'
+#: hostel360/hostel_communication/doctype/message_log/message_log.json
+#: hostel360/hostel_communication/doctype/message_template/message_template.json
 msgid "leave_submitted"
 msgstr ""
 
@@ -15820,7 +16166,7 @@ msgstr ""
 msgid "leave_warden_approval_required"
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:121
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:129
 msgid "manifest.json differs from the manifest written when the export was made."
 msgstr ""
 
@@ -15859,7 +16205,7 @@ msgstr ""
 msgid "mess_reduction_submitted"
 msgstr ""
 
-#: hostel360/api/portal.py:1397
+#: hostel360/api/portal.py:1394
 msgid "message"
 msgstr "செய்தி"
 
@@ -15879,7 +16225,7 @@ msgstr ""
 msgid "not measured"
 msgstr ""
 
-#: hostel360/student_services/utils.py:97
+#: hostel360/student_services/utils.py:112
 msgid "not set"
 msgstr "அமைக்கப்படவில்லை"
 
@@ -15899,7 +16245,7 @@ msgstr ""
 msgid "otp_login"
 msgstr ""
 
-#: hostel360/auth/otp.py:542
+#: hostel360/auth/otp.py:567
 msgid "parent"
 msgstr "பெற்றோர்"
 
@@ -15911,7 +16257,7 @@ msgstr ""
 msgid "payment status is {0}, expected captured"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:453
+#: hostel360/hostel_fees/transactions.py:452
 msgid "payment {0} on the same order is already captured"
 msgstr ""
 
@@ -15922,7 +16268,7 @@ msgstr ""
 msgid "payment_received"
 msgstr ""
 
-#: hostel360/hostel_operations/support.py:343
+#: hostel360/hostel_operations/support.py:351
 msgid "resolution was due by {0}"
 msgstr ""
 
@@ -15962,7 +16308,7 @@ msgstr ""
 msgid "status must be Success or Failed."
 msgstr ""
 
-#: hostel360/auth/otp.py:542
+#: hostel360/auth/otp.py:567
 msgid "student"
 msgstr "மாணவர்"
 
@@ -15980,6 +16326,7 @@ msgstr ""
 msgid "support_ticket_update"
 msgstr ""
 
+#. Option for the 'Language' (Select) field in DocType 'Message Template'
 #. Option for the 'WhatsApp Template Language' (Select) field in DocType
 #. 'Message Template'
 #. Option for the 'Operations Alert Template Language' (Select) field in
@@ -16009,16 +16356,16 @@ msgstr ""
 msgid "the list of students has changed"
 msgstr ""
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:46
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.js:48
 msgid "the registered number"
 msgstr ""
 
-#: hostel360/hostel_fees/transactions.py:442
-#: hostel360/hostel_fees/transactions.py:598
+#: hostel360/hostel_fees/transactions.py:441
+#: hostel360/hostel_fees/transactions.py:597
 msgid "the transaction is already {0}"
 msgstr ""
 
-#: hostel360/student_services/utils.py:196
+#: hostel360/student_services/utils.py:258
 msgid "this hostel"
 msgstr "இந்த விடுதி"
 
@@ -16032,6 +16379,10 @@ msgstr ""
 
 #: hostel360/hostel_fees/transactions.py:195
 msgid "unknown method"
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:205
+msgid "updated {0}"
 msgstr ""
 
 #: hostel360/hostel_people/doctype/student_bulk_import/student_bulk_import.py:677
@@ -16062,7 +16413,7 @@ msgstr ""
 msgid "{0} already exists."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.py:214
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.py:215
 msgid "{0} already has a login with other roles ({1}). Ask a System Manager to link it to this staff record."
 msgstr ""
 
@@ -16103,15 +16454,15 @@ msgstr ""
 msgid "{0} can be received only against an approved indent. Select the indent in Against Indent."
 msgstr ""
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:96
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:101
 msgid "{0} can only be changed with the Approve, Reject and Mark Issued actions."
 msgstr "{0}-ஐ ஒப்புதல், நிராகரிப்பு, வழங்கியதாகக் குறித்தல் ஆகிய செயல்கள் மூலம் மட்டுமே மாற்ற முடியும்."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:113
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:123
 msgid "{0} can only be changed with the Approve, Reject, Checked Out, Returned and Cancel Leave actions."
 msgstr "{0}-ஐ ஒப்புதல், நிராகரிப்பு, வெளியேறுதல், திரும்புதல், விடுப்பு ரத்து ஆகிய செயல்கள் மூலம் மட்டுமே மாற்ற முடியும்."
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:97
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:109
 msgid "{0} can only be changed with the Assign, Add Update, Resolve and Close actions."
 msgstr "{0}-ஐ ஒப்படைத்தல், புதுப்பிப்புச் சேர்த்தல், தீர்வு, முடிவு ஆகிய செயல்கள் மூலம் மட்டுமே மாற்ற முடியும்."
 
@@ -16123,7 +16474,7 @@ msgstr "{0}, {1}-க்குப் பிறகு இருக்கக்க�
 msgid "{0} cannot be before the incident was detected."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:92
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:104
 msgid "{0} cannot be changed on a grievance that has been raised."
 msgstr "அளிக்கப்பட்ட புகாரில் {0}-ஐ மாற்ற முடியாது."
 
@@ -16131,11 +16482,11 @@ msgstr "அளிக்கப்பட்ட புகாரில் {0}-ஐ �
 msgid "{0} cannot be changed on feedback that has been given."
 msgstr "அளிக்கப்பட்ட கருத்துக்கணிப்பில் {0}-ஐ மாற்ற முடியாது."
 
-#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:107
+#: hostel360/student_services/doctype/home_visit_leave/home_visit_leave.py:117
 msgid "{0} cannot be changed. Cancel this leave and apply again if they are wrong."
 msgstr "{0}-ஐ மாற்ற முடியாது. அவை தவறாக இருந்தால் இந்த விடுப்பை ரத்து செய்து மீண்டும் விண்ணப்பிக்கவும்."
 
-#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:92
+#: hostel360/student_services/doctype/bonafide_certificate_request/bonafide_certificate_request.py:97
 msgid "{0} cannot be changed. Please raise a new request if they are wrong."
 msgstr "{0}-ஐ மாற்ற முடியாது. அவை தவறாக இருந்தால் புதிய கோரிக்கையை அனுப்பவும்."
 
@@ -16155,7 +16506,7 @@ msgstr ""
 msgid "{0} cannot be negative."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:220
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:259
 msgid "{0} cannot handle grievances (only hostel and mess staff can)."
 msgstr "{0} புகார்களைக் கையாள முடியாது (விடுதி மற்றும் உணவகப் பணியாளர்கள் மட்டுமே முடியும்)."
 
@@ -16163,8 +16514,12 @@ msgstr "{0} புகார்களைக் கையாள முடியா
 msgid "{0} captures payments automatically."
 msgstr "{0} பணத்தைத் தானாகப் பெற்றுக்கொள்கிறது."
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.js:60
+#: hostel360/hostel_communication/doctype/message_template/message_template.js:104
 msgid "{0} characters, {1} SMS"
+msgstr ""
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:362
+msgid "{0} checked out"
 msgstr ""
 
 #: hostel360/hostel_operations/reports.py:430
@@ -16192,7 +16547,7 @@ msgstr ""
 msgid "{0} failed"
 msgstr ""
 
-#: hostel360/hostel_communication/doctype/message_template/message_template.py:78
+#: hostel360/hostel_communication/doctype/message_template/message_template.py:92
 msgid "{0} has an error: {1}"
 msgstr ""
 
@@ -16232,9 +16587,13 @@ msgstr ""
 msgid "{0} is a {1} hostel; {2} cannot be allotted a bed here."
 msgstr ""
 
-#: hostel360/student_services/utils.py:102
+#: hostel360/student_services/utils.py:117
 msgid "{0} is available once the hostel office has validated the student's registration."
 msgstr "மாணவரின் பதிவை விடுதி அலுவலகம் சரிபார்த்ததும் {0} கிடைக்கும்."
+
+#: hostel360/student_services/page/gate_pass/gate_pass.js:363
+msgid "{0} is back"
+msgstr ""
 
 #: hostel360/hostel_migration/engine.py:684
 msgid "{0} is empty."
@@ -16260,11 +16619,11 @@ msgstr ""
 msgid "{0} is not a valid blood group."
 msgstr "{0} சரியான இரத்த வகை அல்ல."
 
-#: hostel360/api/portal.py:529
+#: hostel360/api/portal.py:502
 msgid "{0} is not a valid date and time."
 msgstr "{0} சரியான தேதியும் நேரமும் அல்ல."
 
-#: hostel360/api/portal.py:516
+#: hostel360/api/portal.py:489
 msgid "{0} is not a valid date."
 msgstr "{0} சரியான தேதி அல்ல."
 
@@ -16274,15 +16633,15 @@ msgstr "{0} சரியான தேதி அல்ல."
 msgid "{0} is not a valid e-mail address."
 msgstr ""
 
-#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:217
+#: hostel360/student_services/doctype/hostel_grievance/hostel_grievance.py:256
 msgid "{0} is not an active staff user."
 msgstr "{0} செயலில் உள்ள பணியாளர் பயனர் அல்ல."
 
-#: hostel360/student_services/utils.py:105
+#: hostel360/student_services/utils.py:120
 msgid "{0} is not available because no room is allotted to the student."
 msgstr "மாணவருக்கு அறை ஒதுக்கப்படாததால் {0} கிடைக்காது."
 
-#: hostel360/student_services/utils.py:96
+#: hostel360/student_services/utils.py:111
 msgid "{0} is not available because the student's status is {1}."
 msgstr "மாணவரின் நிலை {1} என்பதால் {0} கிடைக்காது."
 
@@ -16294,17 +16653,17 @@ msgstr "{0} உணவகத்தில் சேர்க்கப்படவ�
 msgid "{0} is not in indent {1}. Raise an indent for it first."
 msgstr ""
 
-#: hostel360/api/portal.py:460 hostel360/api/portal.py:465
-#: hostel360/api/portal.py:473 hostel360/api/portal.py:495
-#: hostel360/api/portal.py:564 hostel360/api/portal.py:568
-#: hostel360/api/portal.py:583 hostel360/api/portal.py:595
-#: hostel360/api/portal.py:597
+#: hostel360/api/portal.py:433 hostel360/api/portal.py:438
+#: hostel360/api/portal.py:446 hostel360/api/portal.py:468
+#: hostel360/api/portal.py:537 hostel360/api/portal.py:541
+#: hostel360/api/portal.py:556 hostel360/api/portal.py:568
+#: hostel360/api/portal.py:570
 msgid "{0} is not valid."
 msgstr "{0} சரியாக இல்லை."
 
-#: hostel360/api/portal.py:463 hostel360/api/portal.py:480
-#: hostel360/api/portal.py:493 hostel360/api/portal.py:508
-#: hostel360/api/portal.py:522 hostel360/hostel_setup/utils.py:20
+#: hostel360/api/portal.py:436 hostel360/api/portal.py:453
+#: hostel360/api/portal.py:466 hostel360/api/portal.py:481
+#: hostel360/api/portal.py:495 hostel360/hostel_setup/utils.py:20
 msgid "{0} is required."
 msgstr "{0} தேவை."
 
@@ -16333,7 +16692,7 @@ msgstr ""
 msgid "{0} lives in a {1} hostel. Transfer the student before changing the gender."
 msgstr ""
 
-#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:65
+#: hostel360/hostel_migration/doctype/exit_export_log/exit_export_log.py:66
 msgid "{0} must be a SHA-256 checksum (64 hexadecimal characters)."
 msgstr ""
 
@@ -16341,11 +16700,11 @@ msgstr ""
 msgid "{0} must be a full https:// address."
 msgstr ""
 
-#: hostel360/api/portal.py:483
+#: hostel360/api/portal.py:456
 msgid "{0} must be at most {1} characters long."
 msgstr "{0} அதிகபட்சம் {1} எழுத்துகள் வரை மட்டுமே இருக்கலாம்."
 
-#: hostel360/api/portal.py:549
+#: hostel360/api/portal.py:522
 #: hostel360/student_services/doctype/hostel_feedback/hostel_feedback.py:56
 msgid "{0} must be between 1 and 5 stars."
 msgstr "{0} 1 முதல் 5 நட்சத்திரங்களுக்குள் இருக்க வேண்டும்."
@@ -16354,7 +16713,7 @@ msgstr "{0} 1 முதல் 5 நட்சத்திரங்களுக்
 msgid "{0} must be between {1} and {2}."
 msgstr ""
 
-#: hostel360/api/portal.py:501
+#: hostel360/api/portal.py:474
 msgid "{0} must be one of: {1}."
 msgstr "{0} இவற்றில் ஒன்றாக இருக்க வேண்டும்: {1}."
 
@@ -16379,7 +16738,7 @@ msgstr ""
 msgid "{0} of {1} bills"
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:177
+#: hostel360/hostel_fees/reconciliation.py:187
 msgid "{0} of {1} online payments could not be checked with the gateway. Students may not receive receipts until this is resolved."
 msgstr ""
 
@@ -16392,7 +16751,7 @@ msgstr ""
 msgid "{0} on {1} is entered more than once."
 msgstr ""
 
-#: hostel360/hostel_fees/reconciliation.py:247
+#: hostel360/hostel_fees/reconciliation.py:257
 msgid "{0} online payment reconciliation issue(s)"
 msgstr ""
 
@@ -16401,8 +16760,16 @@ msgstr ""
 msgid "{0} open invoices, {1} outstanding"
 msgstr ""
 
-#: hostel360/hostel_fees/services.py:656
+#: hostel360/hostel_fees/services.py:661
 msgid "{0} payment response with an invalid signature was rejected"
+msgstr ""
+
+#: hostel360/security/sharing.py:81
+msgid "{0} records cannot be shared with everyone: that would include every student and parent portal account. Share the document with the colleagues who need it instead."
+msgstr ""
+
+#: hostel360/security/sharing.py:90
+msgid "{0} records cannot be shared with {1}. Students and parents see their own records through the hostel portal only."
 msgstr ""
 
 #: hostel360/api/ops.py:223
@@ -16433,11 +16800,11 @@ msgstr ""
 msgid "{0} staff are recorded for contact purposes only and do not get a desk login. Untick Create Desk Login."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:78
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:86
 msgid "{0} staff are recorded for contact purposes only. They do not get a desk login."
 msgstr ""
 
-#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:74
+#: hostel360/hostel_people/doctype/hostel_staff/hostel_staff.js:82
 msgid "{0} staff do not use the desk. The desk login {1} is disabled when this record is saved."
 msgstr ""
 
@@ -16494,7 +16861,7 @@ msgstr ""
 msgid "{0} {1} may contain only letters, digits and hyphens."
 msgstr ""
 
-#: hostel360/api/portal.py:357
+#: hostel360/api/portal.py:335
 msgid "{0} {1} was not found."
 msgstr "{0} {1} கிடைக்கவில்லை."
 
@@ -16506,7 +16873,7 @@ msgstr ""
 msgid "{0} · Room {1} · Bed {2}"
 msgstr ""
 
-#: hostel360/api/portal.py:426
+#: hostel360/api/portal.py:399
 msgid "{0}'s hostel registration is waiting for validation by the hostel office. This will be available once it is validated."
 msgstr "{0} அவர்களின் விடுதிப் பதிவு விடுதி அலுவலகத்தின் சரிபார்ப்புக்காகக் காத்திருக்கிறது. சரிபார்க்கப்பட்டதும் இது கிடைக்கும்."
 

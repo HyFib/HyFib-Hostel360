@@ -125,8 +125,9 @@ class HostelStaff(Document):
 	def sync_user(self) -> None:
 		"""Roles follow the designation; the login is disabled while the staff is inactive.
 
-		A designation without desk roles (Security, Housekeeping, Other) leaves the login
-		with nothing to do, so it is disabled too. An account that also holds roles this
+		A designation without desk roles (Housekeeping, Other) leaves the login with
+		nothing to do, so it is disabled too. Security staff keep theirs: it carries only
+		the gate role and the hostel restriction. An account that also holds roles this
 		record does not manage, and that the current user may not edit, is never disabled:
 		it only gains or loses the hostel roles.
 		"""

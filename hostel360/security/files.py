@@ -705,6 +705,8 @@ def _scanner_reachable() -> None:
 		resolve_alert(SCANNER_ALERT_KEY, notes="The malware scanner is reachable again.", source="Security")
 	except ImportError:
 		pass
+	except frappe.QueryDeadlockError:
+		raise
 	except Exception:
 		frappe.log_error(title="Hostel360: could not resolve scanner alert", message=frappe.get_traceback())
 	_scan_backlog()
@@ -742,6 +744,10 @@ def _alert(key: str, title: str, severity: str, description: str, details: dict)
 			description=description,
 			details=details,
 		)
+	except frappe.QueryDeadlockError:
+		# raise_alert had to write in the caller's transaction, and InnoDB has rolled all of it
+		# back; the scan job must fail rather than carry on with half its work.
+		raise
 	except Exception:
 		frappe.log_error(title="Hostel360: could not raise security alert", message=frappe.get_traceback())
 

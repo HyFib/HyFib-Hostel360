@@ -2,8 +2,10 @@
 
 ``send_otp`` and ``verify_otp`` are open to guests and return the same response shape
 whether or not the number is registered. The detailed limits live in
-``hostel360.auth.otp``; the decorator limits here are only a coarse flood guard, kept high
-because a whole campus can share one public IP address.
+``hostel360.auth.otp``; the decorator limits here are only a coarse flood guard per IP
+address. It is high because a whole campus can share one public address, and far higher
+for the trusted networks listed in Messaging Settings (the campus gateway, staging load
+generators), where the per-number limits still apply.
 """
 
 import frappe
@@ -16,6 +18,8 @@ from hostel360.setup.roles import ADMIN_ROLE, OFFICE_ROLE, WARDEN_ROLE
 
 PORTAL_REDIRECT = "/hostel"
 FLOOD_LIMIT_PER_HOUR = 3000
+# Still a ceiling, so a runaway client on the campus network cannot hammer the endpoints.
+TRUSTED_FLOOD_LIMIT_PER_HOUR = 100_000
 # Staff who may lift a sign-in lock after confirming with the number's owner.
 UNLOCK_ROLES = (ADMIN_ROLE, WARDEN_ROLE, OFFICE_ROLE, "System Manager")
 
@@ -24,8 +28,20 @@ def _client_ip() -> str | None:
 	return getattr(frappe.local, "request_ip", None)
 
 
+def flood_limit() -> int:
+	"""Hourly request ceiling for the caller's address (see the module docstring)."""
+	try:
+		policy = otp_codes.get_policy()
+		if otp_codes.is_trusted_ip(_client_ip(), policy.trusted_networks):
+			return TRUSTED_FLOOD_LIMIT_PER_HOUR
+	except Exception:
+		# Settings unreadable: keep the ordinary ceiling rather than refuse sign-in.
+		frappe.logger("hostel360").warning("Could not read the trusted networks for sign-in", exc_info=True)
+	return FLOOD_LIMIT_PER_HOUR
+
+
 @frappe.whitelist(allow_guest=True, methods=["POST"])
-@rate_limit(limit=FLOOD_LIMIT_PER_HOUR, seconds=60 * 60)
+@rate_limit(limit=flood_limit, seconds=60 * 60)
 def send_otp(mobile: str, channel: str | None = None) -> dict:
 	"""Send a sign-in code to a registered student or parent mobile number.
 
@@ -35,7 +51,7 @@ def send_otp(mobile: str, channel: str | None = None) -> dict:
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
-@rate_limit(limit=FLOOD_LIMIT_PER_HOUR, seconds=60 * 60)
+@rate_limit(limit=flood_limit, seconds=60 * 60)
 def verify_otp(mobile: str, otp: str, kind: str | None = None) -> dict:
 	"""Verify a sign-in code and start a portal session.
 

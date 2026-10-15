@@ -4,7 +4,7 @@
  * confirmed. Shown after Razorpay Checkout on the pay page, and on the fees page when a
  * redirect checkout (PayU) brings the payer back.
  */
-import { CircleAlert, CircleCheck, Clock, Download, RefreshCw } from "@lucide/vue";
+import { CircleAlert, CircleCheck, Clock, Download, FlaskConical, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { downloadReceipt } from "@/api/portal";
 import type { VerifyPaymentResult } from "@/api/types";
@@ -28,6 +28,13 @@ const outcome = computed<"success" | "failed" | "pending">(() => {
 	return NOT_PAID.has(props.result.status) ? "failed" : "pending";
 });
 const onPayPage = computed(() => (props.context ?? "pay") === "pay");
+/**
+ * Only this attempt failed (a declined card, a cancelled UPI request): the payment request stays
+ * open and paying again continues it. Expired or refunded requests and unmatched replies differ.
+ */
+const attemptFailed = computed(() => props.result.status === "Failed" && Boolean(props.result.transaction));
+/** Paid (or attempted) with the gateway's test credentials. */
+const isTest = computed(() => Boolean(Number(props.result.test_mode)));
 </script>
 
 <template>
@@ -36,6 +43,9 @@ const onPayPage = computed(() => (props.context ?? "pay") === "pay");
 			<CircleCheck :size="48" class="mx-auto text-success" aria-hidden="true" />
 			<h2 class="mt-3 text-xl font-bold text-ink">{{ t("pay.successTitle") }}</h2>
 			<p class="mt-1 text-muted">{{ t("pay.successBody", { receipt: result.receipt_number || result.payment || "" }) }}</p>
+			<p v-if="isTest" class="mt-3 inline-flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-left text-sm font-medium text-info" data-test="test-outcome">
+				<FlaskConical :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("pay.testReceipt") }}
+			</p>
 			<div class="mt-6 grid gap-2 sm:flex sm:justify-center">
 				<button
 					v-if="result.payment"
@@ -55,6 +65,10 @@ const onPayPage = computed(() => (props.context ?? "pay") === "pay");
 			<CircleAlert :size="48" class="mx-auto text-danger" aria-hidden="true" />
 			<h2 class="mt-3 text-xl font-bold text-ink">{{ t("pay.failedTitle") }}</h2>
 			<p class="mt-1 text-muted">{{ result.message || t("pay.failedBody") }}</p>
+			<p v-if="attemptFailed" class="mt-1 text-sm text-muted" data-test="dues-still-open">{{ t("pay.duesStillOpen") }}</p>
+			<p v-if="isTest" class="mt-3 inline-flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-left text-sm font-medium text-info" data-test="test-outcome">
+				<FlaskConical :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("pay.testAttempt") }}
+			</p>
 			<div class="mt-6 grid gap-2 sm:flex sm:justify-center">
 				<button type="button" class="btn-primary" @click="emit('retry')">{{ t("pay.retry") }}</button>
 				<RouterLink v-if="onPayPage" :to="{ name: 'fees' }" class="btn-secondary">{{ t("pay.backToFees") }}</RouterLink>

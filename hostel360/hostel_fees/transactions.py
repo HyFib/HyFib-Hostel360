@@ -302,7 +302,6 @@ def _create_receipt(tx, payment):
 	receipt.update(
 		{
 			"student": tx.student,
-			"hostel": tx.hostel,
 			"payment_date": _payment_date(payment),
 			"mode_of_payment": ONLINE,
 			"amount": amount,

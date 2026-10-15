@@ -1,0 +1,233 @@
+/* Gate pass: used standing at the gate on a tablet, often in gloves or bright light.
+   Large type, large touch targets (at least 48px) and status shown by colour and text. */
+
+.h360-gate {
+	max-width: 880px;
+	margin: 0 auto;
+	padding: var(--padding-md, 16px) 0 var(--padding-xl, 32px);
+}
+
+.h360-gate-search {
+	display: flex;
+	gap: 8px;
+	position: sticky;
+	top: var(--navbar-height, 48px);
+	z-index: 2;
+	padding: 8px 0;
+	background: var(--bg-color);
+}
+
+.h360-gate-input.form-control {
+	flex: 1 1 auto;
+	height: 56px;
+	padding: 0 16px;
+	font-size: 20px;
+	border-radius: var(--border-radius-lg, 12px);
+}
+
+/* The page has its own large Clear button; the browser's small one is hard to hit. */
+.h360-gate-input::-webkit-search-cancel-button {
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+.h360-gate-clear.btn {
+	min-width: 88px;
+	min-height: 56px;
+	font-size: var(--text-md);
+	border-radius: var(--border-radius-lg, 12px);
+}
+
+.h360-gate-meta {
+	font-size: var(--text-sm);
+	margin: 4px 2px 12px;
+}
+
+.h360-gate-tabs {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
+.h360-gate-tab {
+	flex: 1 1 0;
+	min-height: 48px;
+	border-radius: 999px;
+	border: 1px solid var(--border-color);
+	background: var(--card-bg);
+	color: var(--text-color);
+	font-size: var(--text-md);
+	font-weight: 600;
+}
+
+.h360-gate-tab.active {
+	background: var(--text-color);
+	border-color: var(--text-color);
+	color: var(--card-bg);
+}
+
+.h360-gate-count {
+	display: inline-block;
+	min-width: 28px;
+	margin-left: 6px;
+	padding: 0 8px;
+	border-radius: 999px;
+	background: var(--control-bg);
+	color: var(--text-color);
+	font-size: var(--text-sm);
+	line-height: 24px;
+}
+
+.h360-gate-tab.active .h360-gate-count {
+	background: var(--card-bg);
+}
+
+.h360-gate-card {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 14px 16px;
+	margin-bottom: 12px;
+	background: var(--card-bg);
+	border: 1px solid var(--border-color);
+	border-left: 6px solid var(--gray-400, #c0c6cc);
+	border-radius: var(--border-radius-lg, 12px);
+	box-shadow: var(--card-shadow, none);
+}
+
+.h360-gate-ready { border-left-color: var(--green-500, #22c55e); }
+.h360-gate-waiting { border-left-color: var(--blue-400, #60a5fa); }
+.h360-gate-overdue { border-left-color: var(--red-500, #ef4444); }
+
+.h360-gate-avatar {
+	flex: none;
+	width: 72px;
+	height: 72px;
+	border-radius: 12px;
+	object-fit: cover;
+	background: var(--control-bg);
+}
+
+.h360-gate-initials {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 26px;
+	font-weight: 600;
+	color: var(--text-muted);
+}
+
+.h360-gate-avatar-lg {
+	width: 160px;
+	height: 160px;
+	margin: 0 auto 12px;
+	font-size: 48px;
+}
+
+img.h360-gate-avatar-lg {
+	display: block;
+}
+
+.h360-gate-info {
+	/* A zero basis keeps the details beside the photo when the button wraps below. */
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.h360-gate-name {
+	font-size: 20px;
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--heading-color, var(--text-color));
+}
+
+.h360-gate-sub {
+	font-size: var(--text-md);
+	margin-top: 2px;
+}
+
+.h360-gate-leave {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+	margin-top: 8px;
+	font-size: var(--text-md);
+}
+
+.h360-gate-line {
+	margin-top: 4px;
+	font-size: var(--text-sm);
+}
+
+.h360-gate-note {
+	margin-top: 6px;
+	font-size: var(--text-sm);
+	font-weight: 500;
+	color: var(--orange-700, #b25400);
+}
+
+.h360-gate-act {
+	flex: none;
+}
+
+.h360-gate-btn.btn {
+	min-width: 168px;
+	min-height: 56px;
+	padding: 0 20px;
+	font-size: 18px;
+	font-weight: 600;
+	border-radius: var(--border-radius-lg, 12px);
+}
+
+.h360-gate-empty {
+	text-align: center;
+	padding: 56px 16px;
+	font-size: var(--text-lg);
+	border: 1px dashed var(--border-color);
+	border-radius: var(--border-radius-lg, 12px);
+}
+
+.h360-gate-more {
+	text-align: center;
+	margin-top: 8px;
+}
+
+.h360-gate-confirm {
+	text-align: center;
+	padding: 8px 0;
+}
+
+.h360-gate-confirm .h360-gate-leave {
+	justify-content: center;
+}
+
+.h360-gate-question {
+	margin: 16px 0 0;
+	font-size: var(--text-md);
+}
+
+@media (max-width: 640px) {
+	.h360-gate-tab {
+		font-size: var(--text-sm);
+		white-space: nowrap;
+	}
+
+	.h360-gate-card {
+		flex-wrap: wrap;
+		align-items: flex-start;
+	}
+
+	.h360-gate-avatar {
+		width: 56px;
+		height: 56px;
+	}
+
+	.h360-gate-act {
+		flex: 1 1 100%;
+	}
+
+	.h360-gate-btn.btn {
+		width: 100%;
+	}
+}

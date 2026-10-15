@@ -29,6 +29,8 @@
   "sms_param_sender",
   "sms_param_template_id",
   "sms_param_entity_id",
+  "sms_param_unicode",
+  "sms_unicode_value",
   "sms_extra_params",
   "whatsapp_tab",
   "whatsapp_section",
@@ -219,6 +221,20 @@
    "default": "entity_id"
   },
   {
+   "fieldname": "sms_param_unicode",
+   "fieldtype": "Data",
+   "label": "Unicode Parameter",
+   "description": "Parameter that marks a Unicode (for example Tamil) message, if your gateway needs one. Leave blank if it detects Unicode itself."
+  },
+  {
+   "fieldname": "sms_unicode_value",
+   "fieldtype": "Data",
+   "label": "Unicode Parameter Value",
+   "default": "1",
+   "depends_on": "eval:doc.sms_param_unicode",
+   "description": "Value sent in the Unicode parameter, only with messages that contain Unicode characters."
+  },
+  {
    "fieldname": "sms_extra_params",
    "fieldtype": "Code",
    "label": "Additional Parameters",
@@ -377,7 +393,7 @@
    "fieldname": "otp_trusted_networks",
    "fieldtype": "Small Text",
    "label": "Trusted Networks",
-   "description": "One IP address or CIDR range per line, for example the campus Wi-Fi gateway. These networks are exempt from the per-IP limit; per-number limits still apply."
+   "description": "One IP address or CIDR range per line, for example the campus Wi-Fi gateway. These networks are exempt from the per-IP code limit and get a far higher sign-in flood ceiling (100,000 requests an hour instead of 3,000); per-number limits still apply."
   },
   {
    "fieldname": "delivery_tab",
@@ -426,7 +442,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-15 15:30:00.000000",
+ "modified": "2026-10-15 21:30:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Communication",
  "name": "Messaging Settings",

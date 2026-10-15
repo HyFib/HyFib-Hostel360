@@ -145,6 +145,43 @@ def make_student(
 	return doc.name
 
 
+def make_scoped_user(hostel: str, role: str | None = None) -> str:
+	"""A desk user limited to ``hostel`` through a User Permission, as Hostel Staff sync sets up."""
+	from hostel360.setup.roles import OFFICE_ROLE
+
+	email = f"{unique('fee.staff.').lower()}@example.com"
+	user = frappe.get_doc(
+		{
+			"doctype": "User",
+			"email": email,
+			"first_name": "Fee Counter",
+			"user_type": "System User",
+			"send_welcome_email": 0,
+			"roles": [{"role": role or OFFICE_ROLE}],
+		}
+	)
+	user.flags.no_welcome_mail = True
+	user.insert(ignore_permissions=True)
+	frappe.get_doc(
+		{
+			"doctype": "User Permission",
+			"user": email,
+			"allow": "Hostel",
+			"for_value": hostel,
+			"apply_to_all_doctypes": 1,
+		}
+	).insert(ignore_permissions=True)
+	return email
+
+
+def move_student(student: str, hostel: str | None, last_hostel: str | None = None) -> None:
+	"""Record the outcome of a transfer or vacating (allotments belong to the people module)."""
+	values = {"current_hostel": hostel}
+	if frappe.get_meta("Hostel Student").has_field("last_hostel"):
+		values["last_hostel"] = last_hostel or hostel
+	frappe.db.set_value("Hostel Student", student, values, update_modified=False)
+
+
 def make_invoice(
 	student: str,
 	amount: float = 1000,

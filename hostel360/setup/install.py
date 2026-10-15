@@ -91,6 +91,7 @@ def after_install():
 	sync_roles()
 	enforce_log_retention()
 	enable_languages()
+	remove_unsafe_shares()
 	run_module_setup()
 	frappe.db.commit()  # nosemgrep
 
@@ -99,6 +100,7 @@ def after_migrate():
 	sync_roles()
 	enforce_log_retention()
 	enable_languages()
+	remove_unsafe_shares()
 	run_module_setup()
 
 
@@ -145,6 +147,13 @@ def sync_roles() -> None:
 	for role_name in TWO_FACTOR_CORE_ROLES:
 		if frappe.db.exists("Role", role_name):
 			frappe.db.set_value("Role", role_name, "two_factor_auth", 1, update_modified=False)
+
+
+def remove_unsafe_shares() -> None:
+	"""Shares created before the DocShare rule existed are removed (idempotent)."""
+	from hostel360.security.sharing import remove_unsafe_shares as _remove
+
+	_remove()
 
 
 def enable_languages() -> None:

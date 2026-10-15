@@ -22,12 +22,40 @@ frappe.ui.form.on("Hostel Guardian", {
 				__("Actions")
 			);
 		}
+		if (frm.doc.__onload?.can_unlock_sign_in) {
+			frm.add_custom_button(__("Unlock Sign-in"), () => frm.trigger("unlock_sign_in"), __("Actions"));
+		}
 		if (frm.doc.validation_status === "Pending") {
 			frm.dashboard.set_headline_alert(
 				__("Validated automatically when a linked student is validated."),
 				"orange"
 			);
 		}
+	},
+
+	unlock_sign_in(frm) {
+		// The lock follows repeated wrong codes and otherwise lasts an hour.
+		if (frm.is_dirty()) {
+			frappe.msgprint(__("Save your changes first. The saved mobile number is the one that gets unlocked."));
+			return;
+		}
+		const esc = frappe.utils.escape_html;
+		const mobile = frm.doc.mobile_number;
+		frappe.confirm(
+			__(
+				"Let {0} sign in again on {1} straight away? Do this only after confirming who you are speaking to, for example by calling back on the registered number.",
+				[esc(frm.doc.guardian_name), esc(mobile)]
+			),
+			() =>
+				frappe
+					.call({ method: "hostel360.api.auth.unlock_sign_in", args: { mobile }, freeze: true })
+					.then(() =>
+						frappe.show_alert({
+							message: __("Sign-in unlocked for {0}. A new code can be requested now.", [esc(mobile)]),
+							indicator: "green",
+						})
+					)
+		);
 	},
 
 	render_wards(frm) {

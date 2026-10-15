@@ -1,5 +1,6 @@
 # Tools for the deploy checks (deploy/README.md, section 5): Ansible with the playbook's
-# collections, ansible-lint and fail2ban-regex, at the versions the playbook is tested with.
+# collections, ansible-lint and fail2ban-regex, at the versions the playbook is tested with,
+# and curl, jq and gpg for the host script checks (deploy/tests/host).
 #
 #   docker build -t hostel360-deploy-checks:1 -f deploy/tests/Containerfile deploy/tests
 FROM python:3.13.16-slim
@@ -12,5 +13,10 @@ RUN set -eux; \
 RUN pip install --no-cache-dir ansible-core==2.21.5 ansible-lint==26.10.1 \
 	&& ansible-galaxy collection install -p /usr/share/ansible/collections \
 		ansible.posix:2.2.2 community.general:13.5.0 community.crypto:3.5.0
+
+RUN set -eux; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends curl jq gnupg; \
+	rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work

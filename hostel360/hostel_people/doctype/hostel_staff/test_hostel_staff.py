@@ -5,6 +5,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from hostel360.hostel_people.doctype.hostel_staff.hostel_staff import get_designation_rules
+from hostel360.hostel_people.services import get_staff_scope
 from hostel360.hostel_people.testing import make_block, make_desk_user, make_hostel
 from hostel360.setup.roles import (
 	ADMIN_ROLE,
@@ -12,6 +13,8 @@ from hostel360.setup.roles import (
 	MESS_STAFF_ROLE,
 	OFFICE_ROLE,
 	OPERATIONS_ROLE,
+	SECURITY_ROLE,
+	STAFF_ROLES,
 	WARDEN_ROLE,
 )
 
@@ -101,9 +104,14 @@ class TestHostelStaff(IntegrationTestCase):
 			make_staff("Mess Staff", [])
 
 	def test_no_login_for_non_desk_designations(self):
-		with self.assertRaises(frappe.ValidationError):
-			make_staff("Security", [self.hostel_a])
-		staff = make_staff("Security", [self.hostel_a], create_user=0)
+		for designation in ("Housekeeping", "Other"):
+			with self.assertRaisesRegex(frappe.ValidationError, "contact purposes"):
+				make_staff(designation, [self.hostel_a])
+			staff = make_staff(designation, [self.hostel_a], create_user=0)
+			self.assertFalse(staff.user)
+
+		# Security staff may also be recorded without a login, for example before they have an e-mail.
+		staff = make_staff("Security", [self.hostel_a], create_user=0, email=None)
 		self.assertFalse(staff.user)
 
 	def test_existing_user_is_reused_and_other_roles_kept(self):
@@ -223,7 +231,7 @@ class TestHostelStaff(IntegrationTestCase):
 	def test_desk_less_designation_switches_the_login_off(self):
 		staff = make_staff("Office Staff", [self.hostel_a])
 		staff.reload()
-		staff.designation = "Security"
+		staff.designation = "Housekeeping"
 		staff.save()
 		self.assertEqual(frappe.db.get_value("User", staff.user, "enabled"), 0)
 		self.assertNotIn(OFFICE_ROLE, frappe.get_roles(staff.user))
@@ -236,12 +244,69 @@ class TestHostelStaff(IntegrationTestCase):
 		self.assertIn(OFFICE_ROLE, frappe.get_roles(staff.user))
 		self.assertEqual(hostel_permissions(staff.user), {self.hostel_a})
 
-	def test_security_staff_are_recorded_without_a_login(self):
-		with self.assertRaisesRegex(frappe.ValidationError, "contact purposes"):
-			make_staff("Security", [self.hostel_a])
+	def test_security_staff_get_a_hostel_scoped_gate_login(self):
+		staff = make_staff("Security", [self.hostel_a])
+		self.assertTrue(staff.user)
+		user = frappe.get_doc("User", staff.user)
+		self.assertEqual(user.user_type, "System User")
+		self.assertTrue(user.enabled)
+		roles = set(frappe.get_roles(staff.user))
+		self.assertIn(SECURITY_ROLE, roles)
+		# The gate role is not a staff role: no student records, fees or reports.
+		self.assertFalse(roles & STAFF_ROLES)
+		self.assertTrue(frappe.db.get_value("Role", SECURITY_ROLE, "two_factor_auth"))
+		self.assertEqual(hostel_permissions(staff.user), {self.hostel_a})
+		self.assertEqual(get_staff_scope(staff.user), {self.hostel_a: None})
+		self.assertFalse(frappe.has_permission("Hostel Student", "read", user=staff.user))
+		self.assertFalse(frappe.has_permission("Hostel Staff", "read", user=staff.user))
+
+		# A block assignment narrows the gate to the students of that block.
+		block = make_block(self.hostel_a, "G")
+		staff.reload()
+		staff.assignments = []
+		staff.append("assignments", {"hostel": self.hostel_a, "block": block.name})
+		staff.save()
+		self.assertEqual(get_staff_scope(staff.user), {self.hostel_a: frozenset({block.name})})
+
 		rules = get_designation_rules()
-		self.assertNotIn("Security", rules["login"])
+		self.assertIn("Security", rules["login"])
+		self.assertIn("Security", rules["scoped"])
 		self.assertNotIn("Housekeeping", rules["login"])
 		self.assertIn("Hostel Administrator", rules["login"])
 		self.assertIn("Office Staff", rules["scoped"])
 		self.assertNotIn(ADMIN_ROLE, rules["scoped"])
+
+	def test_security_login_needs_a_hostel(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Assign at least one hostel"):
+			make_staff("Security", [])
+
+	def test_moving_to_and_from_security_swaps_the_role(self):
+		staff = make_staff("Office Staff", [self.hostel_a])
+		open_session(staff.user)
+		staff.reload()
+		staff.designation = "Security"
+		staff.save()
+		roles = frappe.get_roles(staff.user)
+		self.assertIn(SECURITY_ROLE, roles)
+		self.assertNotIn(OFFICE_ROLE, roles)
+		self.assertEqual(frappe.db.get_value("User", staff.user, "enabled"), 1)
+		self.assertEqual(session_count(staff.user), 1)
+		self.assertEqual(hostel_permissions(staff.user), {self.hostel_a})
+
+		staff.reload()
+		staff.designation = "Warden"
+		staff.save()
+		roles = frappe.get_roles(staff.user)
+		self.assertIn(WARDEN_ROLE, roles)
+		self.assertNotIn(SECURITY_ROLE, roles)
+		self.assertEqual(hostel_permissions(staff.user), set())
+
+		# Deactivating the record disables the gate login and signs it out, like any other login.
+		staff.reload()
+		staff.designation = "Security"
+		staff.save()
+		staff.reload()
+		staff.is_active = 0
+		staff.save()
+		self.assertEqual(frappe.db.get_value("User", staff.user, "enabled"), 0)
+		self.assertEqual(session_count(staff.user), 0)

@@ -74,10 +74,9 @@ class TestIndependentAlertTransactions(IntegrationTestCase):
 
 	def test_no_second_connection_falls_back_to_the_callers_transaction(self):
 		# Other tests here committed alerts from other connections after this transaction's
-		# snapshot was taken; writing the same naming series row inline would then fail with
-		# "record has changed since last read". Start from a fresh snapshot, as a new request does.
+		# snapshot was taken. Start from a fresh snapshot, as a new request does.
 		frappe.db.rollback()
-		# The inline write keeps the series lock until this transaction ends.
+		# The inline write keeps the new alert's row locks until this transaction ends.
 		self.addCleanup(frappe.db.rollback)
 		key = unique_key("independent")
 		with (

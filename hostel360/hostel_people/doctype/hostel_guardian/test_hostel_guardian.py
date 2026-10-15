@@ -4,7 +4,8 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from hostel360.hostel_people.testing import make_guardian, make_student, random_mobile
+from hostel360.hostel_people.testing import make_desk_user, make_guardian, make_student, random_mobile
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, WARDEN_ROLE
 
 
 class TestHostelGuardian(IntegrationTestCase):
@@ -50,4 +51,18 @@ class TestHostelGuardian(IntegrationTestCase):
 
 	def test_guardian_link_is_indexed(self):
 		# Parent sign-in and the parent portal look up a guardian's wards on every request.
-		self.assertTrue(frappe.db.has_index("tabHostel Student Guardian", "guardian_index"))
+		# The index name differs between a fresh install ("guardian") and a migrated site
+		# ("guardian_index"), so look for a plain index on the column (SHOW INDEX) instead.
+		index = frappe.db.get_column_index("tabHostel Student Guardian", "guardian", unique=False)
+		self.assertTrue(index, "Hostel Student Guardian.guardian has no index")
+		self.assertEqual(index.Column_name, "guardian")
+
+	def test_form_offers_unlock_sign_in_to_permitted_staff(self):
+		guardian = make_guardian()
+		offered = {}
+		for role in (WARDEN_ROLE, DEPUTY_WARDEN_ROLE):
+			with self.set_user(make_desk_user(role)):
+				form = frappe.get_doc("Hostel Guardian", guardian.name)
+				form.run_method("onload")
+				offered[role] = form.get_onload().get("can_unlock_sign_in")
+		self.assertEqual(offered, {WARDEN_ROLE: True, DEPUTY_WARDEN_ROLE: False})

@@ -1,0 +1,190 @@
+# Deploy a released image to a Hostel360 server.
+#
+# Manual only, and gated by a GitHub environment ("production" or "staging") whose required
+# reviewers approve every run. The server has no public address: the job opens a short OCI
+# Bastion port-forwarding session with a key made for this run, connects through it as the
+# deploy account, and runs h360-deploy, which takes a database dump, an off-site snapshot
+# and a volume backup, migrates from the new image and rolls back by itself if anything
+# fails (deploy/README.md, section 4).
+#
+# The Bastion accepts sessions only from the addresses in bastion_client_cidrs, so the job
+# runs on a runner whose public address is on that list: set the variable DEPLOY_RUNS_ON to
+# its labels as JSON, e.g. ["self-hosted","hyfib-office"].
+#
+# Environment configuration (Settings > Environments > production / staging):
+#   variables  OCI_CLI_REGION       e.g. ap-hyderabad-1
+#              H360_BASTION_ID      terraform output bastion_id
+#              H360_INSTANCE_IP     terraform output instance_private_ip
+#              H360_PUBLIC_URL      https://<portal host name>
+#              H360_DEPLOY_SSH_USER deploy account on the server (default ubuntu)
+#              DEPLOY_RUNS_ON       runner labels as JSON (default "ubuntu-24.04")
+#   secrets    OCI_CLI_USER, OCI_CLI_TENANCY, OCI_CLI_FINGERPRINT, OCI_CLI_KEY_CONTENT
+#                                   API key of an OCI user that may use Bastion sessions
+#              H360_DEPLOY_SSH_KEY  private key of the deploy account (hostel360-admins group)
+#              H360_SSH_KNOWN_HOSTS the server's host key, as "hostel360-app <type> <key>"
+# See docs/DEPLOYMENT.md, section 3.
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy: <version>-<12-character git sha>, e.g. 1.0.1-94a56ce3e54a"
+        required: true
+        type: string
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        default: production
+        options:
+          - production
+          - staging
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.tag }} to ${{ inputs.environment }}
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 60
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.H360_PUBLIC_URL }}
+    env:
+      TAG: ${{ inputs.tag }}
+      TARGET_ENV: ${{ inputs.environment }}
+      OCI_CLI_VERSION: "3.94.1"
+      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+      H360_BASTION_ID: ${{ vars.H360_BASTION_ID }}
+      H360_INSTANCE_IP: ${{ vars.H360_INSTANCE_IP }}
+      H360_PUBLIC_URL: ${{ vars.H360_PUBLIC_URL }}
+      DEPLOY_USER: ${{ vars.H360_DEPLOY_SSH_USER || 'ubuntu' }}
+      # The server's host key is pinned under this name in H360_SSH_KNOWN_HOSTS.
+      HOST_KEY_ALIAS: hostel360-app
+    steps:
+      - name: Check the inputs and the configuration
+        run: |
+          if [[ ! "${TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9a-f]{12}$ ]]; then
+            echo "::error::'${TAG}' is not an image tag of the form <version>-<12-character git sha>."
+            exit 1
+          fi
+          for name in OCI_CLI_REGION H360_BASTION_ID H360_INSTANCE_IP H360_PUBLIC_URL; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::The environment variable ${name} is not set for this environment."
+              exit 1
+            fi
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the OCI CLI
+        run: python -m pip install --disable-pip-version-check "oci-cli==${OCI_CLI_VERSION}"
+
+      - name: Write credentials for this run
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          H360_DEPLOY_SSH_KEY: ${{ secrets.H360_DEPLOY_SSH_KEY }}
+          H360_SSH_KNOWN_HOSTS: ${{ secrets.H360_SSH_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          work="${RUNNER_TEMP}/h360-deploy"
+          mkdir -p "${work}"
+          printf '%s\n' "${OCI_CLI_KEY_CONTENT}" > "${work}/oci_api_key.pem"
+          {
+            echo "[DEFAULT]"
+            echo "user=${OCI_CLI_USER}"
+            echo "fingerprint=${OCI_CLI_FINGERPRINT}"
+            echo "tenancy=${OCI_CLI_TENANCY}"
+            echo "region=${OCI_CLI_REGION}"
+            echo "key_file=${work}/oci_api_key.pem"
+          } > "${work}/oci_config"
+          printf '%s\n' "${H360_DEPLOY_SSH_KEY}" > "${work}/deploy_key"
+          printf '%s\n' "${H360_SSH_KNOWN_HOSTS}" > "${work}/known_hosts"
+          # A key that exists only for this run's Bastion session.
+          ssh-keygen -q -t ed25519 -N '' -C "github-deploy-${GITHUB_RUN_ID}" -f "${work}/bastion_key"
+          {
+            echo "WORK=${work}"
+            echo "OCI_CLI_CONFIG_FILE=${work}/oci_config"
+            echo "OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True"
+          } >> "${GITHUB_ENV}"
+
+      - name: Open a Bastion session
+        run: |
+          session_id="$(oci bastion session create-port-forwarding \
+            --bastion-id "${H360_BASTION_ID}" \
+            --target-private-ip "${H360_INSTANCE_IP}" --target-port 22 \
+            --ssh-public-key-file "${WORK}/bastion_key.pub" \
+            --session-ttl 1800 \
+            --display-name "github-deploy-${GITHUB_RUN_ID}" \
+            --query 'data.id' --raw-output)"
+          echo "SESSION_ID=${session_id}" >> "${GITHUB_ENV}"
+          for _ in $(seq 1 60); do
+            state="$(oci bastion session get --session-id "${session_id}" \
+              --query 'data."lifecycle-state"' --raw-output)"
+            case "${state}" in
+              ACTIVE) echo "Bastion session is active."; exit 0 ;;
+              FAILED | DELETED | DELETING) echo "::error::Bastion session ${state}."; exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "::error::The Bastion session did not become active in 5 minutes."
+          exit 1
+
+      - name: Deploy ${{ inputs.tag }}
+        run: |
+          bastion="${SESSION_ID}@host.bastion.${OCI_CLI_REGION}.oci.oraclecloud.com"
+          proxy="ssh -i ${WORK}/bastion_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          proxy+=" -o UserKnownHostsFile=${WORK}/bastion_known_hosts -W %h:%p -p 22 ${bastion}"
+          remote() {
+            ssh -i "${WORK}/deploy_key" -o IdentitiesOnly=yes -o BatchMode=yes \
+              -o HostKeyAlias="${HOST_KEY_ALIAS}" -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="${WORK}/known_hosts" -o ServerAliveInterval=30 \
+              -o ProxyCommand="${proxy}" "${DEPLOY_USER}@${H360_INSTANCE_IP}" "$@"
+          }
+          remote sudo /usr/local/sbin/h360-deploy --status
+          remote sudo /usr/local/sbin/h360-deploy "${TAG}"
+          {
+            echo "### Deployed \`${TAG}\` to ${TARGET_ENV}"
+            echo
+            echo '```'
+            remote sudo /usr/local/sbin/h360-deploy --status
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Check the portal from outside
+        run: |
+          url="${H360_PUBLIC_URL%/}/api/method/hostel360.api.health.readiness"
+          for _ in $(seq 1 12); do
+            if curl -fsS --max-time 10 "${url}" | grep -q '"ok"'; then
+              echo "Portal ready: ${url}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::${url} did not answer ok within two minutes of the deployment."
+          exit 1
+
+      - name: Close the Bastion session and remove credentials
+        if: ${{ always() }}
+        run: |
+          if [[ -n "${SESSION_ID:-}" ]]; then
+            oci bastion session delete --session-id "${SESSION_ID}" --force || true
+          fi
+          rm -rf "${WORK:-${RUNNER_TEMP}/h360-deploy}"

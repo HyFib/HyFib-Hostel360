@@ -31,6 +31,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory(PORTAL
 			profileConfirmed: session.profileConfirmed,
 			validationStatus: effectiveValidationStatus.value,
 			studentStatus: studentStatus.value,
+			closedReason: session.closedReason,
 		});
 	});
 

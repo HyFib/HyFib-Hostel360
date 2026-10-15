@@ -1,6 +1,7 @@
 """Small helpers used across the fee module."""
 
 import frappe
+from frappe import _
 from frappe.utils import flt, get_url
 
 from hostel360.hostel_fees.constants import SETTINGS
@@ -85,6 +86,40 @@ def get_student_hostel(student: str | None) -> str | None:
 		fields.append("last_hostel")
 	values = frappe.db.get_value("Hostel Student", student, fields, as_dict=True) or {}
 	return values.get("current_hostel") or values.get("last_hostel") or None
+
+
+def resolve_record_hostel(doc) -> str | None:
+	"""The hostel a fee record is filed under. It is never taken from the request.
+
+	Hostel-scoped staff see fee records through ``hostel``, so it always follows the student: the
+	hostel they live in, else the one they last lived in. Two callers may file a record elsewhere:
+	the legacy migration (historical records keep the hostel they were issued in) and server code
+	that sets ``flags.keep_hostel`` (the mess bill run bills the hostel whose mess the student ate
+	in). Flags cannot be set through the REST API.
+	"""
+	if doc.get("hostel") and (is_migration() or doc.flags.keep_hostel):
+		return doc.hostel
+	return get_student_hostel(doc.get("student"))
+
+
+def assert_hostel_permitted(doc) -> None:
+	"""Check a desk save again once the record's hostel has been derived from the student.
+
+	Frappe checks create and write permission before ``validate`` runs, against the hostel the
+	request sent. Without a second check a hostel-scoped user could file a record for another
+	hostel's student by sending their own hostel.
+	"""
+	if doc.flags.ignore_permissions or is_migration():
+		return
+	if doc.has_permission("create" if doc.is_new() else "write"):
+		return
+	if doc.get("hostel"):
+		message = _("Student {0} belongs to hostel {1}, which is not one of your assigned hostels.").format(
+			doc.get("student"), doc.hostel
+		)
+	else:
+		message = _("You are not permitted to save this {0}.").format(_(doc.doctype))
+	frappe.throw(message, frappe.PermissionError, title=_("Not permitted"))
 
 
 def persist_now() -> None:

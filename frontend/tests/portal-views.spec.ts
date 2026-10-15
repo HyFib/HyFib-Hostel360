@@ -33,12 +33,14 @@ vi.mock("@/api/portal", () => ({
 	cancelLeave: vi.fn(),
 }));
 vi.mock("@/api/auth", () => ({ logout: vi.fn(() => Promise.resolve({})), sendOtp: vi.fn(), verifyOtp: vi.fn() }));
+vi.mock("@/utils/razorpay", () => ({ openCheckout: vi.fn(), loadRazorpay: vi.fn() }));
 
 const portal = await import("@/api/portal");
 const auth = await import("@/api/auth");
+const razorpay = await import("@/utils/razorpay");
 const { routes } = await import("@/router/routes");
 const { applySession, loadSession, resetSession, session } = await import("@/stores/session");
-const { resetBoot } = await import("@/utils/boot");
+const { resetBoot, updateBoot } = await import("@/utils/boot");
 
 function studentSession(overrides: Partial<PortalSession> = {}): PortalSession {
 	return {
@@ -240,6 +242,62 @@ describe("PayView with PayU", () => {
 	});
 });
 
+describe("PayView in test mode", () => {
+	const PayView = () => import("@/views/PayView.vue").then((m) => m.default);
+	const invoice = {
+		name: "INV-2",
+		invoice_type: "Hostel Fee",
+		posting_date: "2026-10-01",
+		total_amount: 1500,
+		paid_amount: 0,
+		outstanding_amount: 1500,
+		status: "Unpaid",
+		items: [],
+	};
+
+	it("says no real money is taken before the payer starts", async () => {
+		applySession(studentSession());
+		vi.mocked(portal.getFees).mockResolvedValue({ outstanding: 1500, overdue: 0, payments: [], invoices: [invoice], payment_enabled: true, payment_test_mode: true });
+		const wrapper = await mountAt("/fees/pay", await PayView());
+		expect(wrapper.find('[data-test="test-mode"]').text()).toContain("No real money is taken");
+		wrapper.unmount();
+	});
+
+	it("keeps the dues open after a failed attempt and marks it as a test", async () => {
+		applySession(studentSession());
+		vi.mocked(portal.getFees).mockResolvedValue({ outstanding: 1500, overdue: 0, payments: [], invoices: [invoice], payment_enabled: true });
+		vi.mocked(portal.createPayment).mockResolvedValue({
+			transaction: "PTX-9",
+			gateway: "razorpay",
+			test_mode: 1,
+			checkout: { key: "rzp_test_x", order_id: "order_9", amount: 150000, currency: "INR", name: "ACGCET", description: "Hostel dues", prefill: {} },
+		});
+		vi.mocked(razorpay.openCheckout).mockResolvedValue({
+			type: "success",
+			response: { razorpay_payment_id: "pay_9", razorpay_order_id: "order_9", razorpay_signature: "sig" },
+		});
+		vi.mocked(portal.verifyPayment).mockResolvedValue({
+			status: "Failed",
+			payment: null,
+			receipt_number: null,
+			transaction: "PTX-9",
+			message: "Your bank declined the payment.",
+		});
+
+		const wrapper = await mountAt("/fees/pay", await PayView());
+		expect(wrapper.find('[data-test="test-mode"]').exists()).toBe(false);
+		await wrapper.find("button.btn-primary").trigger("click");
+		await flushPromises();
+
+		const outcome = wrapper.find('[data-test="payment-outcome"]');
+		expect(outcome.attributes("data-outcome")).toBe("failed");
+		expect(outcome.text()).toContain("Your bank declined the payment.");
+		expect(outcome.find('[data-test="dues-still-open"]').exists()).toBe(true);
+		expect(outcome.find('[data-test="test-outcome"]').text()).toContain("test payment");
+		wrapper.unmount();
+	});
+});
+
 describe("HomeView", () => {
 	const HomeView = () => import("@/views/HomeView.vue").then((m) => m.default);
 
@@ -401,6 +459,33 @@ describe("LeaveView", () => {
 		const notice = wrapper.find('[data-test="reduction-not-applied"]');
 		expect(notice.text()).toContain("2 full mess days");
 		expect(notice.text()).toContain("at least 3");
+		wrapper.unmount();
+	});
+});
+
+describe("AccessClosedView", () => {
+	const AccessClosedView = () => import("@/views/AccessClosedView.vue").then((m) => m.default);
+
+	it("says why the session ended and how to reach the hostel office", async () => {
+		updateBoot({ office_phone: "04565 224528", office_email: "hostel.office@example.com" });
+		vi.mocked(portal.getSession).mockRejectedValue(
+			new ApiError("permission", "Portal access for this hostel record has been closed. Please contact the hostel office.", {
+				status: 403,
+				excType: "PortalAccessClosed",
+			}),
+		);
+		await loadSession(true);
+
+		const wrapper = await mountAt("/access-closed", await AccessClosedView());
+		expect(wrapper.find('[data-test="closed-reason"]').text()).toContain("has been closed");
+		const office = wrapper.find('[data-test="closed-office"]');
+		expect(office.find('a[href="tel:04565224528"]').exists()).toBe(true);
+		expect(office.find('a[href="mailto:hostel.office@example.com"]').exists()).toBe(true);
+
+		await wrapper.find('[data-test="sign-in-again"]').trigger("click");
+		// The sign-in page is loaded on demand.
+		await vi.waitFor(() => expect(router.currentRoute.value.name).toBe("login"), { timeout: 5000 });
+		await vi.waitFor(() => expect(session.closedReason).toBe(""));
 		wrapper.unmount();
 	});
 });

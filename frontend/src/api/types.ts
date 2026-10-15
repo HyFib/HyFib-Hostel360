@@ -32,6 +32,8 @@ export interface Ward {
 	status?: string | null;
 	/** Validation of this ward by the hostel office (a parent's own status says nothing about each ward). */
 	validation_status?: string | null;
+	/** This ward's dues may be paid online now (in test mode only designated test payers may pay). */
+	payment_enabled?: boolean;
 }
 
 export interface UploadRules {
@@ -226,6 +228,8 @@ export interface FeesSummary {
 	invoices: Invoice[];
 	payments: PaymentRecord[];
 	payment_enabled?: boolean;
+	/** Online payment uses the gateway's test credentials: no real money is taken. */
+	payment_test_mode?: boolean;
 }
 
 export interface CheckoutOptions {
@@ -271,6 +275,8 @@ export interface VerifyPaymentResult {
 	receipt_number: string | null;
 	transaction?: string;
 	message?: string;
+	/** Paid with the gateway's test credentials (the receipt is marked as a test receipt). */
+	test_mode?: number | boolean;
 }
 
 export interface MenuDay {

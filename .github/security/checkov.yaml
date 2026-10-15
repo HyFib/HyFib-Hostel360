@@ -1,0 +1,25 @@
+# Checkov configuration for deploy/terraform/oci (.github/workflows/security.yml).
+# Every skipped check has been reviewed; the reason is recorded here so the next review
+# starts from it. Remove a skip as soon as the reason no longer holds.
+framework:
+  - terraform
+compact: true
+quiet: true
+skip-check:
+  # Stateless rules: the NSG and security-list rules are deliberately stateful. Return
+  # traffic of TLS sessions to the load balancer and of Bastion SSH sessions would otherwise
+  # need broad ephemeral-port rules in the opposite direction, which is weaker, not stronger.
+  - CKV_OCI_17
+  - CKV_OCI_21
+  # In-transit encryption of the boot volume: compute.tf sets is_pv_encryption_in_transit_enabled
+  # on the instance itself; the check only looks for it under launch_options.
+  - CKV_OCI_4
+  # Block volume backups: provided by oci_core_volume_backup_policy and its assignments in
+  # storage.tf (daily, weekly, monthly), which the check does not recognise.
+  - CKV_OCI_2
+  # Object events on the backup bucket: nothing consumes them. The bucket is versioned, the
+  # server cannot delete object versions, and every backup run is reported to Hostel360.
+  - CKV_OCI_7
+  # "RDP open to all" on the two egress rules to the Oracle Services Network and the VCN:
+  # these are egress rules, not ingress; no ingress rule admits 3389.
+  - CKV2_OCI_2

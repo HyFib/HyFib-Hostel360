@@ -110,6 +110,21 @@ class TestMSG91(IntegrationTestCase):
 		self.assertEqual(data["route"], sms.MSG91_TRANSACTIONAL_ROUTE)
 		self.assertEqual(data["authkey"], "secret-key")
 
+	def test_tamil_text_is_sent_as_unicode(self):
+		response = FakeResponse(200, {"type": "success", "message": "3567686b6e44303636363138"})
+		with patch(
+			"hostel360.hostel_communication.providers.sms.requests.post", return_value=response
+		) as post:
+			sms.send_sms(
+				MOBILE,
+				"ரசீது எண் RCPT-1. நன்றி. -ACGCET விடுதி",
+				dlt_template_id="1207170000000012346",
+				settings=settings(),
+			)
+			self.assertEqual(post.call_args.kwargs["data"]["unicode"], "1")
+			sms.send_sms(MOBILE, "Receipt RCPT-1", dlt_template_id="1207170000000012345", settings=settings())
+			self.assertNotIn("unicode", post.call_args.kwargs["data"])
+
 	def test_errors_reported_with_http_200(self):
 		response = FakeResponse(200, {"type": "error", "message": "Insufficient balance"})
 		with patch("hostel360.hostel_communication.providers.sms.requests.post", return_value=response):
@@ -246,6 +261,20 @@ class TestGenericHTTP(IntegrationTestCase):
 		self.assertTrue(result.ok)
 		self.assertIn("data", request.call_args.kwargs)
 		self.assertNotIn("json", request.call_args.kwargs)
+
+	def test_unicode_parameter_only_for_unicode_text(self):
+		config = self.generic(sms_param_unicode="type", sms_unicode_value="unicode")
+		with patch(
+			"hostel360.hostel_communication.providers.sms.requests.request",
+			return_value=FakeResponse(200, {"message_id": "u-1"}),
+		) as request:
+			sms.send_sms(MOBILE, "வணக்கம்", settings=config)
+			self.assertEqual(request.call_args.kwargs["json"]["type"], "unicode")
+			sms.send_sms(MOBILE, "Hello", settings=config)
+			self.assertNotIn("type", request.call_args.kwargs["json"])
+			# Without a configured parameter the gateway is left to detect Unicode itself.
+			sms.send_sms(MOBILE, "வணக்கம்", settings=self.generic())
+			self.assertNotIn("unicode", request.call_args.kwargs["json"])
 
 	def test_server_errors_are_retryable(self):
 		with patch(
@@ -455,3 +484,21 @@ class TestProviderHealthAlerts(IntegrationTestCase):
 		self.assertTrue(kwargs["deduplicate"])
 		self.assertEqual(kwargs["queue"], "short")
 		self.assertEqual((kwargs["provider"], kwargs["count"]), (self.provider, threshold))
+
+	def test_deadlocks_in_alert_jobs_are_not_swallowed(self):
+		# raise_alert / resolve_alert re-raise a deadlock only when InnoDB has already rolled
+		# back the job's transaction; the job must fail rather than carry on.
+		deadlock = frappe.QueryDeadlockError("Deadlock found when trying to get lock")
+		with patch("hostel360.hostel_operations.alerts.raise_alert", side_effect=deadlock):
+			with self.assertRaises(frappe.QueryDeadlockError):
+				base.raise_provider_alert(self.provider, 5, 5, "HTTP 503")
+		self.assertFalse(frappe.flags.hostel360_raising_messaging_alert)
+		with patch("hostel360.hostel_operations.alerts.resolve_alert", side_effect=deadlock):
+			with self.assertRaises(frappe.QueryDeadlockError):
+				base.resolve_provider_alert(self.provider)
+
+		# Anything else is still logged and swallowed.
+		with patch("hostel360.hostel_operations.alerts.raise_alert", side_effect=RuntimeError("down")):
+			base.raise_provider_alert(self.provider, 5, 5, "HTTP 503")
+		with patch("hostel360.hostel_operations.alerts.resolve_alert", side_effect=RuntimeError("down")):
+			base.resolve_provider_alert(self.provider)

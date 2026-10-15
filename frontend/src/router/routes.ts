@@ -8,6 +8,12 @@ export const routes: RouteRecordRaw[] = [
 		component: () => import("@/views/LoginView.vue"),
 		meta: { public: true, guestOnly: true, bare: true, title: "login.title" },
 	},
+	{
+		path: "/access-closed",
+		name: "access-closed",
+		component: () => import("@/views/AccessClosedView.vue"),
+		meta: { public: true, guestOnly: true, bare: true, accessClosed: true, title: "closed.title" },
+	},
 	{ path: "/", name: "home", component: () => import("@/views/HomeView.vue"), meta: { title: "nav.home" } },
 	{
 		path: "/privacy",

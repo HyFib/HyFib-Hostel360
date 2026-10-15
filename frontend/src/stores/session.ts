@@ -265,7 +265,15 @@ const firstName = computed(() => (state.displayName || "").trim().split(/\s+/)[0
 const institutionName = computed(
 	() => state.settings.institution_short_name || state.settings.institution_name || readBoot().institution_short_name || "",
 );
-const paymentEnabled = computed(() => state.settings.payment_enabled === undefined || Boolean(state.settings.payment_enabled));
+/**
+ * Online payment for the student being viewed. It can differ between a parent's wards (in test
+ * mode only designated test payers may pay), so the ward's own flag decides when the server sent one.
+ */
+const paymentEnabled = computed(() => {
+	const ward = activeWard.value;
+	if (ward && typeof ward.payment_enabled === "boolean") return ward.payment_enabled;
+	return state.settings.payment_enabled === undefined || Boolean(state.settings.payment_enabled);
+});
 const reductionMinDays = computed(() => Number(state.settings.mess_reduction_min_days) || 3);
 const messDayCutoffHour = computed(() => {
 	const hour = Number(state.settings.mess_day_cutoff_hour);

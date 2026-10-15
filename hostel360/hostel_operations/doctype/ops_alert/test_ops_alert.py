@@ -11,6 +11,8 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from hostel360.hostel_operations import alerts, channels, escalation, notification
+from hostel360.hostel_operations.doctype.ops_alert import ops_alert as ops_alert_module
+from hostel360.hostel_operations.doctype.ops_alert.ops_alert import NAME_ALPHABET, NAME_SUFFIX_LENGTH
 from hostel360.hostel_operations.settings import get_settings
 from hostel360.hostel_operations.tests.helpers import (
 	CHANNEL_EMAIL,
@@ -146,6 +148,56 @@ class TestOpsAlert(IntegrationTestCase):
 		second = alerts.raise_alert(key, "Long key", "Info", "Other")
 		self.assertEqual(first, second)
 		self.assertLessEqual(len(frappe.db.get_value("Ops Alert", first, "alert_key")), 140)
+
+	# Naming ----------------------------------------------------------------------
+
+	def test_alert_names_take_no_shared_counter(self):
+		def series_rows():
+			return frappe.db.sql(
+				"select name, current from `tabSeries` where name like %(prefix)s", {"prefix": "ALERT-%"}
+			)
+
+		before = series_rows()
+		_key, first = self.raise_test_alert()
+		_key, second = self.raise_test_alert()
+		self.assertEqual(series_rows(), before, "no naming-series row is read or bumped")
+
+		pattern = rf"^ALERT-{now_datetime():%y%m%d}-[{NAME_ALPHABET}]{{{NAME_SUFFIX_LENGTH}}}$"
+		self.assertRegex(first, pattern)
+		self.assertRegex(second, pattern)
+		self.assertNotEqual(first, second)
+
+	def test_a_taken_name_is_never_reused(self):
+		_key, taken = self.raise_test_alert()
+		fresh = f"ALERT-{now_datetime():%y%m%d}-ZZZZZ"
+		self.assertFalse(frappe.db.exists("Ops Alert", fresh))
+		with patch.object(ops_alert_module, "make_alert_name", side_effect=[taken, fresh]):
+			_key, name = self.raise_test_alert()
+		self.assertEqual(name, fresh)
+
+	def test_name_clash_at_insert_is_retried(self):
+		# Another process inserts the same name between the existence check and the insert.
+		taken_key, taken = self.raise_test_alert()
+		real_autoname = ops_alert_module.OpsAlert.autoname
+		calls = []
+
+		def clash_once(doc):
+			calls.append(doc.alert_key)
+			if len(calls) == 1:
+				doc.name = taken
+				return
+			real_autoname(doc)
+
+		messages = len(frappe.local.message_log or [])
+		with patch.object(ops_alert_module.OpsAlert, "autoname", clash_once):
+			key, name = self.raise_test_alert()
+		self.assertEqual(len(calls), 2)
+		self.assertNotEqual(name, taken)
+		self.assertEqual(frappe.db.get_value("Ops Alert", name, "alert_key"), key)
+		self.assertEqual(frappe.db.get_value("Ops Alert", taken, "alert_key"), taken_key)
+		self.assertEqual(
+			len(frappe.local.message_log or []), messages, "the duplicate-name message is not shown"
+		)
 
 	# Resolution ----------------------------------------------------------------
 
@@ -402,7 +454,7 @@ class TestOpsAlert(IntegrationTestCase):
 class TestAlertChannels(IntegrationTestCase):
 	def message(self, event="raised", severity="Critical"):
 		alert = frappe._dict(
-			name="ALERT-2026-00001",
+			name="ALERT-261015-K7Q3X",
 			alert_key="health.redis.cache",
 			title="Redis cache is not responding",
 			severity=severity,
@@ -420,7 +472,7 @@ class TestAlertChannels(IntegrationTestCase):
 
 	def test_critical_security_alert_states_the_cert_in_deadline(self):
 		alert = frappe._dict(
-			name="ALERT-2026-00002",
+			name="ALERT-261015-M4R8T",
 			alert_key="malware-detected-abc",
 			title="Malware detected in an uploaded file",
 			severity="Critical",
@@ -454,7 +506,7 @@ class TestAlertChannels(IntegrationTestCase):
 		message = self.message()
 		self.assertEqual(channels.subject(message), "[ACGCET Hostel360] CRITICAL: Redis cache is not responding")
 		self.assertIn("Seen 3x since", channels.short_text(message))
-		self.assertIn("/ops-alert/ALERT-2026-00001", message["url"])
+		self.assertIn("/ops-alert/ALERT-261015-K7Q3X", message["url"])
 		html = channels.email_html(message)
 		self.assertIn("&lt;script&gt;", html)
 		self.assertNotIn("<script>", html)

@@ -10,7 +10,14 @@ from frappe.client import set_value as client_set_value
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, get_datetime, getdate, now_datetime, nowdate
 
-from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE, OFFICE_ROLE, WARDEN_ROLE
+from hostel360.setup.roles import (
+	AUDITOR_ROLE,
+	DEPUTY_WARDEN_ROLE,
+	MESS_MANAGER_ROLE,
+	OFFICE_ROLE,
+	SECURITY_ROLE,
+	WARDEN_ROLE,
+)
 from hostel360.student_services import services
 from hostel360.student_services.leave_tasks import mark_overdue_returns
 from hostel360.student_services.permissions import hostel_scoped_has_permission
@@ -225,15 +232,82 @@ class TestHomeVisitLeave(IntegrationTestCase):
 		return frappe.get_doc("Home Visit Leave", name)
 
 	def test_check_out_and_return(self):
-		leave = self.approved_leave()
+		leave = self.approved_leave(start_in_hours=1)
 		frappe.set_user(self.deputy)
-		leave.mark_checked_out()
+		with capture_notifications() as sent:
+			leave.mark_checked_out()
 		self.assertEqual(leave.status, "Checked Out")
+		self.assertEqual(sent.recipients("leave_checked_out"), {self.guardian.user})
 		with self.assertRaises(frappe.ValidationError):
 			leave.mark_returned(returned_on=str(add_to_date(leave.checked_out_on, hours=-1)))
-		leave.mark_returned()
+		with capture_notifications() as sent:
+			leave.mark_returned()
 		self.assertEqual(leave.status, "Returned")
 		self.assertTrue(leave.returned_on)
+		self.assertEqual(sent.recipients("leave_returned"), {self.guardian.user})
+		self.assertEqual(sent.references("leave_returned"), [leave.name])
+
+	def test_check_out_only_while_the_leave_is_on(self):
+		early = self.approved_leave(start_in_hours=5)
+		with self.assertRaises(frappe.ValidationError):
+			early.record_check_out(self.warden)
+		# A return cannot close a leave that has not started; it is cancelled instead.
+		with self.assertRaises(frappe.ValidationError):
+			early.record_return(self.warden)
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", early.name, "status"), "Approved")
+
+		# Up to two hours early is fine (an early bus).
+		soon = self.approved_leave(start_in_hours=24 * 5)
+		frappe.db.set_value(
+			"Home Visit Leave", soon.name, "from_datetime", add_to_date(now_datetime(), minutes=90)
+		)
+		frappe.get_doc("Home Visit Leave", soon.name).record_check_out(self.warden)
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", soon.name, "status"), "Checked Out")
+
+	def test_movement_times_cannot_be_in_the_future(self):
+		leave = self.approved_leave(start_in_hours=0.5)
+		with self.assertRaises(frappe.ValidationError):
+			leave.record_check_out(self.warden, add_to_date(now_datetime(), hours=2))
+		leave.record_check_out(self.warden)
+		with self.assertRaises(frappe.ValidationError):
+			leave.record_return(self.warden, add_to_date(now_datetime(), hours=1))
+
+	def test_gate_staff_read_leaves_and_record_movement_at_server_time(self):
+		guard = make_user([SECURITY_ROLE])
+		scope_to_hostel(guard, self.hostel)
+		leave = self.approved_leave(start_in_hours=0.5)
+		self.assertTrue(frappe.has_permission("Home Visit Leave", "read", doc=leave, user=guard))
+		self.assertFalse(frappe.has_permission("Home Visit Leave", "write", doc=leave, user=guard))
+
+		# Gate staff cannot choose the time, cancel, or decide.
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(guard, leave.mark_checked_out, str(add_to_date(now_datetime(), minutes=-30)))
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(guard, run_form_action, frappe.get_doc("Home Visit Leave", leave.name), "cancel_leave")
+		pending = services.apply_leave(make_student(self.hostel).name, leave_data(), "Warden", self.warden)
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(guard, frappe.get_doc("Home Visit Leave", pending).warden_approve, "ok")
+
+		before = now_datetime()
+		self.as_user(guard, leave.mark_checked_out)
+		self.assertEqual(leave.status, "Checked Out")
+		self.assertGreaterEqual(get_datetime(leave.checked_out_on), before.replace(microsecond=0))
+		self.as_user(guard, leave.mark_returned)
+		self.assertEqual(leave.status, "Returned")
+
+	def test_read_only_staff_and_other_gates_cannot_record_movement(self):
+		leave = self.approved_leave(start_in_hours=0.5)
+		other_gate = make_user([SECURITY_ROLE])
+		scope_to_hostel(other_gate, make_hostel())
+		unposted_gate = make_user([SECURITY_ROLE])
+		for user in (make_user([AUDITOR_ROLE]), make_user([MESS_MANAGER_ROLE]), other_gate, unposted_gate):
+			with self.assertRaises(frappe.PermissionError, msg=user):
+				self.as_user(user, frappe.get_doc("Home Visit Leave", leave.name).mark_checked_out)
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", leave.name, "status"), "Approved")
+
+		office = make_user([OFFICE_ROLE])
+		self.as_user(office, frappe.get_doc("Home Visit Leave", leave.name).mark_checked_out)
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", leave.name, "status"), "Checked Out")
 
 	def test_portal_user_cannot_record_movement(self):
 		leave = self.approved_leave()
@@ -242,7 +316,7 @@ class TestHomeVisitLeave(IntegrationTestCase):
 			leave.mark_checked_out()
 
 	def test_cancel_rules(self):
-		leave = self.approved_leave()
+		leave = self.approved_leave(start_in_hours=0.5)
 		stranger = make_student(self.hostel)
 		with self.assertRaises(frappe.PermissionError):
 			services.cancel_leave(leave.name, stranger.user)

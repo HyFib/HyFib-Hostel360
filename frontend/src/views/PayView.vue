@@ -8,7 +8,7 @@
  * shows the outcome. A payment the browser could not confirm is still picked up by the
  * server's reconciliation, so the page says so instead of failing.
  */
-import { CircleAlert, Lock } from "@lucide/vue";
+import { CircleAlert, FlaskConical, Lock } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { ApiError, errorMessage } from "@/api/client";
@@ -38,6 +38,10 @@ const fees = useResource(() => getFees(studentArg()), { watch: [() => session.ac
 const phase = ref<Phase>("review");
 const problem = ref("");
 const result = ref<VerifyPaymentResult | null>(null);
+/** The order just created uses the gateway's test credentials. */
+const testOrder = ref(false);
+/** Test credentials are in use: say so before anyone types card or UPI details. */
+const testMode = computed(() => testOrder.value || Boolean(fees.data.value?.payment_test_mode));
 
 const requested = computed<string[]>(() => {
 	const fromParam = typeof route.params.invoice === "string" && route.params.invoice ? [route.params.invoice] : [];
@@ -69,6 +73,7 @@ async function startPayment() {
 			studentArg(),
 		);
 		transaction = order.transaction;
+		testOrder.value = Boolean(order.test_mode);
 		if (order.gateway === "payu") {
 			// The payer leaves for PayU's page and returns to the fees page with the outcome.
 			phase.value = "redirecting";
@@ -90,13 +95,21 @@ async function startPayment() {
 		// A success always gets verified, even if the payer had given up on the window meanwhile.
 		confirming = true;
 		phase.value = "confirming";
-		result.value = await verifyPayment(transaction, outcome.response);
+		const verified = await verifyPayment(transaction, outcome.response);
+		result.value = { ...verified, test_mode: verified.test_mode ?? (testOrder.value ? 1 : 0) };
 		phase.value = "done";
 		void refreshUnread(true);
 	} catch (error) {
 		if (confirming) {
 			// Money may have moved; the server reconciles with Razorpay on its own.
-			result.value = { status: "Pending", payment: null, receipt_number: null, transaction, message: t("pay.verifyLater") };
+			result.value = {
+				status: "Pending",
+				payment: null,
+				receipt_number: null,
+				transaction,
+				message: t("pay.verifyLater"),
+				test_mode: testOrder.value ? 1 : 0,
+			};
 			phase.value = "done";
 			return;
 		}
@@ -178,6 +191,9 @@ onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 			<p v-if="!onlineEnabled" class="card mt-4 bg-info-soft text-sm text-info" role="status">{{ t("fees.paymentDisabled") }}</p>
 
 			<template v-else>
+				<p v-if="testMode" class="mt-4 flex items-start gap-2 rounded-xl bg-info-soft p-3 text-sm font-medium text-info" role="status" data-test="test-mode">
+					<FlaskConical :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("pay.testMode") }}
+				</p>
 				<button
 					type="button"
 					class="btn-primary btn-block mt-5 min-h-12 text-base"

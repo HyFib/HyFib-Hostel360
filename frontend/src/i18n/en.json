@@ -132,6 +132,15 @@
 		"staff": "Hostel staff? Sign in here",
 		"closedTitle": "You have been signed out"
 	},
+	"closed": {
+		"title": "You can't use the portal right now",
+		"signedOut": "You have been signed out on this device.",
+		"officeTitle": "Contact the hostel office",
+		"officeBody": "Only the hostel office can update your hostel record. Call or write to them, then sign in again.",
+		"officeFallback": "Please contact the hostel office. Once they have updated your record, sign in again with your registered mobile number.",
+		"signInAgain": "Sign in again",
+		"help": "Help and contacts"
+	},
 	"home": {
 		"greeting": {
 			"morning": "Good morning, {name}",
@@ -214,7 +223,8 @@
 		"noDues": "No dues right now",
 		"noDuesHint": "New invoices appear here when the hostel office publishes fees or mess bills.",
 		"receipts": "Receipts",
-		"feeStructure": "Download fee structure (PDF)"
+		"feeStructure": "Download fee structure (PDF)",
+		"testMode": "Online payment is in test mode: no real money is taken."
 	},
 	"pay": {
 		"title": "Pay fees",
@@ -249,7 +259,11 @@
 		"resumeHint": "A payment for these invoices was started but not finished. Continuing uses the same payment; you won't be charged twice.",
 		"checking": "Checking…",
 		"checkAgain": "Check again",
-		"returnUnmatched": "We couldn't match the payment page's reply to your payment. If money was debited, it will be confirmed automatically or refunded. Check Receipts in a few minutes."
+		"returnUnmatched": "We couldn't match the payment page's reply to your payment. If money was debited, it will be confirmed automatically or refunded. Check Receipts in a few minutes.",
+		"testMode": "Online payment is being tested. No real money is taken: use the test card or UPI details the hostel office gave you. The receipt will be marked as a test receipt.",
+		"testReceipt": "Test payment: no real money was taken, and the receipt is marked as a test receipt.",
+		"testAttempt": "This was a test payment; no real money was involved.",
+		"duesStillOpen": "Your dues are still open and can be paid again."
 	},
 	"receipts": {
 		"title": "Receipts",

@@ -167,6 +167,36 @@ describe("access by ward", () => {
 		expect(effectiveValidationStatus.value).toBe("Pending");
 		expect(hasFullAccess.value).toBe(false);
 	});
+
+	it("offers online payment per ward, as the server decides it for each", () => {
+		// In test mode only designated test payers may pay; the parent's other ward pays at the office.
+		applySession({
+			user: "parent@portal.hostel360.invalid",
+			kind: "parent",
+			display_name: "Raman K",
+			validation_status: "Validated",
+			wards: [
+				{ student: "REG001", full_name: "Priya", validation_status: "Validated", status: "Active", payment_enabled: true },
+				{ student: "REG002", full_name: "Arun", validation_status: "Validated", status: "Active", payment_enabled: false },
+			],
+			settings: { payment_enabled: true },
+		});
+		const { paymentEnabled, setActiveStudent } = useSession();
+		setActiveStudent("REG001");
+		expect(paymentEnabled.value).toBe(true);
+		setActiveStudent("REG002");
+		expect(paymentEnabled.value).toBe(false);
+
+		// An older server without the per-ward flag: the session-wide setting applies.
+		applySession({
+			user: "priya@portal.hostel360.invalid",
+			kind: "student",
+			display_name: "Priya",
+			wards: [{ student: "REG001", full_name: "Priya" }],
+			settings: { payment_enabled: true },
+		});
+		expect(useSession().paymentEnabled.value).toBe(true);
+	});
 });
 
 describe("LoginView", () => {

@@ -5,16 +5,31 @@
 #   h360-ingest -             message from standard input
 #   h360-ingest --flush       retry spooled messages (the agent does this every run)
 #
+# Exit status: 0 delivered, 1 kept in the spool for a later attempt, 2 rejected for good.
+#
 # Each request is signed with the shared ingest secret (Ops Alert Settings):
 #   X-H360-Timestamp: <unix seconds>
 #   X-H360-Signature: hex(HMAC-SHA256(secret, "<timestamp>.<body>"))
-# The server rejects timestamps more than 300 s away and any signature it has already seen,
-# so a retry of the same signed request is answered 409 and counts as delivered.
 #
-# Messages that cannot be delivered (application down, network) are kept in the spool for
-# up to 24 hours and re-signed on the next attempt. A critical alert that cannot be
-# delivered is also published to the OCI Notifications topic, when one is configured, so
-# HyFib still hears about it while the application itself is unavailable.
+# Every message gets a message_id (a random UUID) the first time it is seen here, before it
+# is sent or spooled, and keeps it on every retry. A retry is re-signed with a new timestamp,
+# so the signature alone cannot tell the server it is a repeat; the message_id can. If an
+# earlier attempt timed out here but did commit on the server, the retry is answered 409
+# and counts as delivered instead of being processed twice.
+#
+# Answers: 2xx and 409 delivered; 400, 413 and 422 rejected for good (the message is
+# dropped and the reason is in Hostel360's Error Log); anything else, including 401/403
+# (secret or clock), 417, 429 and 5xx, is retried later.
+#
+# Messages that cannot be delivered (application down, network) are kept in the spool and
+# re-signed on the next attempt: for 24 hours (H360_SPOOL_MAX_AGE_MINUTES), at most 2000 of
+# them (H360_SPOOL_MAX_FILES), oldest dropped first. Uptime probe samples (type "metrics",
+# source "Uptime Probe") are the record of an outage itself, so they are kept apart from
+# that limit for 35 days (H360_SPOOL_KEEP_DAYS, at most H360_SPOOL_KEEP_MAX_FILES files):
+# the monthly availability figure then shows a long outage as measured downtime rather than
+# as minutes nobody watched. A critical alert that cannot be delivered is also published to
+# the OCI Notifications topic, when one is configured, so HyFib still hears about it while
+# the application itself is unavailable.
 set -Eeuo pipefail
 
 # shellcheck source=deploy/host/bin/h360-lib.sh
@@ -25,11 +40,25 @@ h360_require_cmd curl jq python3
 
 : "${H360_INGEST_URL:?H360_INGEST_URL is not set in agent.env}"
 : "${H360_INGEST_SECRET:?H360_INGEST_SECRET is not set in agent.env}"
+: "${H360_SPOOL_MAX_AGE_MINUTES:=1440}"
+: "${H360_SPOOL_MAX_FILES:=2000}"
+: "${H360_SPOOL_KEEP_DAYS:=35}"
+: "${H360_SPOOL_KEEP_MAX_FILES:=12000}"
+# A long backlog is worked off over several runs instead of holding the lock for an hour.
+: "${H360_SPOOL_FLUSH_SECONDS:=240}"
+# How long a message waits for a flush in progress before it is spooled behind it
+: "${H360_INGEST_LOCK_WAIT:=60}"
+for setting in H360_SPOOL_MAX_AGE_MINUTES H360_SPOOL_MAX_FILES H360_SPOOL_KEEP_DAYS \
+	H360_SPOOL_KEEP_MAX_FILES H360_SPOOL_FLUSH_SECONDS H360_INGEST_LOCK_WAIT; do
+	[[ "${!setting}" =~ ^[1-9][0-9]{0,6}$ ]] || die "${setting} must be a positive whole number"
+done
+
 spool="${H360_SPOOL_DIR}/ingest"
-spool_max_age_minutes=1440
-spool_max_files=2000
 mkdir -p "${spool}"
 chmod 0700 "${spool}"
+# Spool file names: <yyyymmddHHMMSS>-<random>.json, and <...>.keep.json for probe samples.
+# Sorting by name keeps the order in which messages were first created.
+keep_suffix=.keep.json
 
 sign() {
 	# sign <timestamp> <file>: hex HMAC-SHA256 of "<timestamp>.<body>"; the secret is passed
@@ -45,6 +74,38 @@ with open(sys.argv[2], "rb") as handle:
 key = os.environ["H360_HMAC_KEY"].encode()
 print(hmac.new(key, sys.argv[1].encode() + b"." + body, hashlib.sha256).hexdigest())
 PY
+}
+
+new_message_id() {
+	local id=""
+	if [[ -r /proc/sys/kernel/random/uuid ]]; then
+		id="$(cat /proc/sys/kernel/random/uuid)"
+	fi
+	if [[ ! "${id}" =~ ^[0-9a-f-]{36}$ ]]; then
+		id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+	fi
+	printf '%s' "${id}"
+}
+
+with_message_id() {
+	# with_message_id <file>: give the message a message_id unless it already has a valid
+	# one (compact JSON: the signature covers exactly the bytes sent). The file's time is
+	# kept, because the spool's age limits are measured from it.
+	local file="$1" tmp
+	if jq -e '(.message_id // "") | type == "string" and test("^[A-Za-z0-9._:-]{8,100}$")' "${file}" >/dev/null 2>&1; then
+		return 0
+	fi
+	if jq -e 'has("message_id") and .message_id != null and .message_id != ""' "${file}" >/dev/null 2>&1; then
+		log_error "message_id in ${file##*/} must be 8 to 100 letters, digits or . _ : -"
+		return 2
+	fi
+	tmp="$(mktemp "${file%/*}/.id-XXXXXX")"
+	jq -c --arg id "$(new_message_id)" '. + {message_id: $id}' "${file}" >"${tmp}" || {
+		rm -f -- "${tmp}"
+		return 2
+	}
+	touch -r "${file}" -- "${tmp}"
+	mv -f -- "${tmp}" "${file}"
 }
 
 post() {
@@ -65,9 +126,8 @@ post() {
 			--data-binary "@${file}" \
 			"${H360_INGEST_URL}" 2>/dev/null || true)"
 		case "${status}" in
-			2??) return 0 ;;
-			409) return 0 ;;
-			400 | 413 | 417 | 422)
+			2?? | 409) return 0 ;;
+			400 | 413 | 422)
 				log_error "ingest rejected a message (HTTP ${status}); see Error Log in Hostel360"
 				return 2
 				;;
@@ -99,41 +159,83 @@ notify_oci() {
 	fi
 }
 
+is_probe_metrics() {
+	jq -e '.type == "metrics" and .source == "Uptime Probe"' "$1" >/dev/null 2>&1
+}
+
+drop_oldest() {
+	# drop_oldest <find name test...>: delete the 100 oldest spooled files matching the test
+	find "${spool}" -maxdepth 1 -type f "$@" -printf '%T@ %p\n' | sort -n | head -n 100 |
+		cut -d' ' -f2- | xargs -r rm -f --
+}
+
 spool_message() {
-	local file="$1" count target
-	count="$(find "${spool}" -maxdepth 1 -type f -name '*.json' | wc -l)"
-	if [[ "${count}" -ge "${spool_max_files}" ]]; then
-		log_error "ingest spool is full (${count} messages); dropping the oldest"
-		find "${spool}" -maxdepth 1 -type f -name '*.json' -printf '%T@ %p\n' | sort -n | head -n 100 |
-			cut -d' ' -f2- | xargs -r rm -f --
+	# spool_message <file>: keep a copy for a later attempt. Written under a temporary name
+	# and renamed, so a flush running at the same time never reads half a message.
+	local file="$1" count suffix=.json target tmp
+	if is_probe_metrics "${file}"; then
+		suffix="${keep_suffix}"
+		count="$(find "${spool}" -maxdepth 1 -type f -name "*${keep_suffix}" | wc -l)"
+		if [[ "${count}" -ge "${H360_SPOOL_KEEP_MAX_FILES}" ]]; then
+			log_error "ingest spool holds ${count} uptime probe batches; dropping the oldest"
+			drop_oldest -name "*${keep_suffix}"
+		fi
+	else
+		count="$(find "${spool}" -maxdepth 1 -type f -name '*.json' ! -name "*${keep_suffix}" | wc -l)"
+		if [[ "${count}" -ge "${H360_SPOOL_MAX_FILES}" ]]; then
+			log_error "ingest spool is full (${count} messages); dropping the oldest"
+			drop_oldest -name '*.json' ! -name "*${keep_suffix}"
+		fi
 	fi
-	target="$(mktemp "${spool}/$(date +%Y%m%d%H%M%S)-XXXXXX.json")"
-	cp -- "${file}" "${target}"
+	tmp="$(mktemp "${spool}/.new-XXXXXX")"
+	cp -- "${file}" "${tmp}"
+	target="${spool}/$(date +%Y%m%d%H%M%S)-$(new_message_id | cut -c1-8)${suffix}"
+	mv -f -- "${tmp}" "${target}"
+}
+
+prune_spool() {
+	find "${spool}" -maxdepth 1 -type f -name '*.json' ! -name "*${keep_suffix}" \
+		-mmin "+${H360_SPOOL_MAX_AGE_MINUTES}" -delete
+	find "${spool}" -maxdepth 1 -type f -name "*${keep_suffix}" -mtime "+${H360_SPOOL_KEEP_DAYS}" -delete
+	# Leftovers of a copy that was interrupted
+	find "${spool}" -maxdepth 1 -type f -name '.*' -mmin +60 -delete
 }
 
 flush_spool() {
-	local file result
-	find "${spool}" -maxdepth 1 -type f -name '*.json' -mmin "+${spool_max_age_minutes}" -delete
+	# 0 everything delivered, 1 stopped at a message that has to wait, 3 out of time
+	local file result deadline
+	prune_spool
+	deadline=$((SECONDS + H360_SPOOL_FLUSH_SECONDS))
 	while IFS= read -r file; do
+		[[ -f "${file}" ]] || continue
+		if ((SECONDS >= deadline)); then
+			log_notice "ingest spool not empty yet; the next run continues"
+			return 3
+		fi
 		result=0
-		post "${file}" || result=$?
+		# Messages spooled by an older version of this script have no message_id yet.
+		with_message_id "${file}" || result=$?
+		[[ "${result}" == 0 ]] && { post "${file}" || result=$?; }
 		case "${result}" in
 			0 | 2) rm -f -- "${file}" ;;
 			*) return 1 ;;
 		esac
 	done < <(find "${spool}" -maxdepth 1 -type f -name '*.json' | sort)
+	return 0
 }
 
-h360_lock ingest 60
-
 if [[ "${1:-}" == "--flush" ]]; then
-	flush_spool || exit 1
+	# Another run is already flushing (or sending); it will get there.
+	h360_try_lock ingest "${H360_INGEST_LOCK_WAIT}" || exit 0
+	result=0
+	flush_spool || result=$?
+	[[ "${result}" == 1 ]] && exit 1
 	exit 0
 fi
 
 source_file="${1:--}"
 message="$(mktemp)"
-trap 'rm -f -- "${message}"' EXIT
+trap 'rm -f -- "${message}" "${message}.c"' EXIT
 if [[ "${source_file}" == "-" ]]; then
 	cat >"${message}"
 else
@@ -142,18 +244,34 @@ fi
 jq -e 'type == "object" and has("type")' "${message}" >/dev/null 2>&1 || die "message is not a JSON object with a type"
 # Compact form: the signature covers exactly the bytes sent.
 jq -c . "${message}" >"${message}.c" && mv -f -- "${message}.c" "${message}"
+with_message_id "${message}" || die "message rejected before sending"
+
+if ! h360_try_lock ingest "${H360_INGEST_LOCK_WAIT}"; then
+	# A long flush is running. Keep the message for it (or the next run) rather than losing
+	# it; the application is evidently reachable, so OCI Notifications is not needed.
+	spool_message "${message}"
+	log_notice "ingest busy; message spooled for the next attempt"
+	exit 1
+fi
 
 # Older messages go first so the server sees events in order. When even those cannot be
 # delivered the application is down: keep this one too instead of waiting on it again.
 result=0
-if flush_spool; then
-	post "${message}" || result=$?
-else
-	result=1
-fi
+flushed=0
+flush_spool || flushed=$?
+case "${flushed}" in
+	0) post "${message}" || result=$? ;;
+	3) result=3 ;;
+	*) result=1 ;;
+esac
 case "${result}" in
 	0) exit 0 ;;
-	2) exit 1 ;;
+	2) exit 2 ;;
+	3)
+		# Behind a backlog that is still being delivered: queue it in order.
+		spool_message "${message}"
+		exit 1
+		;;
 	*)
 		spool_message "${message}"
 		notify_oci "${message}"

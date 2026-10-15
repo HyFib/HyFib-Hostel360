@@ -95,6 +95,20 @@ h360_lock() {
 	fi
 }
 
+h360_try_lock() {
+	# h360_try_lock <name> <wait-seconds>: like h360_lock, but returns 1 instead of ending
+	# the script when another run still holds the lock after the wait.
+	local name="$1" wait="${2:-0}" fd
+	mkdir -p "${H360_LOCK_DIR}"
+	exec {fd}>"${H360_LOCK_DIR}/h360-${name}.lock"
+	if flock -w "${wait}" "${fd}"; then
+		H360_LOCK_FDS["${name}"]="${fd}"
+		return 0
+	fi
+	exec {fd}>&-
+	return 1
+}
+
 h360_unlock() {
 	# h360_unlock <name>: release a lock taken with h360_lock before the script ends
 	local fd="${H360_LOCK_FDS[$1]:-}"
@@ -175,9 +189,13 @@ h360_site_databases() {
 
 h360_report() {
 	# h360_report <json>: deliver to the Hostel360 ingest API (spooled when unreachable)
-	if ! printf '%s' "$1" | /usr/local/sbin/h360-ingest -; then
-		log_warn "report not delivered now; it is spooled for the next attempt"
-	fi
+	local status=0
+	printf '%s' "$1" | /usr/local/sbin/h360-ingest - || status=$?
+	case "${status}" in
+		0) ;;
+		2) log_warn "report rejected by the ingest API; see Error Log in Hostel360" ;;
+		*) log_warn "report not delivered now; it is spooled for the next attempt" ;;
+	esac
 }
 
 h360_alert() {

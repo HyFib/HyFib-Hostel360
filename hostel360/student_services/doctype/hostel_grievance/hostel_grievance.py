@@ -1,15 +1,18 @@
 # Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import add_days, add_to_date, cint, flt, get_datetime, now_datetime, time_diff_in_hours
+from frappe.utils import add_days, add_to_date, cint, cstr, flt, get_datetime, now_datetime, time_diff_in_hours
 
 from hostel360.setup.roles import GRIEVANCE_HANDLER_ROLES, MESS_MANAGER_ROLE
 from hostel360.student_services import notifications
 from hostel360.student_services.permissions import can_see_confidential
 from hostel360.student_services.utils import (
+	N_,
 	assert_unchanged,
 	get_role_users,
 	get_senior_wardens,
@@ -31,6 +34,15 @@ MESS_CATEGORY = "Mess and Food"
 OPEN_STATUSES = ("Open", "In Progress", "Escalated", "Reopened")
 FINISHED_STATUSES = ("Resolved", "Closed")
 REOPEN_WINDOW_DAYS = 7
+STATUS_ARROW = " → "
+
+# Timeline entries the system writes. They are stored in English, whoever's request wrote
+# them, and translated for each reader (see timeline_message).
+REGISTERED_MESSAGE = N_("Grievance registered.")
+REFERRED_MESSAGE = N_("Referred to the Warden for immediate action.")
+ASSIGNED_MESSAGE = N_("Assigned to {0}.")
+CLOSED_MESSAGE = N_("Grievance closed.")
+ESCALATED_MESSAGE = N_("Not resolved in time; escalated to level {0}.")
 # The first escalation reaches the hostel's deputy wardens as well as the Warden and hostel
 # administrators; later ones go to the Warden and administrators only. After the third, more
 # reminders add nothing but noise.
@@ -129,15 +141,16 @@ class HostelGrievance(Document):
 		self.status = "Open"
 		self.escalation_level = 0
 		self.sla_due_by = self.compute_sla_due_by()
-		self.append_update(_("Grievance registered."), user=self.raised_by_user)
+		self.append_update(REGISTERED_MESSAGE, user=self.raised_by_user, system=True)
 		if self.category == RAGGING_CATEGORY:
 			self.status = "Escalated"
 			self.escalation_level = 1
 			self.escalated_on = now_datetime()
 			self.append_update(
-				_("Referred to the Warden for immediate action."),
-				status_change="Open → Escalated",
+				REFERRED_MESSAGE,
+				status_change=f"Open{STATUS_ARROW}Escalated",
 				user="Administrator",
+				system=True,
 			)
 
 	def compute_sla_due_by(self, start=None):
@@ -153,22 +166,44 @@ class HostelGrievance(Document):
 		is_internal: int = 0,
 		status_change: str | None = None,
 		user: str | None = None,
+		args: list | tuple | None = None,
+		system: bool = False,
 	):
-		self.append(
-			"updates",
-			{
-				"update_on": now_datetime(),
-				"update_by": user or frappe.session.user,
-				"message": message,
-				"is_internal": cint(is_internal),
-				"status_change": status_change,
-			},
-		)
+		"""Add a timeline entry.
 
-	def set_status(self, status: str, message: str, user: str, is_internal: int = 0):
-		change = f"{self.status} → {status}" if status != self.status else None
+		A ``system`` entry is one the application writes rather than one someone typed:
+		``message`` is then an English template marked with N_() and filled with ``args``.
+		It is stored in English, whoever's request wrote it, and shown in the reader's
+		language by ``public_updates``.
+		"""
+		row = {
+			"update_on": now_datetime(),
+			"update_by": user or frappe.session.user,
+			"message": message,
+			"is_internal": cint(is_internal),
+			"status_change": status_change,
+		}
+		if system:
+			args = [cstr(arg) for arg in args or ()]
+			row["message"] = message.format(*args)
+			row["message_template"] = message
+			row["message_args"] = json.dumps(args, ensure_ascii=False) if args else None
+		self.append("updates", row)
+
+	def set_status(
+		self,
+		status: str,
+		message: str,
+		user: str,
+		is_internal: int = 0,
+		args: list | tuple | None = None,
+		system: bool = False,
+	):
+		change = f"{self.status}{STATUS_ARROW}{status}" if status != self.status else None
 		self.status = status
-		self.append_update(message, is_internal=is_internal, status_change=change, user=user)
+		self.append_update(
+			message, is_internal=is_internal, status_change=change, user=user, args=args, system=system
+		)
 
 	def save_changes(self):
 		self.flags.ignore_permissions = True
@@ -187,10 +222,14 @@ class HostelGrievance(Document):
 			by = _("Hostel Office") if row.update_by == "Administrator" else user_display_name(row.update_by)
 			timeline.append(
 				{
+					"id": row.name,
 					"on": row.update_on,
 					"by": by,
 					"is_staff": is_staff_user(row.update_by) if row.update_by else False,
+					# As stored: what people typed, and system entries in English.
 					"message": row.message,
+					# The same entry in the reader's language.
+					"display_message": timeline_message(row),
 					"status_change": row.status_change,
 				}
 			)
@@ -225,7 +264,9 @@ class HostelGrievance(Document):
 		self.assigned_to = assignee
 		self.assigned_on = now_datetime()
 		new_status = "In Progress" if self.status in ("Open", "Reopened") else self.status
-		self.set_status(new_status, _("Assigned to {0}.").format(user_display_name(assignee)), user)
+		self.set_status(
+			new_status, ASSIGNED_MESSAGE, user, args=[user_display_name(assignee)], system=True
+		)
 		if note:
 			self.append_update(note, is_internal=1, user=user)
 		self.save_changes()
@@ -283,7 +324,10 @@ class HostelGrievance(Document):
 		if self.status != "Resolved" and not remarks:
 			frappe.throw(_("Please say why this grievance is being closed without a resolution."))
 		self.closed_on = now_datetime()
-		self.set_status("Closed", remarks or _("Grievance closed."), user)
+		if remarks:
+			self.set_status("Closed", remarks, user)
+		else:
+			self.set_status("Closed", CLOSED_MESSAGE, user, system=True)
 		self.save_changes()
 		notifications.send(
 			"grievance_updated",
@@ -354,8 +398,10 @@ class HostelGrievance(Document):
 		self.sla_due_by = self.compute_sla_due_by(now)
 		self.set_status(
 			"Escalated",
-			_("Not resolved in time; escalated to level {0}.").format(level),
+			ESCALATED_MESSAGE,
 			"Administrator",
+			args=[level],
+			system=True,
 		)
 		self.save_changes()
 		notifications.send(
@@ -422,6 +468,23 @@ class HostelGrievance(Document):
 	def close(self, remarks: str | None = None):
 		load_for_action(self).close_by(frappe.session.user, remarks)
 		self.reload()
+
+
+def timeline_message(row) -> str:
+	"""A timeline entry in the reader's language.
+
+	Entries the system wrote are stored in English together with their template, and are
+	translated here; what people typed is shown as they wrote it.
+	"""
+	template = row.get("message_template")
+	if not template:
+		return row.get("message")
+	try:
+		args = json.loads(row.get("message_args") or "[]")
+		return _(template).format(*args)
+	except (ValueError, TypeError, IndexError, KeyError):
+		# A translation with a broken placeholder must not hide the entry.
+		return row.get("message")
 
 
 def clean_message(message: str | None) -> str:

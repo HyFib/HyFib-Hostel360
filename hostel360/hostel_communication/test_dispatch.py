@@ -750,3 +750,220 @@ class TestRecipients(IntegrationTestCase):
 			"Guardian Pending",
 		)
 		self.assertEqual(dispatch.recipients_for_student("NO-SUCH-STUDENT"), [])
+
+
+def tamil_user(*roles: str) -> str:
+	user = make_user(*roles)
+	frappe.db.set_value("User", user, "language", ev.TAMIL, update_modified=False)
+	return user
+
+
+LEAVE_CONTEXT = {
+	"student_name": "Meena S",
+	"leave": "LV-2026-00078",
+	"status": "Approved",
+	"from_datetime": "2026-07-04 16:00:00",
+	"to_datetime": "2026-07-07 19:00:00",
+	"warden_remarks": "",
+}
+
+
+class TestLanguages(DispatchTestCase):
+	def deliver_leave(self, recipients, channels=None):
+		dispatch.deliver(
+			ev.LEAVE_DECIDED,
+			recipients,
+			LEAVE_CONTEXT,
+			reference_doctype="Home Visit Leave",
+			reference_name=self.reference,
+			channels=channels,
+		)
+
+	def notification_for(self, log) -> frappe._dict:
+		return frappe.db.get_value(
+			"Notification Log", log.provider_message_id, ["subject", "description"], as_dict=True
+		)
+
+	def test_each_recipient_gets_their_own_language(self):
+		tamil, english = tamil_user(STUDENT_ROLE), make_user(STUDENT_ROLE)
+		self.deliver_leave([{"user": tamil}, {"user": english}], channels=["In-App"])
+		logs = {log.recipient_user: log for log in self.logs()}
+
+		self.assertEqual(logs[tamil].template, f"{ev.LEAVE_DECIDED}-In-App-ta")
+		subject = self.notification_for(logs[tamil]).subject
+		self.assertIn("ஒப்புதல் பெற்றது", subject)
+		self.assertIn("Meena S", subject)
+
+		self.assertEqual(logs[english].template, f"{ev.LEAVE_DECIDED}-In-App")
+		self.assertEqual(self.notification_for(logs[english]).subject, "Leave approved for Meena S")
+
+	def test_language_given_with_the_recipient_wins(self):
+		user = make_user(STUDENT_ROLE)
+		self.deliver(
+			[{"user": user, "email": "meena.parent@example.com", "language": "ta-IN"}],
+			channels=["Email", "In-App"],
+		)
+		self.assertEqual(
+			{log.channel: log.template for log in self.logs()},
+			{"Email": f"{ev.FEE_DUE_PUBLISHED}-Email-ta", "In-App": f"{ev.FEE_DUE_PUBLISHED}-In-App-ta"},
+		)
+
+	def test_people_without_an_account_get_english(self):
+		self.deliver([{"mobile": random_mobile(), "email": "parent@example.com"}], channels=["Email"])
+		(log,) = self.logs()
+		self.assertEqual(log.template, f"{ev.FEE_DUE_PUBLISHED}-Email")
+
+	def test_disabled_translation_falls_back_to_english(self):
+		self.set_template(f"{ev.LEAVE_DECIDED}-In-App-ta", "enabled", 0)
+		self.deliver_leave([{"user": tamil_user(STUDENT_ROLE)}], channels=["In-App"])
+		(log,) = self.logs()
+		self.assertEqual(log.template, f"{ev.LEAVE_DECIDED}-In-App")
+
+	def test_english_template_is_the_switch_for_the_channel(self):
+		self.set_template(f"{ev.LEAVE_DECIDED}-In-App", "enabled", 0)
+		self.deliver_leave([{"user": tamil_user(STUDENT_ROLE)}], channels=["In-App"])
+		self.assertEqual(self.logs(), [])
+
+	def test_tamil_sms_only_once_enabled_and_registered(self):
+		user, mobile = tamil_user(STUDENT_ROLE), random_mobile()
+		english, tamil = f"{ev.LEAVE_DECIDED}-SMS", f"{ev.LEAVE_DECIDED}-SMS-ta"
+		self.set_template(english, "dlt_template_id", "1207170000000000001")
+
+		# Shipped disabled: English goes out.
+		self.deliver_leave([{"user": user, "mobile": mobile}], channels=["SMS"])
+		self.assertEqual(self.logs()[-1].template, english)
+
+		# Enabled but not registered on DLT while the English one is: still English.
+		self.set_template(tamil, "enabled", 1)
+		self.deliver_leave([{"user": user, "mobile": random_mobile()}], channels=["SMS"])
+		self.assertEqual(self.logs()[-1].template, english)
+
+		self.set_template(tamil, "dlt_template_id", "1207170000000000002")
+		self.deliver_leave([{"user": user, "mobile": random_mobile()}], channels=["SMS"])
+		log = self.logs()[-1]
+		self.assertEqual(log.template, tamil)
+		self.assertIn("ஒப்புதல் பெற்றது", log.message)
+
+	def test_tamil_whatsapp_uses_the_tamil_template_version(self):
+		self.settings.test_mode = 0
+		self.set_template(f"{ev.LEAVE_DECIDED}-WhatsApp-ta", "enabled", 1)
+		with patch(
+			"hostel360.hostel_communication.providers.whatsapp.send_template",
+			return_value=DeliveryResult.sent("WhatsApp Cloud API", "wamid.ta"),
+		) as send:
+			self.deliver_leave(
+				[{"user": tamil_user(STUDENT_ROLE), "mobile": random_mobile()}], channels=["WhatsApp"]
+			)
+		name, language, parameters = send.call_args.args[1:4]
+		self.assertEqual((name, language), ("h360_leave_decided", "ta"))
+		self.assertIn("ஒப்புதல் பெற்றது", parameters)
+		self.assertEqual(parameters[-1], "இல்லை")
+
+	def test_english_dates_do_not_follow_the_job_language(self):
+		# A delivery job takes on the language of the user who queued it.
+		with patch.object(frappe.local, "lang", ev.TAMIL):
+			self.deliver_leave([{"user": make_user(STUDENT_ROLE)}], channels=["In-App"])
+		(log,) = self.logs()
+		self.assertEqual(log.template, f"{ev.LEAVE_DECIDED}-In-App")
+		self.assertIn("04-07-2026 04:00 PM", log.message)
+
+	def test_tamil_sign_in_code_when_enabled(self):
+		mobile = random_mobile()
+		self.assertTrue(dispatch.send_otp_message(mobile, "482913", "SMS", language="ta"))
+		self.set_template(f"{ev.OTP_LOGIN}-SMS-ta", "enabled", 1)
+		self.assertTrue(dispatch.send_otp_message(mobile, "482913", "SMS", language="ta"))
+		self.assertTrue(dispatch.send_otp_message(mobile, "482913", "SMS", language="en"))
+		templates = frappe.get_all(
+			"Message Log",
+			filters={"event": ev.OTP_LOGIN, "recipient": f"{mobile[:2]}xxxxxx{mobile[-2:]}"},
+			order_by="creation asc",
+			pluck="template",
+		)
+		self.assertEqual(templates, [f"{ev.OTP_LOGIN}-SMS", f"{ev.OTP_LOGIN}-SMS-ta", f"{ev.OTP_LOGIN}-SMS"])
+
+	def test_tamil_sign_in_code_is_rendered_in_tamil(self):
+		self.settings.test_mode = 0
+		self.set_template(f"{ev.OTP_LOGIN}-SMS-ta", "enabled", 1)
+		with patch(
+			"hostel360.hostel_communication.providers.sms.send_sms",
+			return_value=DeliveryResult.sent("MSG91", "req-ta"),
+		) as send_sms:
+			self.assertTrue(dispatch.send_otp_message(random_mobile(), "482913", "SMS", language="ta"))
+		body = send_sms.call_args.args[1]
+		self.assertTrue(body.startswith("482913 - "))
+		self.assertIn("யாரிடமும் பகிர வேண்டாம்", body)
+
+	def test_recipient_language_is_normalised(self):
+		(row,) = dispatch.clean_recipients([{"mobile": random_mobile(), "language": "TA"}])
+		self.assertEqual(row["language"], ev.TAMIL)
+		(row,) = dispatch.clean_recipients([{"mobile": random_mobile(), "language": "hi"}])
+		self.assertEqual(row["language"], ev.ENGLISH)
+		(row,) = dispatch.clean_recipients([{"mobile": random_mobile()}])
+		self.assertIsNone(row["language"])
+
+
+class TestReferenceContext(DispatchTestCase):
+	def test_missing_values_come_from_the_referenced_document(self):
+		todo = frappe.get_doc({"doctype": "ToDo", "description": "Gate register", "date": "2026-07-07"})
+		todo.insert(ignore_permissions=True)
+		spec = ("ToDo", ("description", "date", "no_such_field"))
+		with patch.dict(ev.REFERENCE_FALLBACKS, {ev.LEAVE_RETURNED: spec}):
+			filled = dispatch.complete_context(
+				ev.LEAVE_RETURNED, {"student_name": "Meena S", "description": ""}, "ToDo", todo.name
+			)
+			self.assertEqual(filled["description"], "Gate register")
+			self.assertEqual(filled["date"], "2026-07-07")
+			self.assertEqual(filled["student_name"], "Meena S")
+
+			# Values the caller gave are kept, and other documents are not read.
+			kept = dispatch.complete_context(ev.LEAVE_RETURNED, {"description": "Mine"}, "ToDo", todo.name)
+			self.assertEqual(kept["description"], "Mine")
+			other = dispatch.complete_context(ev.LEAVE_RETURNED, {}, "Note", todo.name)
+			self.assertEqual(other, {})
+		# Events without fallbacks are passed through untouched.
+		self.assertEqual(dispatch.complete_context(ev.LEAVE_DECIDED, {}, "ToDo", todo.name), {})
+
+	def test_notify_completes_the_context_before_queueing(self):
+		with (
+			patch(
+				"hostel360.hostel_communication.dispatch.complete_context", return_value={"x": 1}
+			) as complete,
+			patch("frappe.enqueue") as enqueue,
+		):
+			dispatch.notify(
+				ev.LEAVE_CHECKED_OUT,
+				[{"mobile": random_mobile()}],
+				{"leave": "LV-1"},
+				"Home Visit Leave",
+				"LV-1",
+			)
+		complete.assert_called_once_with(ev.LEAVE_CHECKED_OUT, {"leave": "LV-1"}, "Home Visit Leave", "LV-1")
+		self.assertEqual(enqueue.call_args.kwargs["context"], {"x": 1})
+
+	def test_gate_messages_reach_guardians_in_their_language(self):
+		guardian = tamil_user()
+		context = {
+			"student_name": "Meena S",
+			"leave": "LV-2026-00078",
+			"hostel": "GH1",
+			"destination": "Madurai",
+			"checked_out_on": "2026-07-04 16:20:00",
+			"to_datetime": "2026-07-07 19:00:00",
+			"returned_on": "2026-07-07 18:45:00",
+		}
+		for event in (ev.LEAVE_CHECKED_OUT, ev.LEAVE_RETURNED):
+			dispatch.deliver(
+				event,
+				[{"user": guardian, "kind": "parent"}],
+				context,
+				reference_doctype="Home Visit Leave",
+				reference_name=self.reference,
+				channels=["In-App"],
+			)
+		checked_out, returned = self.logs()
+		self.assertEqual(checked_out.template, f"{ev.LEAVE_CHECKED_OUT}-In-App-ta")
+		self.assertIn("04-07-2026 04:20 PM", checked_out.message)
+		self.assertEqual(returned.template, f"{ev.LEAVE_RETURNED}-In-App-ta")
+		self.assertIn("07-07-2026 06:45 PM", returned.message)
+		link = frappe.db.get_value("Notification Log", checked_out.provider_message_id, "link")
+		self.assertEqual(link, "/hostel/leave")

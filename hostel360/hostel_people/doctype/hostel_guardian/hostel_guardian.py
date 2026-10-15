@@ -65,6 +65,11 @@ class HostelGuardian(Document):
 			ignore_permissions=True,
 		)
 
+	def onload(self):
+		from hostel360.hostel_people.services import can_unlock_sign_in
+
+		self.set_onload("can_unlock_sign_in", bool(self.mobile_number) and can_unlock_sign_in())
+
 	def on_update(self):
 		if self.has_value_changed("guardian_name") or self.has_value_changed("mobile_number"):
 			# Child rows copy these through fetch_from only when the student is saved.

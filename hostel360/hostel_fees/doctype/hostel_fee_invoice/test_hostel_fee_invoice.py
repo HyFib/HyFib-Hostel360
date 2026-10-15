@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe.tests import set_user
 from frappe.utils import add_days, cint, getdate, nowdate
 
 from hostel360.hostel_fees.constants import INVOICE, SETTINGS
@@ -14,7 +15,9 @@ from hostel360.hostel_fees.tests.fixtures import (
 	make_hostel,
 	make_invoice,
 	make_payment,
+	make_scoped_user,
 	make_student,
+	move_student,
 )
 
 # Read by the Frappe test runner: fee tests build every linked record they need themselves.
@@ -312,3 +315,74 @@ class TestHostelFeeInvoice(FeeTestCase):
 		self.assertEqual(invoice.hostel, self.hostel)
 		receipt = make_payment(self.student, [(invoice.name, 400)])
 		self.assertEqual(receipt.hostel, self.hostel)
+
+	# -- hostel the invoice is filed under ---------------------------------------------------
+
+	def draft_invoice(self, student: str, **values):
+		return frappe.get_doc(
+			{
+				"doctype": INVOICE,
+				"student": student,
+				"invoice_type": "Fine",
+				"due_date": add_days(nowdate(), 7),
+				"items": [{"fee_head": "Fine", "amount": 250}],
+				**values,
+			}
+		)
+
+	def test_hostel_follows_the_student_not_the_request(self):
+		elsewhere = make_hostel()
+		invoice = self.draft_invoice(self.student, hostel=elsewhere).insert(ignore_permissions=True)
+		self.assertEqual(invoice.hostel, self.hostel)
+
+		# A draft saved after the student moved is filed under the new hostel.
+		move_student(self.student, elsewhere)
+		invoice.hostel = self.hostel
+		invoice.save(ignore_permissions=True)
+		self.assertEqual(invoice.hostel, elsewhere)
+
+		# Without a bed the record carries no hostel, whatever was sent.
+		homeless = make_student()
+		self.assertIsNone(self.draft_invoice(homeless, hostel=elsewhere).insert(ignore_permissions=True).hostel)
+
+	def test_trusted_callers_and_migration_may_file_elsewhere(self):
+		billed_in = make_hostel()
+		name = create_invoice(
+			self.student, [{"fee_head": "Fine", "amount": 80}], "Fine", add_days(nowdate(), 7), hostel=billed_in
+		)
+		self.assertEqual(frappe.db.get_value(INVOICE, name, "hostel"), billed_in)
+
+		frappe.flags.hostel360_migration = True
+		try:
+			historic = self.draft_invoice(self.student, hostel=billed_in).insert()
+		finally:
+			frappe.flags.hostel360_migration = False
+		self.assertEqual(historic.hostel, billed_in)
+
+	def test_scoped_staff_cannot_file_invoices_for_other_hostels(self):
+		other_hostel = make_hostel()
+		outsider = make_student(hostel=other_hostel)
+		clerk = make_scoped_user(self.hostel)
+
+		with set_user(clerk):
+			# Sending their own hostel used to pass Frappe's check made before validate.
+			with self.assertRaises(frappe.PermissionError):
+				self.draft_invoice(outsider, hostel=self.hostel).insert()
+
+			own = self.draft_invoice(self.student).insert()
+			self.assertEqual(own.hostel, self.hostel)
+			own.submit()
+			self.assertEqual(own.docstatus, 1)
+
+		self.assertFalse(frappe.db.exists(INVOICE, {"student": outsider}))
+
+	def test_scoped_staff_cannot_submit_a_draft_whose_student_moved_away(self):
+		clerk = make_scoped_user(self.hostel)
+		with set_user(clerk):
+			draft = self.draft_invoice(self.student).insert()
+
+		move_student(self.student, make_hostel())
+		with set_user(clerk):
+			draft = frappe.get_doc(INVOICE, draft.name)
+			with self.assertRaises(frappe.PermissionError):
+				draft.submit()

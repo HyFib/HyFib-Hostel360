@@ -13,6 +13,9 @@ MSG91 is used in one of two ways, per message template:
 The generic HTTP provider sends the fully rendered text with the DLT template ID, entity
 ID and sender ID under configurable parameter names, which covers most other Indian
 DLT vendors.
+
+Tamil text is sent as Unicode: MSG91's SendHTTP API is told so with ``unicode=1``, and the
+generic provider adds its configured Unicode parameter, only for messages that need it.
 """
 
 import json
@@ -32,7 +35,7 @@ from hostel360.hostel_communication.providers.base import (
 	test_mode_result,
 	truncate,
 )
-from hostel360.hostel_communication.rendering import short
+from hostel360.hostel_communication.rendering import is_unicode, short
 
 MSG91 = "MSG91"
 GENERIC_HTTP = "Generic HTTP"
@@ -131,6 +134,8 @@ def build_msg91_text_request(settings, mobile: str, body: str, dlt_template_id: 
 	}
 	if settings.get("sms_sender_id"):
 		data["sender"] = settings.sms_sender_id.strip()
+	if is_unicode(body):
+		data["unicode"] = "1"
 	return data
 
 
@@ -194,6 +199,8 @@ def build_generic_request(
 	put("sms_param_sender", (settings.get("sms_sender_id") or "").strip())
 	put("sms_param_template_id", (dlt_template_id or "").strip())
 	put("sms_param_entity_id", (settings.get("dlt_entity_id") or "").strip())
+	if is_unicode(body):
+		put("sms_param_unicode", (settings.get("sms_unicode_value") or "1").strip())
 
 	headers = {"accept": "application/json"}
 	header_name = (settings.get("sms_auth_header") or "").strip()

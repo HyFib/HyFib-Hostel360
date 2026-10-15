@@ -20,10 +20,25 @@ frappe.ui.form.on("Message Template", {
 			);
 		}
 
-		if (frm.doc.channel === "SMS") {
+		const translated = frm.doc.language && frm.doc.language !== "en";
+		if (frm.doc.channel === "SMS" && translated) {
+			frm.set_intro(
+				__(
+					"Tamil readers get this SMS instead of the English one once it is enabled and has its own DLT Template ID (or MSG91 Flow Template ID). Register this exact wording on the DLT portal as a Unicode template, replacing each {{ ... }} with {#var#}. Unicode SMS carry 70 characters a part."
+				),
+				"blue"
+			);
+		} else if (frm.doc.channel === "SMS") {
 			frm.set_intro(
 				__(
 					"Register this exact wording on the DLT portal, replacing each {{ ... }} with {#var#}. Keep SMS in plain English characters (write Rs. instead of the rupee symbol) so it fits in a single message."
+				),
+				"blue"
+			);
+		} else if (frm.doc.channel === "WhatsApp" && translated) {
+			frm.set_intro(
+				__(
+					"Submit this wording in WhatsApp Manager as the Tamil (ta) version of the template named below, with the template parameters as {{1}}, {{2}} and so on, in the order listed. Enable this template once Meta has approved it; until then Tamil readers get the English message."
 				),
 				"blue"
 			);
@@ -34,9 +49,38 @@ frappe.ui.form.on("Message Template", {
 				),
 				"blue"
 			);
+		} else if (translated) {
+			frm.set_intro(
+				__(
+					"Recipients whose account language is Tamil get this template while it is enabled. The English template of this event and channel decides whether the message is sent at all."
+				),
+				"blue"
+			);
+		}
+
+		if (!frm.is_new()) {
+			frm.add_custom_button(
+				translated ? __("English Version") : __("Tamil Version"),
+				() => open_other_language(frm, translated ? "en" : "ta"),
+				__("View")
+			);
 		}
 	},
 });
+
+function open_other_language(frm, language) {
+	const name =
+		language === "en"
+			? `${frm.doc.event}-${frm.doc.channel}`
+			: `${frm.doc.event}-${frm.doc.channel}-${language}`;
+	frappe.db.exists("Message Template", name).then((exists) => {
+		if (exists) {
+			frappe.set_route("Form", "Message Template", name);
+		} else {
+			frappe.msgprint(__("There is no template in that language for this event and channel."));
+		}
+	});
+}
 
 function show_preview(frm) {
 	frm.call({ method: "preview", doc: frm.doc, freeze: true }).then((r) => {

@@ -4,6 +4,7 @@
 import random
 
 import frappe
+from frappe import _
 from frappe.client import insert as client_insert
 from frappe.client import set_value as client_set_value
 from frappe.tests import IntegrationTestCase
@@ -273,6 +274,80 @@ class TestHostelGrievance(IntegrationTestCase):
 		self.assertEqual(detail["student_rating"], 4)
 		self.assertEqual(detail["student_feedback"], "Quick work")
 		self.assertEqual(services.list_grievances(self.student.name)[0]["student_rating"], 4)
+
+	def test_system_entries_are_stored_in_english_and_read_in_the_readers_language(self):
+		electrician = make_user([OFFICE_ROLE], first_name="Murugan")
+		lang = frappe.local.lang
+		frappe.local.lang = "ta"
+		try:
+			name = self.raise_grievance()
+			doc = frappe.get_doc("Hostel Grievance", name)
+			doc.assign_to_user(electrician, self.deputy)
+			doc.resolve_by("Regulator replaced", electrician)
+			doc.close_by(self.deputy)
+		finally:
+			frappe.local.lang = lang
+
+		rows = frappe.get_all(
+			"Hostel Grievance Update",
+			filters={"parent": name, "parenttype": "Hostel Grievance"},
+			fields=["name", "message", "message_template", "message_args"],
+			order_by="idx asc",
+		)
+		assignee = frappe.utils.get_fullname(electrician)
+		self.assertEqual(rows[0].message, "Grievance registered.")
+		self.assertEqual(rows[0].message_template, "Grievance registered.")
+		self.assertEqual(rows[1].message, f"Assigned to {assignee}.")
+		self.assertEqual(rows[1].message_template, "Assigned to {0}.")
+		self.assertEqual(frappe.parse_json(rows[1].message_args), [assignee])
+		self.assertEqual(rows[2].message, "Regulator replaced")
+		self.assertFalse(rows[2].message_template)
+		self.assertEqual(rows[3].message, "Grievance closed.")
+
+		frappe.local.lang = "ta"
+		try:
+			timeline = services.get_grievance(name)["timeline"]
+			expected = [
+				_("Grievance registered."),
+				_("Assigned to {0}.").format(assignee),
+				"Regulator replaced",
+				_("Grievance closed."),
+			]
+		finally:
+			frappe.local.lang = lang
+		self.assertEqual([entry["display_message"] for entry in timeline], expected)
+		self.assertEqual([entry["message"] for entry in timeline], [row.message for row in rows])
+		self.assertEqual([entry["id"] for entry in timeline], [row.name for row in rows])
+
+	def test_older_system_entries_are_tagged_for_translation(self):
+		from hostel360.student_services.setup import tag_system_timeline_entries
+
+		name = self.raise_grievance()
+		frappe.db.set_value(
+			"Hostel Grievance Update",
+			{"parent": name, "idx": 1},
+			{"message_template": None, "message_args": None},
+			update_modified=False,
+		)
+		doc = frappe.get_doc("Hostel Grievance", name)
+		doc.escalate()
+		frappe.db.set_value(
+			"Hostel Grievance Update",
+			{"parent": name, "idx": 2},
+			{"message_template": None, "message_args": None},
+			update_modified=False,
+		)
+
+		tag_system_timeline_entries()
+		rows = frappe.get_all(
+			"Hostel Grievance Update",
+			filters={"parent": name},
+			fields=["message_template", "message_args"],
+			order_by="idx asc",
+		)
+		self.assertEqual(rows[0].message_template, "Grievance registered.")
+		self.assertEqual(rows[1].message_template, "Not resolved in time; escalated to level {0}.")
+		self.assertEqual(frappe.parse_json(rows[1].message_args), ["1"])
 
 	def test_student_comment_notifies_handlers(self):
 		name = self.raise_grievance()

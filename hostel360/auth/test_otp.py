@@ -43,10 +43,12 @@ class OTPTestCase(IntegrationTestCase):
 		self.mobiles: list[str] = []
 
 		self.timeouts = []
+		self.languages = []
 
-		def fake_send(mobile, code, channel, timeout=None):
+		def fake_send(mobile, code, channel, timeout=None, language=None):
 			self.sent.append((mobile, code, channel))
 			self.timeouts.append(timeout)
+			self.languages.append(language)
 			return self.delivery_ok.get(channel, False)
 
 		for target, kwargs in (
@@ -386,6 +388,23 @@ class TestBoundedDelivery(OTPTestCase):
 		self.assertEqual(len(self.sent), 1)
 
 
+class TestCodeLanguage(OTPTestCase):
+	def test_code_follows_the_language_on_the_device(self):
+		mobile = self.new_mobile(otp.KIND_PARENT)
+		with patch.object(frappe.local, "lang", "ta"):
+			otp.request_code(mobile)
+		self.allow_resend(mobile)
+		with patch.object(frappe.local, "lang", "en"):
+			otp.request_code(mobile)
+		self.allow_resend(mobile)
+		otp.request_code(mobile, language="ta-IN")
+		self.assertEqual(self.languages, ["ta", "en", "ta"])
+
+	def test_unknown_language_means_english(self):
+		with patch.object(frappe.local, "lang", "hi"):
+			self.assertEqual(otp.request_language(), "en")
+
+
 class TestFixedDevelopmentCode(OTPTestCase):
 	def test_fixed_code_is_ignored_without_developer_mode(self):
 		with patch.dict(frappe.conf, {"developer_mode": 0, "hostel360_fixed_otp": "123456"}):
@@ -476,6 +495,43 @@ class TestAuthAPI(OTPTestCase):
 		self.assertEqual(otp._ttl(f"lock:{ref}"), 0)
 		otp.request_code(mobile)
 		self.assertEqual(len(self.sent), 1)
+
+
+class TestFloodLimit(IntegrationTestCase):
+	def test_trusted_networks_get_a_far_higher_ceiling(self):
+		from hostel360.api import auth
+
+		policy = otp.get_policy()
+		policy.trusted_networks = otp.parse_networks("203.0.113.0/24")
+		with patch("hostel360.auth.otp.get_policy", return_value=policy):
+			with patch.object(frappe.local, "request_ip", TEST_IP, create=True):
+				self.assertEqual(auth.flood_limit(), auth.TRUSTED_FLOOD_LIMIT_PER_HOUR)
+			with patch.object(frappe.local, "request_ip", "198.51.100.7", create=True):
+				self.assertEqual(auth.flood_limit(), auth.FLOOD_LIMIT_PER_HOUR)
+			with patch.object(frappe.local, "request_ip", None, create=True):
+				self.assertEqual(auth.flood_limit(), auth.FLOOD_LIMIT_PER_HOUR)
+		self.assertGreater(auth.TRUSTED_FLOOD_LIMIT_PER_HOUR, auth.FLOOD_LIMIT_PER_HOUR * 10)
+
+	def test_unreadable_settings_keep_the_ordinary_ceiling(self):
+		from hostel360.api import auth
+
+		with patch("hostel360.auth.otp.get_policy", side_effect=RuntimeError("no settings")):
+			self.assertEqual(auth.flood_limit(), auth.FLOOD_LIMIT_PER_HOUR)
+
+	def test_endpoints_use_the_callable_limit(self):
+		from hostel360.api import auth
+
+		def bound_values(function, depth=0):
+			# The rate_limit wrapper keeps its ``limit`` argument in its closure, under
+			# Frappe's own whitelist wrapper.
+			for cell in getattr(function, "__closure__", None) or ():
+				value = cell.cell_contents
+				yield value
+				if callable(value) and depth < 4:
+					yield from bound_values(value, depth + 1)
+
+		for endpoint in (auth.send_otp, auth.verify_otp):
+			self.assertIn(auth.flood_limit, list(bound_values(endpoint)), endpoint.__name__)
 
 
 class TestIdentityResolution(IntegrationTestCase):

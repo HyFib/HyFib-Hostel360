@@ -4,7 +4,7 @@
  * with ?payment=<transaction>&status=…; the status in the address is only a hint, so the
  * outcome shown is the one the server confirms for that transaction.
  */
-import { FileText, Receipt, Wallet } from "@lucide/vue";
+import { FileText, FlaskConical, Receipt, Wallet } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ApiError } from "@/api/client";
@@ -145,6 +145,9 @@ function pay(invoices: string[]) {
 			<section v-if="openInvoices.length" aria-labelledby="fees-open" class="mb-6">
 				<h2 id="fees-open" class="section-title mb-1">{{ t("fees.dueInvoices") }}</h2>
 				<p v-if="canPayOnline" class="mb-3 text-sm text-muted">{{ t("fees.selectToPay") }}</p>
+				<p v-if="canPayOnline && summary.payment_test_mode" class="mb-3 flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-sm font-medium text-info" data-test="test-mode">
+					<FlaskConical :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("fees.testMode") }}
+				</p>
 				<InvoiceList v-model="selected" :invoices="openInvoices" :payable="canPayOnline" @pay="pay" />
 			</section>
 
