@@ -26,8 +26,8 @@ HTML_UNSAFE_JSON = (
 	("<", "\\u003c"),
 	(">", "\\u003e"),
 	("&", "\\u0026"),
-	(" ", "\\u2028"),
-	(" ", "\\u2029"),
+	("\u2028", "\\u2028"),
+	("\u2029", "\\u2029"),
 )
 
 
@@ -91,4 +91,4 @@ def html_safe_json(value) -> Markup:
 	for raw, escaped in HTML_UNSAFE_JSON:
 		text = text.replace(raw, escaped)
 	# Already escaped for this context; Markup keeps Jinja from escaping it a second time.
-	return Markup(text)
+	return Markup(text)  # noqa: S704 - HTML-significant characters were escaped above

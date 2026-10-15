@@ -7,9 +7,35 @@
  */
 
 const ALLOWED_TAGS = new Set([
-	"P", "BR", "STRONG", "B", "EM", "I", "U", "UL", "OL", "LI", "H2", "H3", "H4", "BLOCKQUOTE", "A", "SPAN", "DIV",
+	"P",
+	"BR",
+	"STRONG",
+	"B",
+	"EM",
+	"I",
+	"U",
+	"UL",
+	"OL",
+	"LI",
+	"H2",
+	"H3",
+	"H4",
+	"BLOCKQUOTE",
+	"A",
+	"SPAN",
+	"DIV",
 ]);
-const DROP_WITH_CONTENT = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "TEMPLATE", "NOSCRIPT", "SVG", "MATH"]);
+const DROP_WITH_CONTENT = new Set([
+	"SCRIPT",
+	"STYLE",
+	"IFRAME",
+	"OBJECT",
+	"EMBED",
+	"TEMPLATE",
+	"NOSCRIPT",
+	"SVG",
+	"MATH",
+]);
 const SAFE_LINK = /^(https?:|mailto:|tel:)/i;
 
 function clean(node: Node, doc: Document): Node | null {

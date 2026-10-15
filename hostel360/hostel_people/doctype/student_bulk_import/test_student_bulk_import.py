@@ -8,16 +8,20 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
+from frappe.utils import add_days, nowdate
 
 from hostel360.hostel_people.doctype.student_bulk_import.student_bulk_import import (
 	COLUMNS,
 	build_template_workbook,
 )
 from hostel360.hostel_people.testing import (
+	allot,
 	beds_of,
+	make_guardian,
 	make_hostel,
 	make_room,
 	make_staff,
+	make_student,
 	random_mobile,
 	unique_code,
 )
@@ -75,7 +79,13 @@ class TestStudentBulkImport(IntegrationTestCase):
 			blood_group="b+ve",
 			mess_enrolled="No",
 		)
-		second = student_row(gender="M", guardian_name="Senthil Kumar", guardian_mobile=guardian_mobile, hostel=self.hostel.name, room_number="I1")
+		second = student_row(
+			gender="M",
+			guardian_name="Senthil Kumar",
+			guardian_mobile=guardian_mobile,
+			hostel=self.hostel.name,
+			room_number="I1",
+		)
 		doc = make_import([first, second])
 
 		summary = doc.validate_file()
@@ -110,8 +120,15 @@ class TestStudentBulkImport(IntegrationTestCase):
 		doc.run_import()
 		doc.reload()
 		self.assertEqual(doc.status, "Completed")
-		self.assertEqual(frappe.db.count("Hostel Student", {"name": ["in", [first["register_number"], second["register_number"]]]}), 2)
-		self.assertEqual(frappe.db.count("Room Allotment", {"student": first["register_number"], "docstatus": 1}), 1)
+		self.assertEqual(
+			frappe.db.count(
+				"Hostel Student", {"name": ["in", [first["register_number"], second["register_number"]]]}
+			),
+			2,
+		)
+		self.assertEqual(
+			frappe.db.count("Room Allotment", {"student": first["register_number"], "docstatus": 1}), 1
+		)
 
 	def test_bad_rows_are_reported_and_good_rows_imported(self):
 		good = student_row()
@@ -180,7 +197,9 @@ class TestStudentBulkImport(IntegrationTestCase):
 		second.run_import()
 		second.reload()
 		self.assertEqual(second.skipped_rows, 1)
-		self.assertEqual(frappe.db.get_value("Hostel Student", row["register_number"], "first_name"), "Import")
+		self.assertEqual(
+			frappe.db.get_value("Hostel Student", row["register_number"], "first_name"), "Import"
+		)
 
 	def test_template_has_every_column(self):
 		from openpyxl import load_workbook
@@ -220,3 +239,102 @@ class TestStudentBulkImport(IntegrationTestCase):
 			self.assertNotIn(doc.name, frappe.get_list("Student Bulk Import", pluck="name"))
 		with self.set_user(warden):
 			self.assertTrue(frappe.has_permission("Student Bulk Import", "read", doc=doc.name))
+
+
+class TestHostelScopedImport(IntegrationTestCase):
+	"""Imports by the office of one hostel touching people another hostel looks after."""
+
+	def setUp(self):
+		self.hostel = make_hostel("Male")
+		self.room = make_room(self.hostel.name, capacity=2, room_number="S1")
+		self.other = make_hostel("Male").name
+		self.other_bed, self.other_bed_2 = beds_of(make_room(self.other, capacity=2).name)
+		self.office = make_staff("Office Staff", [self.hostel.name]).user
+
+	def import_as_office(self, rows: list[dict]):
+		with self.set_user(self.office):
+			doc = make_import(rows)
+			summary = doc.validate_file()
+			preview = json.loads(doc.validation_json)
+			doc.run_import()
+			doc.reload()
+		return summary, preview, doc
+
+	def test_shared_guardian_is_linked_without_changing_their_record(self):
+		sister_hostel = make_hostel("Female").name
+		sister = make_student("Female").name
+		allot(sister, beds_of(make_room(sister_hostel, capacity=1).name)[0])
+		parent = make_guardian(guardian_name="Shared Parent")
+		sister_doc = frappe.get_doc("Hostel Student", sister)
+		sister_doc.append("guardians", {"guardian": parent.name, "relation": "Father"})
+		sister_doc.save()
+
+		row = student_row(
+			guardian_name="Shared Parent",
+			guardian_mobile=parent.mobile_number,
+			guardian_email="shared-parent@example.com",
+			guardian_occupation="Teacher",
+		)
+		summary, preview, doc = self.import_as_office([row])
+		self.assertEqual((summary["create"], summary["errors"], summary["warnings"]), (1, 0, 1))
+		self.assertIn("also have a child", " ".join(preview["rows"][0]["warnings"]))
+
+		self.assertEqual(doc.status, "Completed")
+		self.assertEqual((doc.imported_rows, doc.failed_rows), (1, 0))
+		self.assertIn("also have a child", doc.log)
+		brother = frappe.get_doc("Hostel Student", row["register_number"])
+		self.assertEqual([g.guardian for g in brother.guardians], [parent.name])
+		parent.reload()
+		self.assertFalse(parent.email)
+		self.assertFalse(parent.occupation)
+
+	def test_returning_student_is_given_a_bed_then_updated(self):
+		mobile = random_mobile()
+		returning = make_student("Male", mobile_number=mobile).name
+		stay = allot(returning, self.other_bed, from_date=add_days(nowdate(), -30))
+		stay.reload()
+		stay.vacate_allotment(add_days(nowdate(), -1), "End of term")
+
+		row = student_row(
+			register_number=returning,
+			first_name="Returned",
+			mobile_number=mobile,
+			hostel=self.hostel.name,
+			room_number="S1",
+		)
+		summary, _preview, doc = self.import_as_office([row])
+		self.assertEqual((summary["update"], summary["errors"], summary["allotments"]), (1, 0, 1))
+		self.assertEqual(doc.status, "Completed")
+		student = frappe.db.get_value(
+			"Hostel Student",
+			returning,
+			["first_name", "current_hostel", "last_hostel", "current_bed"],
+			as_dict=True,
+		)
+		self.assertEqual(student.first_name, "Returned")
+		self.assertEqual((student.current_hostel, student.last_hostel), (self.hostel.name, self.hostel.name))
+		self.assertEqual(student.current_bed, beds_of(self.room.name)[0])
+
+	def test_students_the_office_may_not_update_are_refused_in_the_preview(self):
+		left = make_student("Male").name
+		stay = allot(left, self.other_bed, from_date=add_days(nowdate(), -30))
+		stay.reload()
+		stay.vacate_allotment(add_days(nowdate(), -1), "End of term")
+		resident = make_student("Male").name
+		allot(resident, self.other_bed_2)
+
+		rows = [
+			student_row(register_number=left, first_name="Changed"),
+			student_row(
+				register_number=resident, first_name="Changed", hostel=self.hostel.name, room_number="S1"
+			),
+		]
+		summary, preview, doc = self.import_as_office(rows)
+		self.assertEqual(summary["errors"], 2)
+		messages = {row["register_number"]: " ".join(row["errors"]) for row in preview["rows"]}
+		self.assertIn("last lived in another hostel", messages[left])
+		self.assertIn("do not look after", messages[resident])
+
+		self.assertEqual(doc.status, "Failed")
+		self.assertEqual(frappe.db.get_value("Hostel Student", left, "first_name"), "Test")
+		self.assertEqual(frappe.db.get_value("Hostel Student", resident, "current_hostel"), self.other)

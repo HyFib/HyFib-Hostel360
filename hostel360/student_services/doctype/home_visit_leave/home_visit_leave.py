@@ -114,13 +114,17 @@ class HomeVisitLeave(Document):
 		if in_migration():
 			return
 		assert_unchanged(
-			self, IDENTITY_FIELDS, _("{0} cannot be changed. Cancel this leave and apply again if they are wrong.")
+			self,
+			IDENTITY_FIELDS,
+			_("{0} cannot be changed. Cancel this leave and apply again if they are wrong."),
 		)
 		if not self.flags.leave_transition:
 			assert_unchanged(
 				self,
 				WORKFLOW_FIELDS,
-				_("{0} can only be changed with the Approve, Reject, Checked Out, Returned and Cancel Leave actions."),
+				_(
+					"{0} can only be changed with the Approve, Reject, Checked Out, Returned and Cancel Leave actions."
+				),
 			)
 
 	def validate_dates_locked(self):
@@ -132,9 +136,9 @@ class HomeVisitLeave(Document):
 		for fieldname in ("from_datetime", "to_datetime"):
 			if self.has_value_changed(fieldname):
 				frappe.throw(
-					_("Leave dates cannot be changed once the leave is {0}. Cancel it and apply again.").format(
-						_(before.status)
-					)
+					_(
+						"Leave dates cannot be changed once the leave is {0}. Cancel it and apply again."
+					).format(_(before.status))
 				)
 
 	def validate_not_backdated(self):
@@ -178,14 +182,18 @@ class HomeVisitLeave(Document):
 		if self.applied_by == "Parent":
 			if not self.parent_guardian or self.parent_guardian not in approver_guardians:
 				frappe.throw(
-					_("Only a parent or guardian linked to the student and allowed to approve leave can apply."),
+					_(
+						"Only a parent or guardian linked to the student and allowed to approve leave can apply."
+					),
 					frappe.PermissionError,
 				)
 			# A leave applied by the parent carries the parent's consent.
 			self.parent_approval_status = "Approved"
 			self.parent_action_on = now_datetime()
 			self.status = "Pending Warden Approval"
-		elif self.applied_by == "Student" and frappe.utils.cint(get_setting("leave_requires_parent_approval")):
+		elif self.applied_by == "Student" and frappe.utils.cint(
+			get_setting("leave_requires_parent_approval")
+		):
 			if not approver_guardians:
 				frappe.throw(
 					_(
@@ -229,7 +237,9 @@ class HomeVisitLeave(Document):
 
 	def apply_parent_decision(self, guardian: str, approve: bool, remarks: str | None = None):
 		if self.status != "Pending Parent Approval":
-			frappe.throw(_("This leave is not waiting for a parent's approval (it is {0}).").format(_(self.status)))
+			frappe.throw(
+				_("This leave is not waiting for a parent's approval (it is {0}).").format(_(self.status))
+			)
 		if guardian not in self.get_approver_guardians():
 			frappe.throw(_("You are not allowed to approve leave for this student."), frappe.PermissionError)
 		if not approve and not (remarks or "").strip():
@@ -278,15 +288,17 @@ class HomeVisitLeave(Document):
 		if days < max(minimum, 1):
 			self.add_comment(
 				"Info",
-				_("Mess reduction was not applied: {0} mess day(s) away is less than the minimum of {1}.").format(
-					days, minimum
-				),
+				_(
+					"Mess reduction was not applied: {0} mess day(s) away is less than the minimum of {1}."
+				).format(days, minimum),
 			)
 			return
 		try:
 			from hostel360.hostel_mess.services import apply_mess_reduction
 		except ImportError:
-			frappe.log_error(title="Hostel360: mess reduction service unavailable", reference_doctype=self.doctype)
+			frappe.log_error(
+				title="Hostel360: mess reduction service unavailable", reference_doctype=self.doctype
+			)
 			return
 
 		frappe.db.savepoint("leave_mess_reduction")
@@ -311,7 +323,11 @@ class HomeVisitLeave(Document):
 
 	def cancel_by(self, user: str):
 		if self.status not in CANCELLABLE_STATUSES:
-			frappe.throw(_("Only leaves that have not started can be cancelled (this one is {0}).").format(_(self.status)))
+			frappe.throw(
+				_("Only leaves that have not started can be cancelled (this one is {0}).").format(
+					_(self.status)
+				)
+			)
 		self.status = "Cancelled"
 		self.cancelled_by = user
 		self.save_status()
@@ -333,7 +349,9 @@ class HomeVisitLeave(Document):
 			from hostel360.hostel_mess.services import cancel_mess_reduction
 		except ImportError:
 			return
-		reduction = frappe.db.get_value(REDUCTION, self.mess_reduction, ["status", "home_visit_leave"], as_dict=True)
+		reduction = frappe.db.get_value(
+			REDUCTION, self.mess_reduction, ["status", "home_visit_leave"], as_dict=True
+		)
 		if not reduction or reduction.status not in REDUCTION_OPEN_STATUSES:
 			return
 		withdrawn_by = "Administrator" if reduction.home_visit_leave == self.name else user
@@ -347,11 +365,15 @@ class HomeVisitLeave(Document):
 			reason = str(e)
 			self.add_comment(
 				"Info",
-				_("Mess reduction {0} could not be cancelled automatically: {1}").format(self.mess_reduction, reason),
+				_("Mess reduction {0} could not be cancelled automatically: {1}").format(
+					self.mess_reduction, reason
+				),
 			)
 			self.alert_reduction_handlers(reason)
 			return
-		self.add_comment("Info", _("Mess reduction {0} was cancelled with the leave.").format(self.mess_reduction))
+		self.add_comment(
+			"Info", _("Mess reduction {0} was cancelled with the leave.").format(self.mess_reduction)
+		)
 
 	def alert_reduction_handlers(self, reason: str):
 		"""Desk notification to the people who decide mess reductions for this student and to
@@ -392,7 +414,9 @@ class HomeVisitLeave(Document):
 
 	def record_check_out(self, user: str, checked_out_on=None):
 		if self.status != "Approved":
-			frappe.throw(_("Only approved leaves can be checked out (this one is {0}).").format(_(self.status)))
+			frappe.throw(
+				_("Only approved leaves can be checked out (this one is {0}).").format(_(self.status))
+			)
 		at = movement_time(checked_out_on)
 		opens_at = check_out_opens_at(self.from_datetime)
 		if at < opens_at:
@@ -472,7 +496,9 @@ class HomeVisitLeave(Document):
 			and scope_covers_record(get_staff_scope(user), self.hostel, self.student)
 		):
 			return True
-		frappe.throw(_("You are not permitted to record check-out or return for this leave."), frappe.PermissionError)
+		frappe.throw(
+			_("You are not permitted to record check-out or return for this leave."), frappe.PermissionError
+		)
 
 	def record_movement(self, action: str, at: str | None = None):
 		"""Check-out or return started by the signed-in user, on the stored leave."""

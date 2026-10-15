@@ -36,7 +36,6 @@ from hostel360.setup.roles import (
 	WARDEN_ROLE,
 )
 
-
 # The hooks hostel360/hooks.py registers for these DocTypes, wired here so the tests run
 # the functions through Frappe's own list and record permission checks.
 PERMISSION_HOOKS = {
@@ -234,7 +233,7 @@ class TestStaffScope(IntegrationTestCase):
 			condition = permissions.student_query_conditions(user) or "1=1"
 			return set(
 				frappe.db.sql_list(
-					f"select name from `tabHostel Student` where name in %(names)s and {condition}",
+					f"select name from `tabHostel Student` where name in %(names)s and {condition}",  # noqa: S608 - condition comes from the permission hook under test
 					{"names": names},
 				)
 			)
@@ -258,7 +257,7 @@ class TestStaffScope(IntegrationTestCase):
 		self.assertEqual(
 			set(
 				frappe.db.sql_list(
-					f"select name from `tabRoom Allotment` where name in %(names)s and {condition}",
+					f"select name from `tabRoom Allotment` where name in %(names)s and {condition}",  # noqa: S608 - condition comes from the permission hook under test
 					{"names": allotments},
 				)
 			),
@@ -342,7 +341,7 @@ class TestHostelDeskScoping(IntegrationTestCase):
 		condition = permissions.guardian_query_conditions(self.deputy)
 		visible = set(
 			frappe.db.sql_list(
-				f"select name from `tabHostel Guardian` where name in %(names)s and {condition}",
+				f"select name from `tabHostel Guardian` where name in %(names)s and {condition}",  # noqa: S608 - condition comes from the permission hook under test
 				{"names": (own, foreign, shared, unlinked)},
 			)
 		)

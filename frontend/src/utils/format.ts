@@ -178,7 +178,11 @@ export function messDaysAway(
 	const start = parseDate(from);
 	const end = parseDate(to);
 	if (!start || !end || end.getTime() <= start.getTime()) return 0;
-	const first = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate() + (start.getHours() >= cutoffHour ? 1 : 0));
+	const first = Date.UTC(
+		start.getFullYear(),
+		start.getMonth(),
+		start.getDate() + (start.getHours() >= cutoffHour ? 1 : 0),
+	);
 	const last = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate() - (end.getHours() < cutoffHour ? 1 : 0));
 	const days = Math.round((last - first) / 86_400_000) + 1;
 	return days > 0 ? days : 0;
@@ -199,7 +203,9 @@ export function greetingKey(now = new Date()): "morning" | "afternoon" | "evenin
 
 /** Indian mobile number shown as "98765 43210". */
 export function formatMobile(value: string | null | undefined): string {
-	const digits = String(value || "").replace(/\D/g, "").slice(-10);
+	const digits = String(value || "")
+		.replace(/\D/g, "")
+		.slice(-10);
 	return digits.length === 10 ? `${digits.slice(0, 5)} ${digits.slice(5)}` : String(value || "");
 }
 
@@ -217,4 +223,3 @@ export function formatBytes(bytes: number): string {
 	if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
-

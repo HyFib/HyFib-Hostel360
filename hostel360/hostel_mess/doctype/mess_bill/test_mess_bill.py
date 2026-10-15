@@ -1,6 +1,8 @@
 # Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 # For license information, please see license.txt
 
+import re
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
@@ -17,3 +19,15 @@ class TestMessBill(IntegrationTestCase):
 			)
 			bill.flags.ignore_links = True
 			bill.insert(ignore_permissions=True)
+
+	def test_print_formats_fall_back_to_a_tamil_font(self):
+		# Student and item names may be in Tamil; without a Tamil face in the stack wkhtmltopdf
+		# drops those glyphs. The Latin face comes first so English text and figures keep it.
+		for print_format in ("Mess Bill", "Mess Bill Run Summary"):
+			css = frappe.db.get_value("Print Format", print_format, "css") or ""
+			match = re.search(r"\.h360-mess-bill\s*\{[^}]*font-family:\s*([^;]+);", css)
+			self.assertTrue(match, print_format)
+			families = [family.strip().strip('"') for family in match.group(1).split(",")]
+			self.assertLess(families.index("Inter"), families.index("Noto Sans Tamil"), print_format)
+			self.assertIn("Lohit Tamil", families, print_format)
+			self.assertEqual(families[-1], "sans-serif", print_format)

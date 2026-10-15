@@ -39,7 +39,7 @@ async function submit() {
 	overallError.value = "";
 	if (!ratings.overall) {
 		overallError.value = t("feedback.overallRequired");
-		document.querySelector<HTMLInputElement>('fieldset[data-overall] input')?.focus();
+		document.querySelector<HTMLInputElement>("fieldset[data-overall] input")?.focus();
 		return;
 	}
 	const answers: Partial<Record<Question, number>> = {};
@@ -86,8 +86,18 @@ function again() {
 				</select>
 			</FormField>
 
-			<StarRating v-for="question in questions" :key="question" v-model="ratings[question]" :label="t(`feedback.questions.${question}`)" />
-			<StarRating v-model="ratings.overall" :label="t('feedback.questions.overall')" :error="overallError" data-overall />
+			<StarRating
+				v-for="question in questions"
+				:key="question"
+				v-model="ratings[question]"
+				:label="t(`feedback.questions.${question}`)"
+			/>
+			<StarRating
+				v-model="ratings.overall"
+				:label="t('feedback.questions.overall')"
+				:error="overallError"
+				data-overall
+			/>
 
 			<FormField v-slot="{ id, describedBy }" :label="t('feedback.comments')" :hint="t('feedback.commentsHint')">
 				<textarea :id="id" v-model="comments" class="input" rows="4" maxlength="2000" :aria-describedby="describedBy" />
@@ -95,10 +105,16 @@ function again() {
 
 			<ToggleSwitch v-model="anonymous" :label="t('feedback.anonymous')" :hint="t('feedback.anonymousHint')" />
 
-			<p v-if="error" class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+			<p
+				v-if="error"
+				class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+				role="alert"
+			>
 				<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 			</p>
-			<button type="submit" class="btn-primary btn-block" :disabled="busy">{{ busy ? t("common.submitting") : t("feedback.submit") }}</button>
+			<button type="submit" class="btn-primary btn-block" :disabled="busy">
+				{{ busy ? t("common.submitting") : t("feedback.submit") }}
+			</button>
 		</form>
 	</div>
 </template>

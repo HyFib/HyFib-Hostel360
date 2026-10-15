@@ -68,8 +68,7 @@ export default defineConfig(({ command, mode }) => {
 					runtimeCaching: [
 						{
 							urlPattern: ({ request, url }) =>
-								request.mode === "navigate" &&
-								(url.pathname === "/hostel" || url.pathname.startsWith("/hostel/")),
+								request.mode === "navigate" && (url.pathname === "/hostel" || url.pathname.startsWith("/hostel/")),
 							handler: "NetworkOnly",
 							options: {
 								precacheFallback: { fallbackURL: `${ASSET_BASE}index.html` },

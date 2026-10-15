@@ -55,15 +55,24 @@ async function submit() {
 	<div>
 		<PageHeader :title="t('certificates.title')" :subtitle="t('certificates.subtitle')">
 			<template #actions>
-				<button type="button" class="btn-primary min-h-10 px-3 text-sm" @click="startRequest">{{ t("certificates.request") }}</button>
+				<button type="button" class="btn-primary min-h-10 px-3 text-sm" @click="startRequest">
+					{{ t("certificates.request") }}
+				</button>
 			</template>
 		</PageHeader>
 
-		<p v-if="hasPending" class="card mb-4 bg-info-soft text-sm text-info" role="status">{{ t("certificates.pendingNote") }}</p>
+		<p v-if="hasPending" class="card mb-4 bg-info-soft text-sm text-info" role="status">
+			{{ t("certificates.pendingNote") }}
+		</p>
 
 		<SkeletonList v-if="certificates.loading.value && !certificates.data.value" />
 		<ErrorState v-else-if="certificates.error.value" :error="certificates.error.value" @retry="certificates.reload" />
-		<EmptyState v-else-if="!list.length" :icon="Award" :title="t('certificates.empty')" :body="t('certificates.emptyHint')">
+		<EmptyState
+			v-else-if="!list.length"
+			:icon="Award"
+			:title="t('certificates.empty')"
+			:body="t('certificates.emptyHint')"
+		>
 			<button type="button" class="btn-primary" @click="startRequest">{{ t("certificates.request") }}</button>
 		</EmptyState>
 
@@ -80,7 +89,9 @@ async function submit() {
 					<div v-if="item.certificate_number">{{ t("certificates.number", { number: item.certificate_number }) }}</div>
 					<div v-if="item.issue_date">{{ t("certificates.issued", { date: formatDate(item.issue_date) }) }}</div>
 					<div v-if="item.valid_till">{{ t("certificates.validTill", { date: formatDate(item.valid_till) }) }}</div>
-					<div v-if="!item.issue_date && item.creation">{{ t("certificates.requestedOn", { date: formatDate(item.creation) }) }}</div>
+					<div v-if="!item.issue_date && item.creation">
+						{{ t("certificates.requestedOn", { date: formatDate(item.creation) }) }}
+					</div>
 				</dl>
 				<p v-if="item.rejection_reason" class="mt-2 rounded-xl bg-danger-soft p-3 text-sm text-danger">
 					<span class="font-semibold">{{ t("certificates.rejectionReason") }}:</span> {{ item.rejection_reason }}
@@ -100,10 +111,24 @@ async function submit() {
 
 		<BaseDialog :open="open" :title="t('certificates.request')" @close="open = false">
 			<form novalidate @submit.prevent="submit">
-				<FormField v-slot="{ id, describedBy, invalid }" :label="t('certificates.purpose')" :error="errors.purpose" required>
-					<select :id="id" v-model="form.purpose" class="input" data-autofocus :aria-describedby="describedBy" :aria-invalid="invalid">
+				<FormField
+					v-slot="{ id, describedBy, invalid }"
+					:label="t('certificates.purpose')"
+					:error="errors.purpose"
+					required
+				>
+					<select
+						:id="id"
+						v-model="form.purpose"
+						class="input"
+						data-autofocus
+						:aria-describedby="describedBy"
+						:aria-invalid="invalid"
+					>
 						<option value="" disabled>{{ t("common.choose") }}</option>
-						<option v-for="purpose in BONAFIDE_PURPOSES" :key="purpose" :value="purpose">{{ tv("purposes", purpose) }}</option>
+						<option v-for="purpose in BONAFIDE_PURPOSES" :key="purpose" :value="purpose">
+							{{ tv("purposes", purpose) }}
+						</option>
 					</select>
 				</FormField>
 				<FormField
@@ -113,14 +138,28 @@ async function submit() {
 					:error="errors.details"
 					:required="form.purpose === 'Other'"
 				>
-					<textarea :id="id" v-model="form.details" class="input min-h-20" rows="3" maxlength="300" :aria-describedby="describedBy" :aria-invalid="invalid" />
+					<textarea
+						:id="id"
+						v-model="form.details"
+						class="input min-h-20"
+						rows="3"
+						maxlength="300"
+						:aria-describedby="describedBy"
+						:aria-invalid="invalid"
+					/>
 				</FormField>
-				<p v-if="error" class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+				<p
+					v-if="error"
+					class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+					role="alert"
+				>
 					<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 				</p>
 				<div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 					<button type="button" class="btn-secondary" @click="open = false">{{ t("common.cancel") }}</button>
-					<button type="submit" class="btn-primary" :disabled="busy">{{ busy ? t("common.submitting") : t("certificates.submit") }}</button>
+					<button type="submit" class="btn-primary" :disabled="busy">
+						{{ busy ? t("common.submitting") : t("certificates.submit") }}
+					</button>
 				</div>
 			</form>
 		</BaseDialog>

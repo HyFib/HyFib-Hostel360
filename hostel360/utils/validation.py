@@ -26,7 +26,9 @@ def normalize_mobile(value: str | None) -> str | None:
 	elif len(digits) == 11 and digits.startswith("0"):
 		digits = digits[1:]
 	if not INDIAN_MOBILE_RE.match(digits):
-		frappe.throw(_("{0} is not a valid 10-digit Indian mobile number.").format(value), frappe.ValidationError)
+		frappe.throw(
+			_("{0} is not a valid 10-digit Indian mobile number.").format(value), frappe.ValidationError
+		)
 	return digits
 
 

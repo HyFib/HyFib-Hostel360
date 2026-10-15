@@ -60,7 +60,7 @@ def get_room_rows(filters) -> list[dict]:
 		left join `tabHostel Floor` floor on floor.name = room.floor
 		where {" and ".join(conditions)}
 		group by room.name
-		""",
+		""",  # noqa: S608 - conditions are fixed strings; values are bound parameters
 		values,
 		as_dict=True,
 	)
@@ -135,7 +135,13 @@ def get_columns(group_by: str) -> list[dict]:
 		columns.append({"label": _("Floor"), "fieldname": "floor_label", "fieldtype": "Data", "width": 120})
 	if depth >= 3:
 		columns += [
-			{"label": _("Room"), "fieldname": "room", "fieldtype": "Link", "options": "Hostel Room", "width": 110},
+			{
+				"label": _("Room"),
+				"fieldname": "room",
+				"fieldtype": "Link",
+				"options": "Hostel Room",
+				"width": 110,
+			},
 			{"label": _("Room Type"), "fieldname": "room_type", "fieldtype": "Data", "width": 110},
 			{"label": _("Room Status"), "fieldname": "room_status", "fieldtype": "Data", "width": 140},
 		]
@@ -162,7 +168,10 @@ def get_chart(data: list[dict], group_by: str) -> dict | None:
 			"datasets": [
 				{"name": _("Occupied"), "values": [row.occupied for row in rows]},
 				{"name": _("Vacant"), "values": [row.vacant for row in rows]},
-				{"name": _("Reserved / Unavailable"), "values": [row.reserved + row.unavailable for row in rows]},
+				{
+					"name": _("Reserved / Unavailable"),
+					"values": [row.reserved + row.unavailable for row in rows],
+				},
 			],
 		},
 		"type": "bar",

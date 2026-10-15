@@ -66,11 +66,29 @@ def get_rows(filters, from_date, to_date):
 
 def get_columns():
 	return [
-		{"fieldname": "name", "label": _("Leave"), "fieldtype": "Link", "options": "Home Visit Leave", "width": 150},
-		{"fieldname": "student", "label": _("Student"), "fieldtype": "Link", "options": "Hostel Student", "width": 120},
+		{
+			"fieldname": "name",
+			"label": _("Leave"),
+			"fieldtype": "Link",
+			"options": "Home Visit Leave",
+			"width": 150,
+		},
+		{
+			"fieldname": "student",
+			"label": _("Student"),
+			"fieldtype": "Link",
+			"options": "Hostel Student",
+			"width": 120,
+		},
 		{"fieldname": "student_name", "label": _("Student Name"), "fieldtype": "Data", "width": 170},
 		{"fieldname": "hostel", "label": _("Hostel"), "fieldtype": "Link", "options": "Hostel", "width": 90},
-		{"fieldname": "room", "label": _("Room"), "fieldtype": "Link", "options": "Hostel Room", "width": 100},
+		{
+			"fieldname": "room",
+			"label": _("Room"),
+			"fieldtype": "Link",
+			"options": "Hostel Room",
+			"width": 100,
+		},
 		{"fieldname": "from_datetime", "label": _("Leaving On"), "fieldtype": "Datetime", "width": 150},
 		{"fieldname": "to_datetime", "label": _("Returning On"), "fieldtype": "Datetime", "width": 150},
 		{"fieldname": "number_of_days", "label": _("Days"), "fieldtype": "Int", "width": 60},
@@ -79,11 +97,23 @@ def get_columns():
 		{"fieldname": "applied_by", "label": _("Applied By"), "fieldtype": "Data", "width": 90},
 		{"fieldname": "parent_approval_status", "label": _("Parent"), "fieldtype": "Data", "width": 100},
 		{"fieldname": "warden_approval_status", "label": _("Warden"), "fieldtype": "Data", "width": 90},
-		{"fieldname": "warden_user", "label": _("Decided By"), "fieldtype": "Link", "options": "User", "width": 150},
+		{
+			"fieldname": "warden_user",
+			"label": _("Decided By"),
+			"fieldtype": "Link",
+			"options": "User",
+			"width": 150,
+		},
 		{"fieldname": "status", "label": _("Status"), "fieldtype": "Data", "width": 140},
 		{"fieldname": "checked_out_on", "label": _("Checked Out"), "fieldtype": "Datetime", "width": 150},
 		{"fieldname": "returned_on", "label": _("Returned"), "fieldtype": "Datetime", "width": 150},
-		{"fieldname": "late_by_hours", "label": _("Late By (Hours)"), "fieldtype": "Float", "precision": 1, "width": 110},
+		{
+			"fieldname": "late_by_hours",
+			"label": _("Late By (Hours)"),
+			"fieldtype": "Float",
+			"precision": 1,
+			"width": 110,
+		},
 		{
 			"fieldname": "mess_reduction",
 			"label": _("Mess Reduction"),
@@ -98,9 +128,16 @@ def get_chart(rows):
 	if not rows:
 		return None
 	counts = Counter(row.status for row in rows)
-	labels = [status for status in (*PENDING_STATUSES, *APPROVED_STATUSES, "Rejected", "Cancelled") if counts.get(status)]
+	labels = [
+		status
+		for status in (*PENDING_STATUSES, *APPROVED_STATUSES, "Rejected", "Cancelled")
+		if counts.get(status)
+	]
 	return {
-		"data": {"labels": [_(s) for s in labels], "datasets": [{"name": _("Leaves"), "values": [counts[s] for s in labels]}]},
+		"data": {
+			"labels": [_(s) for s in labels],
+			"datasets": [{"name": _("Leaves"), "values": [counts[s] for s in labels]}],
+		},
 		"type": "bar",
 		"colors": ["#2490ef"],
 	}
@@ -111,8 +148,18 @@ def get_summary(rows):
 	late = sum(1 for row in rows if row.late_by_hours)
 	return [
 		{"label": _("Leaves"), "value": len(rows), "datatype": "Int", "indicator": "Blue"},
-		{"label": _("Approved"), "value": sum(counts[s] for s in APPROVED_STATUSES), "datatype": "Int", "indicator": "Green"},
-		{"label": _("Pending"), "value": sum(counts[s] for s in PENDING_STATUSES), "datatype": "Int", "indicator": "Orange"},
+		{
+			"label": _("Approved"),
+			"value": sum(counts[s] for s in APPROVED_STATUSES),
+			"datatype": "Int",
+			"indicator": "Green",
+		},
+		{
+			"label": _("Pending"),
+			"value": sum(counts[s] for s in PENDING_STATUSES),
+			"datatype": "Int",
+			"indicator": "Orange",
+		},
 		{"label": _("Rejected"), "value": counts["Rejected"], "datatype": "Int", "indicator": "Red"},
 		{"label": _("Overdue Now"), "value": counts["Overdue"], "datatype": "Int", "indicator": "Red"},
 		{"label": _("Returned Late"), "value": late, "datatype": "Int", "indicator": "Orange"},

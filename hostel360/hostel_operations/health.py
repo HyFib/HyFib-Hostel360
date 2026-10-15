@@ -9,6 +9,7 @@ configured dead-man switch URL is called. If the server, the scheduler or the al
 path itself dies, those calls stop and the external monitor raises the alarm.
 """
 
+import contextlib
 import shutil
 import socket
 import ssl
@@ -29,7 +30,13 @@ from hostel360.hostel_operations.constants import (
 	SETTINGS_DOCTYPE,
 	WARNING,
 )
-from hostel360.hostel_operations.settings import get_levels, get_settings, parse_emails, parse_mobiles, threshold
+from hostel360.hostel_operations.settings import (
+	get_levels,
+	get_settings,
+	parse_emails,
+	parse_mobiles,
+	threshold,
+)
 
 OK = "ok"
 WARN = "warning"
@@ -129,7 +136,13 @@ def _ping(label, key, connect, metric) -> CheckResult:
 		)
 	elapsed = (time.perf_counter() - started) * 1000
 	return CheckResult(
-		key, label, "Availability", OK, f"Responded in {elapsed:.0f} ms.", metrics=[(metric, elapsed, "ms")], core=True
+		key,
+		label,
+		"Availability",
+		OK,
+		f"Responded in {elapsed:.0f} ms.",
+		metrics=[(metric, elapsed, "ms")],
+		core=True,
 	)
 
 
@@ -170,7 +183,9 @@ def check_job_queues(ctx) -> list[CheckResult]:
 		f"{backlog} jobs waiting, {workers} workers running."
 		if workers
 		else f"No background workers are running; {backlog} jobs waiting.",
-		title="Background jobs are not being processed" if workers == 0 else "Background job backlog is growing",
+		title="Background jobs are not being processed"
+		if workers == 0
+		else "Background job backlog is growing",
 		metrics=[("queue_backlog", backlog, "jobs"), ("rq_workers", workers, "workers")],
 		details={"queues": per_queue, "workers": workers},
 		core=True,
@@ -309,7 +324,9 @@ def check_payments(ctx) -> list[CheckResult]:
 	stale = frappe.db.count(
 		doctype, {"status": "Pending", "creation": ("<", add_to_date(ctx.now, minutes=-minutes))}
 	)
-	failures = frappe.db.count(doctype, {"status": "Failed", "modified": (">=", add_to_date(ctx.now, hours=-1))})
+	failures = frappe.db.count(
+		doctype, {"status": "Failed", "modified": (">=", add_to_date(ctx.now, hours=-1))}
+	)
 	failure_limit = threshold(ctx.settings, "payment_failure_threshold")
 	return [
 		CheckResult(
@@ -467,14 +484,17 @@ def check_tls(ctx) -> CheckResult | None:
 		cached = None
 	if cached is None:
 		cached = _inspect_certificate(host, port)
-		try:
+		# Caching only saves a TLS handshake on the next run; the check works without it.
+		with contextlib.suppress(Exception):
 			frappe.cache.set_value(cache_key, cached, expires_in_sec=TLS_CACHE_SECONDS)
-		except Exception:
-			pass
 
 	warning_days = threshold(ctx.settings, "ssl_expiry_warning_days")
 	result = CheckResult(
-		"security.tls.expiry", "TLS certificate", "Security", UNKNOWN, title=f"TLS certificate problem for {host}"
+		"security.tls.expiry",
+		"TLS certificate",
+		"Security",
+		UNKNOWN,
+		title=f"TLS certificate problem for {host}",
 	)
 	if cached.get("error"):
 		result.message = f"Could not reach {host}:{port} to inspect the certificate ({cached['error']})."
@@ -543,13 +563,17 @@ def check_agents(ctx) -> list[CheckResult]:
 def check_escalation_contacts(ctx) -> CheckResult:
 	"""Every level of the escalation matrix must be able to reach someone."""
 	levels = get_levels(ctx.settings)
-	missing = [row for row in levels if not parse_emails(row.notify_emails) and not parse_mobiles(row.notify_mobiles)]
+	missing = [
+		row for row in levels if not parse_emails(row.notify_emails) and not parse_mobiles(row.notify_mobiles)
+	]
 	if not levels:
 		message = "The escalation matrix in Ops Alert Settings is empty: alerts reach only the channel list."
 	elif missing:
-		message = "No e-mail address or mobile number for escalation " + ", ".join(
-			f"level {cint(row.level)} ({row.label or '-'})" for row in missing
-		) + ": alerts that reach it are not delivered to anyone at that level."
+		message = (
+			"No e-mail address or mobile number for escalation "
+			+ ", ".join(f"level {cint(row.level)} ({row.label or '-'})" for row in missing)
+			+ ": alerts that reach it are not delivered to anyone at that level."
+		)
 	else:
 		message = f"All {len(levels)} escalation levels have contacts."
 	return CheckResult(
@@ -575,11 +599,17 @@ def check_monthly_report(ctx) -> CheckResult | None:
 	status = reports.delivery_status(ctx.now)
 	if not status["applicable"]:
 		return None
-	if not status["sent_on"] and not ctx.read_only and _once_per(REPORT_CATCH_UP_KEY, REPORT_CATCH_UP_SECONDS):
+	if (
+		not status["sent_on"]
+		and not ctx.read_only
+		and _once_per(REPORT_CATCH_UP_KEY, REPORT_CATCH_UP_SECONDS)
+	):
 		try:
 			reports.catch_up_monthly_report(ctx.now)
 		except Exception:
-			frappe.log_error(title="Hostel360: monthly report catch-up failed", message=frappe.get_traceback())
+			frappe.log_error(
+				title="Hostel360: monthly report catch-up failed", message=frappe.get_traceback()
+			)
 		status = reports.delivery_status(ctx.now)
 
 	month = status["month"]
@@ -641,7 +671,11 @@ def check_security_incidents(ctx) -> list[CheckResult]:
 			message = f"{incident.name} ({incident.title}) was due to be reported to {' and '.join(pending)} by {due}."
 			if not ctx.read_only and not incident.reporting_sla_breached:
 				frappe.db.set_value(
-					SECURITY_INCIDENT_DOCTYPE, incident.name, "reporting_sla_breached", 1, update_modified=False
+					SECURITY_INCIDENT_DOCTYPE,
+					incident.name,
+					"reporting_sla_breached",
+					1,
+					update_modified=False,
 				)
 		elif hours >= CERT_IN_WARNING_HOURS:
 			status = WARN
@@ -688,14 +722,20 @@ CHECKS = (
 
 
 def run_checks(settings=None, now=None, read_only: bool = False) -> list[CheckResult]:
-	ctx = frappe._dict(settings=settings or get_settings(), now=get_datetime(now) if now else now_datetime(), read_only=read_only)
+	ctx = frappe._dict(
+		settings=settings or get_settings(),
+		now=get_datetime(now) if now else now_datetime(),
+		read_only=read_only,
+	)
 	results = []
 	for check in CHECKS:
 		try:
 			outcome = check(ctx)
 		except Exception:
 			if not read_only:
-				frappe.log_error(title=f"Hostel360: health check {check.__name__} failed", message=frappe.get_traceback())
+				frappe.log_error(
+					title=f"Hostel360: health check {check.__name__} failed", message=frappe.get_traceback()
+				)
 			outcome = CheckResult(
 				f"health.check.{check.__name__}",
 				check.__name__.removeprefix("check_").replace("_", " ").capitalize(),
@@ -732,7 +772,9 @@ def _run_and_apply(now=None) -> dict:
 		for result in results
 		for metric, value, unit in result.metrics
 	]
-	samples.append({"metric": "app_ready", "value": 1 if _ready(results) else 0, "unit": "", "recorded_at": now})
+	samples.append(
+		{"metric": "app_ready", "value": 1 if _ready(results) else 0, "unit": "", "recorded_at": now}
+	)
 	try:
 		record_metrics(samples, source="Health Check", host=socket.gethostname())
 		_commit()
@@ -779,8 +821,13 @@ def send_heartbeat(settings, now) -> bool | None:
 	url = (settings.get("heartbeat_url") or "").strip()
 	if not url:
 		return None
-	if not (url.startswith("https://") or (settings.get("environment") == "Development" and url.startswith("http://"))):
-		frappe.log_error(title="Hostel360: heartbeat URL must use https", message="Update Ops Alert Settings.")
+	if not (
+		url.startswith("https://")
+		or (settings.get("environment") == "Development" and url.startswith("http://"))
+	):
+		frappe.log_error(
+			title="Hostel360: heartbeat URL must use https", message="Update Ops Alert Settings."
+		)
 		return False
 	try:
 		response = requests.get(
@@ -816,10 +863,9 @@ def _acquire_lock() -> bool:
 
 
 def _release_lock() -> None:
-	try:
+	# The lock expires on its own after RUN_LOCK_SECONDS if the cache cannot be reached.
+	with contextlib.suppress(Exception):
 		frappe.cache.delete(frappe.cache.make_key(RUN_LOCK_KEY))
-	except Exception:
-		pass
 
 
 def _commit() -> None:

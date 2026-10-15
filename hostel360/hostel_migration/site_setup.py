@@ -83,7 +83,9 @@ def complete_setup_wizard() -> None:
 		frappe.log_error(title="Hostel360 site setup: standard fixtures were not installed")
 
 
-def update_hostel_settings(institution_name: str, short_name: str, portal_url: str, office_email: str | None) -> None:
+def update_hostel_settings(
+	institution_name: str, short_name: str, portal_url: str, office_email: str | None
+) -> None:
 	settings = frappe.get_single("Hostel Settings")
 	settings.institution_name = institution_name
 	settings.institution_short_name = short_name
@@ -108,7 +110,9 @@ def ensure_admin_user(
 		user = frappe.get_doc("User", email)
 		if user.user_type != "System User":
 			raise SiteSetupError(
-				_("{0} is a portal account; choose another e-mail address for the administrator.").format(email)
+				_("{0} is a portal account; choose another e-mail address for the administrator.").format(
+					email
+				)
 			)
 		user.enabled = 1
 		user.add_roles(*[role for role in roles if role not in {r.role for r in user.roles}])
@@ -166,7 +170,9 @@ def setup_site(
 	if office_email and not validate_email_address(office_email):
 		raise SiteSetupError(_("{0} is not a valid e-mail address.").format(office_email))
 
-	first_name, _sep, last_name = (" ".join((admin_name or "").split()) or "Hostel Administrator").partition(" ")
+	first_name, _sep, last_name = (" ".join((admin_name or "").split()) or "Hostel Administrator").partition(
+		" "
+	)
 
 	previous_mute = frappe.flags.mute_emails
 	frappe.flags.mute_emails = True
@@ -174,7 +180,9 @@ def setup_site(
 		complete_setup_wizard()
 		after_install()
 		update_hostel_settings(institution_name, short_name, portal_url, office_email)
-		user, password = ensure_admin_user(admin_email, first_name, last_name or None, system_manager, reset_password)
+		user, password = ensure_admin_user(
+			admin_email, first_name, last_name or None, system_manager, reset_password
+		)
 		frappe.db.commit()  # nosemgrep
 	finally:
 		frappe.flags.mute_emails = previous_mute

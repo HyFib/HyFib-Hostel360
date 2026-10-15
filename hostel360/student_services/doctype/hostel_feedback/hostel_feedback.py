@@ -35,7 +35,9 @@ class HostelFeedback(Document):
 		if self.is_new():
 			student = self.set_student_details()
 		elif not in_migration():
-			assert_unchanged(self, DERIVED_FIELDS, _("{0} cannot be changed on feedback that has been given."))
+			assert_unchanged(
+				self, DERIVED_FIELDS, _("{0} cannot be changed on feedback that has been given.")
+			)
 		# Before any check whose message would describe another hostel's records.
 		recheck_scope(self)
 		if self.is_new():
@@ -45,7 +47,9 @@ class HostelFeedback(Document):
 
 	def validate_period(self):
 		if not PERIOD_RE.match(self.period):
-			frappe.throw(_("Period must be a month written as YYYY-MM, for example {0}.").format(current_period()))
+			frappe.throw(
+				_("Period must be a month written as YYYY-MM, for example {0}.").format(current_period())
+			)
 		if not in_migration() and self.period > current_period():
 			frappe.throw(_("Feedback cannot be given for a future month."))
 
@@ -53,7 +57,9 @@ class HostelFeedback(Document):
 		for fieldname in RATING_FIELDS:
 			value = flt(self.get(fieldname))
 			if value < 0 or value > 1:
-				frappe.throw(_("{0} must be between 1 and 5 stars.").format(_(self.meta.get_label(fieldname))))
+				frappe.throw(
+					_("{0} must be between 1 and 5 stars.").format(_(self.meta.get_label(fieldname)))
+				)
 		if not flt(self.overall):
 			frappe.throw(_("Please give an overall rating."))
 
@@ -76,10 +82,11 @@ class HostelFeedback(Document):
 	def validate_not_duplicate(self):
 		if frappe.db.exists("Hostel Feedback", {"submission_key": self.submission_key}):
 			frappe.throw(
-				_("Feedback on {0} for {1} has already been submitted.").format(_(self.feedback_type), self.period),
+				_("Feedback on {0} for {1} has already been submitted.").format(
+					_(self.feedback_type), self.period
+				),
 				frappe.DuplicateEntryError,
 			)
-
 
 	def forget_submitter(self):
 		"""Keep the student's login out of the record and out of what other sessions are told.
@@ -105,5 +112,7 @@ def submission_key(student: str, feedback_type: str, period: str) -> str:
 
 def has_submitted(student: str, feedback_type: str, period: str) -> bool:
 	return bool(
-		frappe.db.exists("Hostel Feedback", {"submission_key": submission_key(student, feedback_type, period)})
+		frappe.db.exists(
+			"Hostel Feedback", {"submission_key": submission_key(student, feedback_type, period)}
+		)
 	)

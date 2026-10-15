@@ -30,7 +30,10 @@ defineProps<{ steps: TimelineStep[]; label: string }>();
 				<Circle v-else-if="step.state === 'current'" :size="8" class="fill-current" />
 			</span>
 			<div class="min-w-0 pb-1">
-				<p class="text-sm font-semibold" :class="step.state === 'upcoming' || step.state === 'skipped' ? 'text-muted' : 'text-ink'">
+				<p
+					class="text-sm font-semibold"
+					:class="step.state === 'upcoming' || step.state === 'skipped' ? 'text-muted' : 'text-ink'"
+				>
 					{{ step.label }}
 				</p>
 				<p v-if="step.detail" class="text-sm text-muted">{{ step.detail }}</p>

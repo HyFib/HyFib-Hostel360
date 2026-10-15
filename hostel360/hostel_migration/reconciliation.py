@@ -191,7 +191,16 @@ def render_markdown(reconciliation: dict, failures: list[dict]) -> str:
 		"",
 	]
 	lines += _md_table(
-		[_("Entity"), _("DocType"), _("Source rows"), _("Excluded"), _("Expected"), _("In Hostel360"), _("Failed"), _("Matched")],
+		[
+			_("Entity"),
+			_("DocType"),
+			_("Source rows"),
+			_("Excluded"),
+			_("Expected"),
+			_("In Hostel360"),
+			_("Failed"),
+			_("Matched"),
+		],
 		[
 			[
 				e["entity"],
@@ -301,7 +310,20 @@ def build_xlsx(reconciliation: dict, failures: list[dict]) -> bytes:
 
 	sheet(
 		_("Counts"),
-		[_("Entity"), _("DocType"), _("Source File"), _("Source Rows"), _("Excluded"), _("Expected"), _("In Hostel360"), _("Created"), _("Updated"), _("Unchanged"), _("Failed"), _("Matched")],
+		[
+			_("Entity"),
+			_("DocType"),
+			_("Source File"),
+			_("Source Rows"),
+			_("Excluded"),
+			_("Expected"),
+			_("In Hostel360"),
+			_("Created"),
+			_("Updated"),
+			_("Unchanged"),
+			_("Failed"),
+			_("Matched"),
+		],
 		[
 			[
 				e["entity"],
@@ -323,7 +345,17 @@ def build_xlsx(reconciliation: dict, failures: list[dict]) -> bytes:
 	)
 	sheet(
 		_("Money"),
-		[_("Entity"), _("Total"), _("Source Column"), _("Target Field"), _("Legacy (INR)"), _("Hostel360 (INR)"), _("Difference"), _("Unparsed Values"), _("Matched")],
+		[
+			_("Entity"),
+			_("Total"),
+			_("Source Column"),
+			_("Target Field"),
+			_("Legacy (INR)"),
+			_("Hostel360 (INR)"),
+			_("Difference"),
+			_("Unparsed Values"),
+			_("Matched"),
+		],
 		[
 			[
 				t["entity"],
@@ -342,7 +374,17 @@ def build_xlsx(reconciliation: dict, failures: list[dict]) -> bytes:
 	)
 	sheet(
 		_("Attachments"),
-		[_("Entity"), _("Legacy ID"), _("Record"), _("Field"), _("Source File"), _("Source SHA-256"), _("Stored File"), _("Stored SHA-256"), _("Status")],
+		[
+			_("Entity"),
+			_("Legacy ID"),
+			_("Record"),
+			_("Field"),
+			_("Source File"),
+			_("Source SHA-256"),
+			_("Stored File"),
+			_("Stored SHA-256"),
+			_("Status"),
+		],
 		[
 			[
 				a["entity"],
@@ -396,7 +438,9 @@ def attach_reports(run, reconciliation: dict, failures: list[dict]) -> None:
 		"report_json": _save_file(
 			run, f"{base}.json", json.dumps(full, indent=1, default=str, ensure_ascii=False).encode("utf-8")
 		),
-		"report_markdown": _save_file(run, f"{base}.md", render_markdown(reconciliation, failures).encode("utf-8")),
+		"report_markdown": _save_file(
+			run, f"{base}.md", render_markdown(reconciliation, failures).encode("utf-8")
+		),
 		"report_file": _save_file(run, f"{base}.xlsx", build_xlsx(reconciliation, failures)),
 	}
 	run.db_set(urls, update_modified=False)

@@ -69,7 +69,9 @@ def validate(ticket) -> None:
 		_track_status_change(ticket, old_status, now)
 
 	if ticket.status in CLOSED_STATUSES and not strip_html(ticket.resolution_details or "").strip():
-		frappe.throw(_("Please describe the resolution before marking the ticket {0}.").format(_(ticket.status)))
+		frappe.throw(
+			_("Please describe the resolution before marking the ticket {0}.").format(_(ticket.status))
+		)
 
 
 def _track_status_change(ticket, old_status, now) -> None:
@@ -132,7 +134,9 @@ def _sync_alert(ticket, old_status) -> None:
 	if ticket.status in CLOSED_STATUSES:
 		alerts.resolve_alert(
 			key,
-			notes=_("Ticket {0}: {1}").format(_(ticket.status), strip_html(ticket.resolution_details or "")[:500]),
+			notes=_("Ticket {0}: {1}").format(
+				_(ticket.status), strip_html(ticket.resolution_details or "")[:500]
+			),
 			source="Support",
 		)
 		return
@@ -179,7 +183,9 @@ def _notify_raiser(ticket, old_status) -> None:
 			reference_name=ticket.name,
 		)
 	except Exception:
-		frappe.log_error(title="Hostel360: support ticket update notification failed", message=frappe.get_traceback())
+		frappe.log_error(
+			title="Hostel360: support ticket update notification failed", message=frappe.get_traceback()
+		)
 
 
 def _alert_description(ticket) -> str:
@@ -189,7 +195,8 @@ def _alert_description(ticket) -> str:
 	lines = [
 		_("Priority: {0}. Category: {1}.").format(_(ticket.priority), _(ticket.category)),
 		_("Raised by {0}{1}.").format(
-			ticket.raised_by_name or ticket.raised_by, f" ({ticket.contact_phone})" if ticket.contact_phone else ""
+			ticket.raised_by_name or ticket.raised_by,
+			f" ({ticket.contact_phone})" if ticket.contact_phone else "",
 		),
 		_("First response due by {0}; resolution due by {1}.").format(
 			_fmt(ticket.response_due_by),
@@ -225,7 +232,9 @@ def reopen_ticket(ticket, reason: str, user: str | None = None) -> None:
 		frappe.throw(_("Please say why the ticket is being re-opened."))
 	if ticket.resolved_on and (now_datetime() - get_datetime(ticket.resolved_on)).days > REOPEN_DAYS:
 		frappe.throw(
-			_("This ticket was resolved more than {0} days ago. Please raise a new ticket.").format(REOPEN_DAYS)
+			_("This ticket was resolved more than {0} days ago. Please raise a new ticket.").format(
+				REOPEN_DAYS
+			)
 		)
 	ticket.status = STATUS_OPEN
 	ticket.resolution_due_by = add_to_date(
@@ -246,13 +255,20 @@ def on_comment(doc, method=None) -> None:
 	if not is_operations_user(doc.owner):
 		return
 	ticket = frappe.db.get_value(
-		TICKET_DOCTYPE, doc.reference_name, ["name", "first_response_on", "raised_by", "subject", "status"], as_dict=True
+		TICKET_DOCTYPE,
+		doc.reference_name,
+		["name", "first_response_on", "raised_by", "subject", "status"],
+		as_dict=True,
 	)
 	if not ticket:
 		return
 	if not ticket.first_response_on:
 		frappe.db.set_value(
-			TICKET_DOCTYPE, ticket.name, "first_response_on", get_datetime(doc.creation), update_modified=False
+			TICKET_DOCTYPE,
+			ticket.name,
+			"first_response_on",
+			get_datetime(doc.creation),
+			update_modified=False,
 		)
 	if ticket.raised_by and ticket.raised_by != doc.owner:
 		try:
@@ -273,7 +289,9 @@ def on_comment(doc, method=None) -> None:
 		except ImportError:
 			pass
 		except Exception:
-			frappe.log_error(title="Hostel360: support ticket comment notification failed", message=frappe.get_traceback())
+			frappe.log_error(
+				title="Hostel360: support ticket comment notification failed", message=frappe.get_traceback()
+			)
 
 
 def _backfill_first_responses(names: list[str]) -> None:
@@ -285,7 +303,11 @@ def _backfill_first_responses(names: list[str]) -> None:
 		return
 	comments = frappe.get_all(
 		"Comment",
-		filters={"reference_doctype": TICKET_DOCTYPE, "reference_name": ("in", names), "comment_type": "Comment"},
+		filters={
+			"reference_doctype": TICKET_DOCTYPE,
+			"reference_name": ("in", names),
+			"comment_type": "Comment",
+		},
 		fields=["reference_name", "owner", "creation"],
 		order_by="creation asc",
 	)
@@ -294,7 +316,11 @@ def _backfill_first_responses(names: list[str]) -> None:
 		if comment.reference_name in done or not is_operations_user(comment.owner):
 			continue
 		frappe.db.set_value(
-			TICKET_DOCTYPE, comment.reference_name, "first_response_on", comment.creation, update_modified=False
+			TICKET_DOCTYPE,
+			comment.reference_name,
+			"first_response_on",
+			comment.creation,
+			update_modified=False,
 		)
 		done.add(comment.reference_name)
 
@@ -360,7 +386,9 @@ def check_ticket_slas(now=None) -> dict:
 				frappe.db.set_value(TICKET_DOCTYPE, ticket.name, values, update_modified=False)
 
 			if breaches:
-				description = _("SLA breached for support ticket {0}: {1}.").format(ticket.name, "; ".join(breaches))
+				description = _("SLA breached for support ticket {0}: {1}.").format(
+					ticket.name, "; ".join(breaches)
+				)
 				notified_before = frappe.db.get_value(
 					"Ops Alert", {"open_key": alert_key(ticket.name)}, "last_notified_on"
 				)

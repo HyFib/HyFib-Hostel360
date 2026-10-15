@@ -41,7 +41,9 @@ class TestOpsAlert(IntegrationTestCase):
 
 	def raise_test_alert(self, severity="Warning", key=None, **kwargs):
 		key = key or unique_key()
-		name = alerts.raise_alert(key, f"Test alert {key}", severity, kwargs.pop("category", "Other"), **kwargs)
+		name = alerts.raise_alert(
+			key, f"Test alert {key}", severity, kwargs.pop("category", "Other"), **kwargs
+		)
 		self.assertTrue(name, "raise_alert should return the alert name")
 		return key, name
 
@@ -70,7 +72,9 @@ class TestOpsAlert(IntegrationTestCase):
 
 	def test_repeat_occurrences_are_counted_on_one_alert(self):
 		key, name = self.raise_test_alert("Warning")
-		second = alerts.raise_alert(key, "Same problem again", "Warning", "Other", description="still failing")
+		second = alerts.raise_alert(
+			key, "Same problem again", "Warning", "Other", description="still failing"
+		)
 		third = alerts.raise_alert(key, "Same problem again", "Warning", "Other")
 		self.assertEqual(second, name)
 		self.assertEqual(third, name)
@@ -356,7 +360,9 @@ class TestOpsAlert(IntegrationTestCase):
 
 		alerts.acknowledge_alert(name, "Administrator")
 		self.escalate_at(119)
-		self.assertEqual(self.recorder.events(name), ["raised", "reminder"], "acknowledged alerts are not repeated")
+		self.assertEqual(
+			self.recorder.events(name), ["raised", "reminder"], "acknowledged alerts are not repeated"
+		)
 		# Escalation by age still applies to an acknowledged but unresolved alert.
 		self.escalate_at(125)
 		self.assertEqual(self.recorder.events(name), ["raised", "reminder", "escalated"])
@@ -369,7 +375,9 @@ class TestOpsAlert(IntegrationTestCase):
 		self.assertFalse(self.recorder.for_alert(name)["webhooks"])
 
 	def test_run_escalations_runs_once_per_minute(self):
-		moment = add_to_date(now_datetime(), days=3650, minutes=int(frappe.generate_hash(length=6), 16) % 500_000)
+		moment = add_to_date(
+			now_datetime(), days=3650, minutes=int(frappe.generate_hash(length=6), 16) % 500_000
+		)
 		first = escalation.run_escalations(now=moment)
 		second = escalation.run_escalations(now=moment)
 		self.assertIsNotNone(first)
@@ -437,7 +445,11 @@ class TestOpsAlert(IntegrationTestCase):
 		self.assertTrue(
 			frappe.db.exists(
 				"Error Log",
-				{"reference_doctype": "Ops Alert", "reference_name": name, "method": "Hostel360: alert notification not delivered"},
+				{
+					"reference_doctype": "Ops Alert",
+					"reference_name": name,
+					"method": "Hostel360: alert notification not delivered",
+				},
 			)
 		)
 
@@ -467,7 +479,9 @@ class TestAlertChannels(IntegrationTestCase):
 			occurrence_count=3,
 			is_outage=0,
 		)
-		settings = frappe._dict(instance_label="ACGCET Hostel360", environment="Production", escalation_levels=[])
+		settings = frappe._dict(
+			instance_label="ACGCET Hostel360", environment="Production", escalation_levels=[]
+		)
 		return notification.build_message(alert, settings, event, [])
 
 	def test_critical_security_alert_states_the_cert_in_deadline(self):
@@ -485,7 +499,9 @@ class TestAlertChannels(IntegrationTestCase):
 			occurrence_count=1,
 			is_outage=0,
 		)
-		settings = frappe._dict(instance_label="ACGCET Hostel360", environment="Production", escalation_levels=[])
+		settings = frappe._dict(
+			instance_label="ACGCET Hostel360", environment="Production", escalation_levels=[]
+		)
 		message = notification.build_message(alert, settings, "raised", [])
 		self.assertEqual(message["reporting_due_display"], "15-10-2026 08:30")
 		self.assertIn("CERT-In", dict(channels.facts(message))["Reporting"])
@@ -504,13 +520,17 @@ class TestAlertChannels(IntegrationTestCase):
 
 	def test_message_text(self):
 		message = self.message()
-		self.assertEqual(channels.subject(message), "[ACGCET Hostel360] CRITICAL: Redis cache is not responding")
+		self.assertEqual(
+			channels.subject(message), "[ACGCET Hostel360] CRITICAL: Redis cache is not responding"
+		)
 		self.assertIn("Seen 3x since", channels.short_text(message))
 		self.assertIn("/ops-alert/ALERT-261015-K7Q3X", message["url"])
 		html = channels.email_html(message)
 		self.assertIn("&lt;script&gt;", html)
 		self.assertNotIn("<script>", html)
-		self.assertTrue(channels.subject(self.message("resolved")).endswith("RESOLVED: Redis cache is not responding"))
+		self.assertTrue(
+			channels.subject(self.message("resolved")).endswith("RESOLVED: Redis cache is not responding")
+		)
 
 	def test_chat_payload_shapes(self):
 		message = self.message()

@@ -100,7 +100,9 @@ class MigrationRun(Document):
 
 		if self.status != "Running" or engine_is_running():
 			return False
-		note = _("The process running this migration stopped before finishing (for example a server restart).")
+		note = _(
+			"The process running this migration stopped before finishing (for example a server restart)."
+		)
 		self.db_set(
 			{"status": "Failed", "log": "\n".join(filter(None, [self.log, note]))}, update_modified=False
 		)

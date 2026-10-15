@@ -134,7 +134,9 @@ def complete_transaction(name: str, payment: dict, source: str) -> frappe._dict:
 		if _is_extra_capture(tx, payment):
 			_record_extra_capture(tx, payment, source)
 		elif tx.status == TX_REFUNDED:
-			frappe.logger("hostel360").info(f"Ignoring {source} confirmation for refunded transaction {tx.name}")
+			frappe.logger("hostel360").info(
+				f"Ignoring {source} confirmation for refunded transaction {tx.name}"
+			)
 		return result(tx)
 
 	problem = _verification_problem(tx, payment)
@@ -535,7 +537,9 @@ def settle_with_gateway(
 	failed = [p for p in payments if p.status == FAILED]
 	if failed and not gateway.reusable_orders and len(failed) == len(payments):
 		# The gateway closed this order with the failed attempt; the payer must start a new payment.
-		return mark_failed(name, failed[0].error_description or _("The payment did not go through."), failed[0])
+		return mark_failed(
+			name, failed[0].error_description or _("The payment did not go through."), failed[0]
+		)
 
 	if expiry_minutes is None:
 		from hostel360.hostel_fees.utils import get_payment_settings

@@ -272,13 +272,20 @@ Whitelisted controller methods: `transfer(new_bed, from_date, remarks)` → new 
 `vacate(vacated_on, reason)` → status Vacated, bed Vacant. History is never deleted.
 A daily job (`hostel_people.tasks.close_ended_allotments`) vacates allotments whose `to_date` has passed.
 
+Registration-desk exceptions to hostel scoping: (a) a student who lives in no hostel now may be given a New allotment by
+staff who can submit an allotment for that bed; they find the student by exact register or mobile number
+(`hostel_people.queries.allottable_student_query`, `RoomAllotment.admits_returning_student`); (b) staff with Hostel Student
+write permission may link an existing guardian of another hostel's student by exact mobile number
+(`hostel_people.queries.guardian_link_query`); viewing and editing that guardian still follow the ward rule.
+
 **Student Bulk Import** — upload XLSX/CSV (template downloadable), validate (every row checked, nothing written,
 preview stored), import in background on the long queue, creates/updates Hostel Student + Hostel Guardian + links
 (+ room allotment, + portal users when asked), downloadable "rows to fix" report.
 Fields: `import_file` Attach, `academic_year`, `status` Select (Draft/Validated/Importing/Completed/Completed with Errors/Failed),
 `update_existing` Check (1), `allot_rooms` Check (1), `create_portal_users` Check, `total_rows`, `imported_rows`,
 `skipped_rows`, `failed_rows`, `started_on`, `finished_on`, `log` Code. Students are matched by register number and
-guardians by mobile number; each row runs in its own savepoint. Deputy Wardens and Office Staff see only their own imports.
+guardians by mobile number; each row runs in its own savepoint. Deputy Wardens and Office Staff see only their own imports. A returning-student row is allotted first and then updated; rows for students the
+importer cannot update are refused in the preview; a guardian shared with another hostel is linked unchanged, with a warning.
 
 Desk page **room-board**: visual hostel→block→floor→room→bed grid, colour by status, click to allot/transfer/vacate,
 reserve or send a bed to maintenance.
@@ -824,8 +831,9 @@ magic-byte check, 5 MB portal / 10 MB staff, portal uploads private and only thr
 Frappe writes any bytes by the `File` override `security.files.HostelFile` and the `before_request` hook
 `security.files.block_portal_generic_upload`), encrypted secrets (Password fields), no tracebacks to users.
 Sharing restrictions for Hostel360 records (no "share with everyone", no shares to accounts without desk access) are
-implemented in `hostel360/security/sharing.py` as a DocShare `validate` hook; they take effect once that hook is registered in
-`hooks.py`.
+enforced by the registered DocShare `validate` hook `security.sharing.validate_doc_share`; `remove_unsafe_shares` removes
+older shares on every install and migrate. `block_portal_generic_upload` judges the user Frappe's `validate_auth` resolves,
+so an `Authorization` header never exempts a request; abandoned chunk files are removed hourly.
 Data: TLS in transit; AES-256 at rest (OCI block/object encryption, restic repository encryption, Frappe backup encryption,
 AES-256-GCM for encrypted exit exports).
 Logs: retained 180 days in India (journald, rsyslog, WAF/ClamAV/MariaDB logs, OCI Logging; Frappe Error/API Request/Integration

@@ -27,5 +27,9 @@ def mark_overdue_returns():
 			doc.mark_overdue()
 		except Exception:
 			frappe.db.rollback(save_point="leave_overdue")
-			frappe.log_error(title="Hostel360: could not mark leave overdue", reference_doctype="Home Visit Leave", reference_name=name)
+			frappe.log_error(
+				title="Hostel360: could not mark leave overdue",
+				reference_doctype="Home Visit Leave",
+				reference_name=name,
+			)
 	return len(leaves)

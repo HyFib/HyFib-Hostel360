@@ -23,6 +23,8 @@ describe("Frappe page template", () => {
 	});
 
 	it("refuses a page without exactly one boot block", () => {
-		expect(() => toJinjaTemplate(BUILT.replace(/<script type="application\/json"[\s\S]*?<\/script>/, ""))).toThrow(/h360-boot/);
+		expect(() => toJinjaTemplate(BUILT.replace(/<script type="application\/json"[\s\S]*?<\/script>/, ""))).toThrow(
+			/h360-boot/,
+		);
 	});
 });

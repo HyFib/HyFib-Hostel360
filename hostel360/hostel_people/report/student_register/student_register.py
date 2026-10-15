@@ -32,7 +32,9 @@ def execute(filters=None):
 		data.append(
 			{
 				**student,
-				"mobile_number": student.mobile_number if full_numbers else mask_mobile(student.mobile_number),
+				"mobile_number": student.mobile_number
+				if full_numbers
+				else mask_mobile(student.mobile_number),
 				"guardian_name": guardian.get("guardian_name"),
 				"guardian_relation": guardian.get("relation"),
 				"guardian_mobile": guardian.get("mobile_number")
@@ -98,27 +100,79 @@ def get_primary_guardians(students: list[str]) -> dict:
 
 def get_columns() -> list[dict]:
 	return [
-		{"label": _("Register No."), "fieldname": "name", "fieldtype": "Link", "options": "Hostel Student", "width": 130},
+		{
+			"label": _("Register No."),
+			"fieldname": "name",
+			"fieldtype": "Link",
+			"options": "Hostel Student",
+			"width": 130,
+		},
 		{"label": _("Name"), "fieldname": "full_name", "fieldtype": "Data", "width": 180},
 		{"label": _("Roll No."), "fieldname": "roll_number", "fieldtype": "Data", "width": 100},
 		{"label": _("Gender"), "fieldname": "gender", "fieldtype": "Data", "width": 80},
-		{"label": _("Program"), "fieldname": "program", "fieldtype": "Link", "options": "Academic Program", "width": 180},
+		{
+			"label": _("Program"),
+			"fieldname": "program",
+			"fieldtype": "Link",
+			"options": "Academic Program",
+			"width": 180,
+		},
 		{"label": _("Year"), "fieldname": "year_of_study", "fieldtype": "Data", "width": 60},
 		{"label": _("Mobile"), "fieldname": "mobile_number", "fieldtype": "Data", "width": 120},
-		{"label": _("Hostel"), "fieldname": "current_hostel", "fieldtype": "Link", "options": "Hostel", "width": 80},
-		{"label": _("Room"), "fieldname": "current_room", "fieldtype": "Link", "options": "Hostel Room", "width": 100},
-		{"label": _("Bed"), "fieldname": "current_bed", "fieldtype": "Link", "options": "Hostel Bed", "width": 110},
-		{"label": _("Last Hostel"), "fieldname": "last_hostel", "fieldtype": "Link", "options": "Hostel", "width": 90},
+		{
+			"label": _("Hostel"),
+			"fieldname": "current_hostel",
+			"fieldtype": "Link",
+			"options": "Hostel",
+			"width": 80,
+		},
+		{
+			"label": _("Room"),
+			"fieldname": "current_room",
+			"fieldtype": "Link",
+			"options": "Hostel Room",
+			"width": 100,
+		},
+		{
+			"label": _("Bed"),
+			"fieldname": "current_bed",
+			"fieldtype": "Link",
+			"options": "Hostel Bed",
+			"width": 110,
+		},
+		{
+			"label": _("Last Hostel"),
+			"fieldname": "last_hostel",
+			"fieldtype": "Link",
+			"options": "Hostel",
+			"width": 90,
+		},
 		{"label": _("Status"), "fieldname": "status", "fieldtype": "Data", "width": 90},
 		{"label": _("Validation"), "fieldname": "validation_status", "fieldtype": "Data", "width": 100},
 		{"label": _("Guardian"), "fieldname": "guardian_name", "fieldtype": "Data", "width": 160},
 		{"label": _("Relation"), "fieldname": "guardian_relation", "fieldtype": "Data", "width": 90},
 		{"label": _("Guardian Mobile"), "fieldname": "guardian_mobile", "fieldtype": "Data", "width": 120},
 		{"label": _("Mess"), "fieldname": "mess_enrolled", "fieldtype": "Check", "width": 60},
-		{"label": _("Profile Confirmed"), "fieldname": "profile_confirmed", "fieldtype": "Check", "width": 90},
-		{"label": _("Consent Version"), "fieldname": "privacy_consent_version", "fieldtype": "Data", "width": 90},
+		{
+			"label": _("Profile Confirmed"),
+			"fieldname": "profile_confirmed",
+			"fieldtype": "Check",
+			"width": 90,
+		},
+		{
+			"label": _("Consent Version"),
+			"fieldname": "privacy_consent_version",
+			"fieldtype": "Data",
+			"width": 90,
+		},
 		{"label": _("Portal User"), "fieldname": "portal_user", "fieldtype": "Check", "width": 80},
-		{"label": _("Department"), "fieldname": "department", "fieldtype": "Link", "options": "Academic Department", "width": 160},
+		{
+			"label": _("Department"),
+			"fieldname": "department",
+			"fieldtype": "Link",
+			"options": "Academic Department",
+			"width": 160,
+		},
 	]
 
 

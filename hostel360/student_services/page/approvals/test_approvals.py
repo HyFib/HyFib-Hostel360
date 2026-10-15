@@ -11,6 +11,7 @@ from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE, OFFICE_
 from hostel360.student_services import services
 from hostel360.student_services.page.approvals import approvals
 from hostel360.student_services.testing import (
+	capture_notifications,
 	leave_data,
 	make_block_deputy,
 	make_block_room,
@@ -81,7 +82,8 @@ class TestApprovals(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			approvals.decide("Bonafide Certificate Request", self.certificate, "reject", "")
 		self.assertEqual(
-			approvals.decide("Bonafide Certificate Request", self.certificate, "approve")["status"], "Approved"
+			approvals.decide("Bonafide Certificate Request", self.certificate, "approve")["status"],
+			"Approved",
 		)
 		with self.assertRaises(frappe.PermissionError):
 			approvals.decide("Home Visit Leave", self.other_leave, "approve")
@@ -117,6 +119,27 @@ class TestApprovals(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		self.assertNotIn(name, self.names(self.inbox_as(self.deputy), "grievances"))
 
+	def test_taking_ownership_files_no_note_and_tells_the_student_nothing_internal(self):
+		name = services.raise_grievance(
+			self.student.name,
+			{"category": "Electrical", "subject": "Fan not working", "description": "Since yesterday"},
+			self.student.user,
+		)
+		draft = "Regulator burnt; student may have overloaded it"
+		frappe.set_user(self.deputy)
+		try:
+			with capture_notifications() as sent:
+				approvals.act_on_grievance(name, "take", draft)
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertEqual(frappe.db.get_value("Hostel Grievance", name, "assigned_to"), self.deputy)
+		stored = [row.message for row in frappe.get_doc("Hostel Grievance", name).updates]
+		self.assertNotIn(draft, stored)
+		to_student = sent.contexts("grievance_updated", self.student.user)
+		self.assertTrue(to_student)
+		self.assertNotIn(draft, frappe.as_json(to_student))
+
 	def test_block_deputy_sees_and_decides_only_their_blocks(self):
 		if not people_service("staff_covers_student"):
 			self.skipTest("Hostel People does not provide block scoping on this site")
@@ -140,7 +163,6 @@ class TestApprovals(IntegrationTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			approvals.decide("Bonafide Certificate Request", west_certificate, "approve")
 		self.assertEqual(approvals.decide("Home Visit Leave", self.leave, "approve")["status"], "Approved")
-
 
 	def make_pending_indent(self, raised_by: str, requested_by: str | None = None) -> str:
 		# Indents belong to Hostel Mess; only a submitted indent awaiting approval matters here.

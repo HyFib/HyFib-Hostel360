@@ -38,7 +38,11 @@ from hostel360.hostel_fees.tests.fixtures import (
 	webhook_signature,
 )
 from hostel360.hostel_fees.transactions import PaymentVerificationError
-from hostel360.hostel_fees.webhooks import handle_razorpay_webhook
+from hostel360.hostel_fees.webhooks import (
+	MAX_UNVERIFIED_BODY_BYTES,
+	NOT_CONFIGURED_ALERT_KEY,
+	handle_razorpay_webhook,
+)
 
 # Read by the Frappe test runner: fee tests build every linked record they need themselves.
 IGNORE_TEST_RECORD_DEPENDENCIES = fee_fixtures.IGNORE_TEST_RECORD_DEPENDENCIES
@@ -315,6 +319,7 @@ class TestHostelPaymentTransaction(FeeTestCase):
 		security = self.alerts_in("Security")
 		self.assertEqual(len(security), 1)
 		self.assertEqual(security[0].kwargs["severity"], "Warning")
+		self.assertEqual(security[0].kwargs["details"]["transaction"], result["transaction"])
 
 	def test_webhook_completes_payment_idempotently(self):
 		result = self.start()
@@ -370,6 +375,42 @@ class TestHostelPaymentTransaction(FeeTestCase):
 		body = webhook_body("payment.captured", payment_entity("order_X", 1000))
 		status, _response = handle_razorpay_webhook(body, webhook_signature(body))
 		self.assertEqual(status, 400)
+		self.assertIn(NOT_CONFIGURED_ALERT_KEY, self.alert_keys())
+
+	def test_webhook_without_secret_alerts_only_where_razorpay_is_used(self):
+		self.hide_site_transactions("Razorpay")
+		body = webhook_body("payment.captured", payment_entity("order_X", 1000))
+
+		# Razorpay was never used on this site: an anonymous post is refused quietly.
+		configure_gateway(gateway="PayU", webhook_secret="")
+		self.assertEqual(handle_razorpay_webhook(body, None), (400, {"status": "not_configured"}))
+		self.assertNotIn(NOT_CONFIGURED_ALERT_KEY, self.alert_keys())
+
+		# Payments taken through Razorpay before a switch still report to this URL.
+		configure_gateway()
+		self.start()
+		configure_gateway(gateway="PayU", webhook_secret="")
+		self.assertEqual(handle_razorpay_webhook(body, None), (400, {"status": "not_configured"}))
+		self.assertIn(NOT_CONFIGURED_ALERT_KEY, self.alert_keys())
+
+	def test_bad_signature_naming_no_order_of_ours_is_refused_without_an_alert(self):
+		result = self.start()
+		for body in (
+			webhook_body("payment.captured", payment_entity("order_NOTOURS", 1000)),
+			b'{"payload": {"payment": "not an entity"}}',
+			b"[1, 2, 3]",
+			b"not json",
+			# Names our order, but no real event is this large; it is not even parsed.
+			webhook_body("payment.captured", payment_entity(result["checkout"]["order_id"], 150000))
+			+ b" " * MAX_UNVERIFIED_BODY_BYTES,
+		):
+			self.assertEqual(handle_razorpay_webhook(body, "f" * 64), (400, {"status": "invalid_signature"}))
+		self.assertEqual(self.alert_keys(), [])
+
+		# A correctly signed body that is not an event is refused rather than failing.
+		self.assertEqual(
+			handle_razorpay_webhook(b"[1]", webhook_signature(b"[1]")), (400, {"status": "invalid_payload"})
+		)
 
 	# -- money arriving after dues changed ---------------------------------------------------
 
@@ -637,7 +678,9 @@ class TestHostelPaymentTransaction(FeeTestCase):
 		# A partial refund from the dashboard leaves the payment "captured" at Razorpay.
 		other = make_invoice(self.student, 500)
 		refunded = self.start([other.name])
-		partly = self.api.pay(refunded["checkout"]["order_id"], amount_refunded=10000, refund_status="partial")
+		partly = self.api.pay(
+			refunded["checkout"]["order_id"], amount_refunded=10000, refund_status="partial"
+		)
 		self.deliver("payment.captured", partly)
 		self.alerts.reset_mock()
 		daily = daily_reconciliation()
@@ -709,7 +752,11 @@ class TestHostelPaymentTransaction(FeeTestCase):
 
 	def test_test_mode_payments_limited_to_test_payers(self):
 		user = frappe.get_doc(
-			{"doctype": "User", "email": f"{frappe.generate_hash(length=8)}@example.com", "first_name": "Payer"}
+			{
+				"doctype": "User",
+				"email": f"{frappe.generate_hash(length=8)}@example.com",
+				"first_name": "Payer",
+			}
 		).insert(ignore_permissions=True)
 		with patch("hostel360.hostel_fees.services.assert_can_access_student"):
 			with self.assertRaises(frappe.ValidationError):

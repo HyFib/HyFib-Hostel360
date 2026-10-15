@@ -30,7 +30,9 @@ export function useAttachments(max: number, student: () => StudentArg = () => un
 	const limits = () => uploadRules(session.settings.upload);
 
 	const uploading = computed(() => items.some((item) => item.status === "uploading"));
-	const fileUrls = computed(() => items.filter((item) => item.status === "done" && item.fileUrl).map((item) => item.fileUrl as string));
+	const fileUrls = computed(() =>
+		items.filter((item) => item.status === "done" && item.fileUrl).map((item) => item.fileUrl as string),
+	);
 	const remaining = computed(() => Math.max(0, max - items.length));
 
 	async function uploadOne(entry: PendingAttachment, file: File) {

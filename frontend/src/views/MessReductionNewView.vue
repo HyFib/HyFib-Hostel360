@@ -50,7 +50,12 @@ async function submit() {
 	}
 	const result = await run(() =>
 		applyMessReduction(
-			{ from_date: form.from_date, to_date: form.to_date, reason: form.reason, description: form.description.trim() || undefined },
+			{
+				from_date: form.from_date,
+				to_date: form.to_date,
+				reason: form.reason,
+				description: form.description.trim() || undefined,
+			},
 			studentArg(),
 		),
 	);
@@ -72,21 +77,58 @@ async function submit() {
 
 		<form ref="formRef" class="card" novalidate @submit.prevent="submit">
 			<div class="grid gap-x-4 sm:grid-cols-2">
-				<FormField v-slot="{ id, describedBy, invalid }" :label="t('reduction.from')" :error="errors.from_date" required>
-					<input :id="id" v-model="form.from_date" class="input" type="date" :min="minDate" :aria-describedby="describedBy" :aria-invalid="invalid" required>
+				<FormField
+					v-slot="{ id, describedBy, invalid }"
+					:label="t('reduction.from')"
+					:error="errors.from_date"
+					required
+				>
+					<input
+						:id="id"
+						v-model="form.from_date"
+						class="input"
+						type="date"
+						:min="minDate"
+						:aria-describedby="describedBy"
+						:aria-invalid="invalid"
+						required
+					/>
 				</FormField>
 				<FormField v-slot="{ id, describedBy, invalid }" :label="t('reduction.to')" :error="errors.to_date" required>
-					<input :id="id" v-model="form.to_date" class="input" type="date" :min="form.from_date || minDate" :aria-describedby="describedBy" :aria-invalid="invalid" required>
+					<input
+						:id="id"
+						v-model="form.to_date"
+						class="input"
+						type="date"
+						:min="form.from_date || minDate"
+						:aria-describedby="describedBy"
+						:aria-invalid="invalid"
+						required
+					/>
 				</FormField>
 			</div>
-			<p v-if="days" class="-mt-2 mb-4 text-sm font-medium" :class="days < reductionMinDays ? 'text-warning' : 'text-success'" aria-live="polite">
+			<p
+				v-if="days"
+				class="-mt-2 mb-4 text-sm font-medium"
+				:class="days < reductionMinDays ? 'text-warning' : 'text-success'"
+				aria-live="polite"
+			>
 				{{ tc("common.days", days) }}
 			</p>
 
 			<FormField v-slot="{ id, describedBy, invalid }" :label="t('reduction.reason')" :error="errors.reason" required>
-				<select :id="id" v-model="form.reason" class="input" :aria-describedby="describedBy" :aria-invalid="invalid" required>
+				<select
+					:id="id"
+					v-model="form.reason"
+					class="input"
+					:aria-describedby="describedBy"
+					:aria-invalid="invalid"
+					required
+				>
 					<option value="" disabled>{{ t("common.choose") }}</option>
-					<option v-for="reason in REDUCTION_REASONS" :key="reason" :value="reason">{{ tv("reductionReasons", reason) }}</option>
+					<option v-for="reason in REDUCTION_REASONS" :key="reason" :value="reason">
+						{{ tv("reductionReasons", reason) }}
+					</option>
 				</select>
 			</FormField>
 
@@ -97,10 +139,22 @@ async function submit() {
 				:error="errors.description"
 				:required="form.reason === 'Other'"
 			>
-				<textarea :id="id" v-model="form.description" class="input" rows="3" maxlength="500" :aria-describedby="describedBy" :aria-invalid="invalid" />
+				<textarea
+					:id="id"
+					v-model="form.description"
+					class="input"
+					rows="3"
+					maxlength="500"
+					:aria-describedby="describedBy"
+					:aria-invalid="invalid"
+				/>
 			</FormField>
 
-			<p v-if="error" class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+			<p
+				v-if="error"
+				class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+				role="alert"
+			>
 				<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 			</p>
 			<button type="submit" class="btn-primary btn-block" :disabled="busy">

@@ -26,7 +26,12 @@ function act(item: Toast) {
 			>
 				<CircleAlert :size="20" class="mt-0.5 shrink-0" aria-hidden="true" />
 				<p class="min-w-0 flex-1 whitespace-pre-line">{{ item.message }}</p>
-				<button type="button" class="-m-2 inline-flex size-10 items-center justify-center rounded-full" :aria-label="t('common.dismiss')" @click="dismissToast(item.id)">
+				<button
+					type="button"
+					class="-m-2 inline-flex size-10 items-center justify-center rounded-full"
+					:aria-label="t('common.dismiss')"
+					@click="dismissToast(item.id)"
+				>
 					<X :size="18" aria-hidden="true" />
 				</button>
 			</div>
@@ -48,7 +53,13 @@ function act(item: Toast) {
 				>
 					{{ item.actionLabel }}
 				</button>
-				<button v-else type="button" class="-m-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full" :aria-label="t('common.dismiss')" @click="dismissToast(item.id)">
+				<button
+					v-else
+					type="button"
+					class="-m-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full"
+					:aria-label="t('common.dismiss')"
+					@click="dismissToast(item.id)"
+				>
 					<X :size="18" aria-hidden="true" />
 				</button>
 			</div>

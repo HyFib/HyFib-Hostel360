@@ -10,6 +10,10 @@ hostel360.allotment.hostel_genders = (gender) => {
 	return ["Mixed"];
 };
 
+// Also finds a returning student who last lived in another hostel, by the exact register
+// or mobile number.
+hostel360.allotment.student_query = "hostel360.hostel_people.queries.allottable_student_query";
+
 hostel360.allotment.vacant_bed_query = (filters) => ({
 	query: "hostel360.hostel_people.page.room_board.room_board.search_vacant_beds",
 	filters,
@@ -138,7 +142,7 @@ frappe.ui.form.on("Room Allotment", {
 			const filters = { status: ["in", ["Active", "Applied"]] };
 			if (frm.doc.allotment_type === "New") filters.current_allotment = ["is", "not set"];
 			else filters.current_allotment = ["is", "set"];
-			return { filters };
+			return { query: hostel360.allotment.student_query, filters };
 		});
 		frm.set_query("hostel", () => {
 			const filters = { is_active: 1 };

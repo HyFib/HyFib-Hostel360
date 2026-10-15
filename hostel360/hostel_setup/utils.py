@@ -30,8 +30,7 @@ def clean_code(value: str | None, label: str, max_length: int = 20) -> str:
 def bed_label_sequence() -> Iterator[str]:
 	"""A, B, ... Z, AA, AB, ... in the order beds are numbered on the floor."""
 	letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	for letter in letters:
-		yield letter
+	yield from letters
 	for first in letters:
 		for second in letters:
 			yield first + second

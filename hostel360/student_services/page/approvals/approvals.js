@@ -280,7 +280,8 @@ class Hostel360Approvals {
 				? frappe.xcall("hostel360.student_services.page.approvals.approvals.act_on_grievance", {
 						name,
 						action,
-						message: remarks,
+						// The box holds the resolution; taking ownership sends nothing with it.
+						message: action === "resolve" ? remarks : null,
 				  })
 				: frappe.xcall("hostel360.student_services.page.approvals.approvals.decide", {
 						doctype,
@@ -300,7 +301,11 @@ class Hostel360Approvals {
 				};
 				frappe.show_alert({ message: `${messages[action]}: ${name}`, indicator: action === "reject" ? "orange" : "green" });
 				if (action === "take") {
-					this.refresh(true);
+					// Keep a resolution typed before taking ownership for when the work is done.
+					this.refresh(true).then(() => {
+						if (!remarks) return;
+						this.$list.find(`.h360-card[data-name="${CSS.escape(name)}"] .h360-remarks`).val(remarks);
+					});
 					return;
 				}
 				this.remove_item($card.attr("data-section"), name);

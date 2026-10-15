@@ -119,7 +119,9 @@ def _safe(label: str, func, default):
 	try:
 		return func()
 	except Exception:
-		frappe.log_error(title=f"Hostel360: monthly report - {label} unavailable", message=frappe.get_traceback())
+		frappe.log_error(
+			title=f"Hostel360: monthly report - {label} unavailable", message=frappe.get_traceback()
+		)
 		return default
 
 
@@ -171,7 +173,9 @@ def collect_figures(start, end, from_date, to_date) -> dict:
 
 	figures["security_events"] = _safe(
 		"security events",
-		lambda: frappe.db.count(ALERT_DOCTYPE, {"category": "Security", "first_seen": ("between", [start, end])}),
+		lambda: frappe.db.count(
+			ALERT_DOCTYPE, {"category": "Security", "first_seen": ("between", [start, end])}
+		),
 		0,
 	)
 	figures["malware_detections"] = _safe("malware", lambda: _malware_detections(start, end), 0)
@@ -229,13 +233,19 @@ def _malware_detections(start, end) -> int:
 		or_filters=[["alert_key", "like", "%malware%detect%"], ["alert_key", "like", "%maldet%"]],
 		fields=["occurrence_count"],
 	)
-	return sum(cint(a.occurrence_count) or 1 for a in alerts) + cint(metrics.metric_sum("malware_detections", start, end))
+	return sum(cint(a.occurrence_count) or 1 for a in alerts) + cint(
+		metrics.metric_sum("malware_detections", start, end)
+	)
 
 
 def _backup_counts(start, end) -> dict:
 	rows = frappe.get_all(
 		BACKUP_DOCTYPE,
-		filters=[["backup_type", "in", BACKUP_TYPES], ["finished_at", ">=", start], ["finished_at", "<", end]],
+		filters=[
+			["backup_type", "in", BACKUP_TYPES],
+			["finished_at", ">=", start],
+			["finished_at", "<", end],
+		],
 		fields=["status", {"COUNT": "*", "as": "count"}],
 		group_by="status",
 	)
@@ -329,9 +339,9 @@ def build_summary(doc) -> str:
 			)
 	else:
 		parts.append(
-			_("No availability measurements were recorded this month; {0} critical incidents were logged.").format(
-				cint(doc.incidents)
-			)
+			_(
+				"No availability measurements were recorded this month; {0} critical incidents were logged."
+			).format(cint(doc.incidents))
 		)
 	parts.append(
 		_(
@@ -345,9 +355,9 @@ def build_summary(doc) -> str:
 		)
 	)
 	parts.append(
-		_("Security: {0} security events, {1} malware detections and {2} requests blocked by the web application firewall.").format(
-			cint(doc.security_events), cint(doc.malware_detections), cint(doc.waf_blocks)
-		)
+		_(
+			"Security: {0} security events, {1} malware detections and {2} requests blocked by the web application firewall."
+		).format(cint(doc.security_events), cint(doc.malware_detections), cint(doc.waf_blocks))
 	)
 	restore = (
 		_("the last restore test was on {0}").format(format_date(doc.last_restore_test_on))
@@ -360,9 +370,9 @@ def build_summary(doc) -> str:
 		)
 	)
 	parts.append(
-		_("Support: {0} tickets raised and {1} resolved, with {2}% meeting the response and resolution SLAs.").format(
-			cint(doc.tickets_raised), cint(doc.tickets_resolved), flt(doc.sla_compliance_percent, 1)
-		)
+		_(
+			"Support: {0} tickets raised and {1} resolved, with {2}% meeting the response and resolution SLAs."
+		).format(cint(doc.tickets_raised), cint(doc.tickets_resolved), flt(doc.sla_compliance_percent, 1))
 	)
 	parts.append(
 		_("Usage: {0} active residents, {1} portal logins and {2} online payments totalling {3}.").format(
@@ -408,7 +418,9 @@ def render_pdf(name: str) -> tuple[bytes, str]:
 		pdf = frappe.get_print(REPORT_DOCTYPE, name, print_format=PRINT_FORMAT, as_pdf=True, no_letterhead=1)
 		return pdf, f"{name}.pdf"
 	except Exception:
-		frappe.log_error(title="Hostel360: monthly report PDF could not be rendered", message=frappe.get_traceback())
+		frappe.log_error(
+			title="Hostel360: monthly report PDF could not be rendered", message=frappe.get_traceback()
+		)
 		html = frappe.get_print(REPORT_DOCTYPE, name, print_format=PRINT_FORMAT, no_letterhead=1)
 		return html.encode(), f"{name}.html"
 
@@ -448,7 +460,9 @@ def send_report(name: str) -> bool:
 		add_unsubscribe_link=0,
 	)
 	doc.db_set({"sent_on": now_datetime(), "sent_to": "\n".join(recipients)}, update_modified=False)
-	resolve_alert(NO_RECIPIENTS_ALERT_KEY, notes=_("{0} was sent to {1}.").format(name, ", ".join(recipients)))
+	resolve_alert(
+		NO_RECIPIENTS_ALERT_KEY, notes=_("{0} was sent to {1}.").format(name, ", ".join(recipients))
+	)
 	return True
 
 
@@ -463,7 +477,9 @@ def delivery_status(now=None) -> dict:
 	now = get_datetime(now) if now else now_datetime()
 	month = previous_month(now)
 	_from_date, _to_date, _start, end = month_bounds(month)
-	row = frappe.db.get_value(REPORT_DOCTYPE, {"month": month, "docstatus": 1}, ["name", "sent_on"], as_dict=True)
+	row = frappe.db.get_value(
+		REPORT_DOCTYPE, {"month": month, "docstatus": 1}, ["name", "sent_on"], as_dict=True
+	)
 	started = monitoring_started_at()
 	applicable = bool(row) or bool(started and started < end)
 	if now.day == 1 and now.hour < 8:
@@ -494,7 +510,9 @@ def _email_body(doc, month_label: str) -> str:
 		else _("not measured")
 	)
 	if cint(doc.get("unmonitored_minutes")) and doc.uptime_percent is not None:
-		uptime += " " + _("({0} unmonitored minutes counted as downtime)").format(cint(doc.unmonitored_minutes))
+		uptime += " " + _("({0} unmonitored minutes counted as downtime)").format(
+			cint(doc.unmonitored_minutes)
+		)
 	return (
 		f"<p>{escape_html(_('Dear Sir / Madam,'))}</p>"
 		f"<p>{escape_html(_('Please find attached the Hostel360 server performance report for {0}.').format(month_label))}</p>"

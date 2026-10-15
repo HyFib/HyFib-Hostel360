@@ -28,7 +28,13 @@ class TestHostelFeedback(IntegrationTestCase):
 		frappe.set_user("Administrator")
 
 	def submit(self, student=None, **data):
-		values = {"feedback_type": "Mess", "overall": 4, "food_quality": 3, "comments": "Sambar too watery", **data}
+		values = {
+			"feedback_type": "Mess",
+			"overall": 4,
+			"food_quality": 3,
+			"comments": "Sambar too watery",
+			**data,
+		}
 		return services.submit_feedback((student or self.student).name, values)
 
 	def test_stars_are_stored_as_rating_fractions(self):
@@ -115,7 +121,9 @@ class TestHostelFeedback(IntegrationTestCase):
 		name, publish = self.submit_as_student(is_anonymous=1, comments="Warden was rude")
 		doc = frappe.get_doc("Hostel Feedback", name)
 		self.assertNotIn(self.student.user, (doc.owner, doc.modified_by))
-		announced = [call.args[1] for call in publish.call_args_list if call.args and call.args[0] == "list_update"]
+		announced = [
+			call.args[1] for call in publish.call_args_list if call.args and call.args[0] == "list_update"
+		]
 		self.assertNotIn(self.student.user, [data.get("user") for data in announced])
 
 		mess_manager = make_user([MESS_MANAGER_ROLE])
@@ -135,12 +143,16 @@ class TestHostelFeedback(IntegrationTestCase):
 		name = self.submit(is_anonymous=1)
 		# How such a row looked before anonymous submissions were scrubbed
 		frappe.db.set_value(
-			"Hostel Feedback", name, {"owner": self.student.user, "modified_by": self.student.user}, update_modified=False
+			"Hostel Feedback",
+			name,
+			{"owner": self.student.user, "modified_by": self.student.user},
+			update_modified=False,
 		)
 		install_defaults()
 		install_defaults()
 		self.assertEqual(
-			frappe.db.get_value("Hostel Feedback", name, ["owner", "modified_by"]), ("Administrator", "Administrator")
+			frappe.db.get_value("Hostel Feedback", name, ["owner", "modified_by"]),
+			("Administrator", "Administrator"),
 		)
 
 	def test_scoped_staff_cannot_move_feedback_into_their_hostel(self):
@@ -155,5 +167,6 @@ class TestHostelFeedback(IntegrationTestCase):
 					client_set_value("Hostel Feedback", name, {"hostel": hostel, "action_taken": "Noted"})
 		finally:
 			frappe.set_user("Administrator")
-		self.assertEqual(frappe.db.get_value("Hostel Feedback", name, ["hostel", "action_taken"]), (other.hostel, None))
-
+		self.assertEqual(
+			frappe.db.get_value("Hostel Feedback", name, ["hostel", "action_taken"]), (other.hostel, None)
+		)

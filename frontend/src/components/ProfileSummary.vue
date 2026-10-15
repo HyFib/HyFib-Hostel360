@@ -39,7 +39,11 @@ defineProps<{ profile: Profile }>();
 			</dl>
 		</section>
 
-		<section v-if="profile.room && (profile.room.room || profile.room.room_number)" class="card" aria-labelledby="ps-room">
+		<section
+			v-if="profile.room && (profile.room.room || profile.room.room_number)"
+			class="card"
+			aria-labelledby="ps-room"
+		>
 			<h2 id="ps-room" class="section-title mb-3">{{ t("profile.room") }}</h2>
 			<dl class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
 				<div>
@@ -64,7 +68,11 @@ defineProps<{ profile: Profile }>();
 		<section v-if="profile.guardians?.length" class="card" aria-labelledby="ps-guardians">
 			<h2 id="ps-guardians" class="section-title mb-2">{{ t("profile.guardians") }}</h2>
 			<ul class="list-divided">
-				<li v-for="guardian in profile.guardians" :key="guardian.guardian" class="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+				<li
+					v-for="guardian in profile.guardians"
+					:key="guardian.guardian"
+					class="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm"
+				>
 					<span>
 						<span class="font-medium text-ink">{{ guardian.guardian_name }}</span>
 						<span v-if="guardian.relation" class="text-muted"> · {{ tv("relations", guardian.relation) }}</span>

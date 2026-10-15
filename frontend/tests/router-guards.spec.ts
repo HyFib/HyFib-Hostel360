@@ -13,13 +13,35 @@ const { createAppRouter } = await import("@/router");
 const { resetSession } = await import("@/stores/session");
 const { resetBoot } = await import("@/utils/boot");
 
-const guest: GuardState = { loggedIn: false, kind: null, consentRequired: false, profileConfirmed: false, validationStatus: "" };
-const student: GuardState = { loggedIn: true, kind: "student", consentRequired: false, profileConfirmed: true, validationStatus: "Validated" };
+const guest: GuardState = {
+	loggedIn: false,
+	kind: null,
+	consentRequired: false,
+	profileConfirmed: false,
+	validationStatus: "",
+};
+const student: GuardState = {
+	loggedIn: true,
+	kind: "student",
+	consentRequired: false,
+	profileConfirmed: true,
+	validationStatus: "Validated",
+};
 const parent: GuardState = { ...student, kind: "parent", profileConfirmed: false };
 
 function route(name: string, fullPath: string, query: Record<string, string> = {}): RouteLocationNormalized {
 	const record = routes.find((item) => item.name === name);
-	return { name, fullPath, path: fullPath.split("?")[0], query, params: {}, hash: "", matched: [], meta: record?.meta ?? {}, redirectedFrom: undefined };
+	return {
+		name,
+		fullPath,
+		path: fullPath.split("?")[0],
+		query,
+		params: {},
+		hash: "",
+		matched: [],
+		meta: record?.meta ?? {},
+		redirectedFrom: undefined,
+	};
 }
 
 describe("decideNavigation", () => {
@@ -43,7 +65,9 @@ describe("decideNavigation", () => {
 		expect(safeRedirect("//evil.example/phish")).toBeNull();
 		expect(safeRedirect("https://evil.example")).toBeNull();
 		expect(safeRedirect("/\\evil.example")).toBeNull();
-		expect(decideNavigation(route("login", "/login", { redirect: "//evil.example" }), student)).toEqual({ name: "home" });
+		expect(decideNavigation(route("login", "/login", { redirect: "//evil.example" }), student)).toEqual({
+			name: "home",
+		});
 	});
 
 	it("asks for privacy consent before anything else", () => {
@@ -57,7 +81,10 @@ describe("decideNavigation", () => {
 	it("asks unconfirmed students to confirm their details", () => {
 		const state = { ...student, profileConfirmed: false };
 		expect(decideNavigation(route("home", "/"), state)).toEqual({ name: "confirm-details", query: {} });
-		expect(decideNavigation(route("leave", "/leave"), state)).toEqual({ name: "confirm-details", query: { redirect: "/leave" } });
+		expect(decideNavigation(route("leave", "/leave"), state)).toEqual({
+			name: "confirm-details",
+			query: { redirect: "/leave" },
+		});
 		expect(decideNavigation(route("confirm-details", "/confirm-details"), state)).toBe(true);
 	});
 
@@ -87,7 +114,10 @@ describe("decideNavigation", () => {
 
 	it("holds back full features until the registration is verified", () => {
 		const pending = { ...student, validationStatus: "Pending" };
-		expect(decideNavigation(route("fees", "/fees"), pending)).toEqual({ name: "home", query: { notice: "verification" } });
+		expect(decideNavigation(route("fees", "/fees"), pending)).toEqual({
+			name: "home",
+			query: { notice: "verification" },
+		});
 		expect(decideNavigation(route("profile", "/profile"), pending)).toBe(true);
 		expect(decideNavigation(route("fees", "/fees"), student)).toBe(true);
 	});

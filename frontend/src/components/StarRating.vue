@@ -20,14 +20,7 @@ const stars = Array.from({ length: props.max }, (_, index) => index + 1);
 				:key="value"
 				class="relative inline-flex size-11 cursor-pointer items-center justify-center rounded-full has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-focus"
 			>
-				<input
-					v-model="model"
-					class="sr-only"
-					type="radio"
-					:name="name"
-					:value="value"
-					:disabled="disabled"
-				>
+				<input v-model="model" class="sr-only" type="radio" :name="name" :value="value" :disabled="disabled" />
 				<Star
 					:size="30"
 					:stroke-width="1.75"

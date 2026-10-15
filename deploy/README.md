@@ -101,6 +101,7 @@ linux/amd64):
 2. **runtime** (`frappe/base:v16.52.0`): the finished bench, non-root (`frappe`), OCI
    labels, a `HEALTHCHECK`, and the built assets in the image layer. At start-up the
    entrypoint links them into the sites volume, so a new image never serves stale assets.
+   It adds the Tamil fonts print PDFs need (see *Print PDFs* below).
 
 One image runs every role; the first argument selects it (`backend`, `websocket`,
 `worker <queues>`, `scheduler`, `frontend`, `configure`, `migrate`), anything else runs as a
@@ -158,6 +159,18 @@ to leave the host through the NAT gateway and come back through the load balance
 the public name does not resolve from the server (staging, before the DNS change) every PDF
 failed with `HostNotFoundError`. These two ports are not published; the host firewall and
 the load balancer are unchanged.
+
+Tamil in PDFs needs fonts with Tamil glyphs in the image that renders them (backend and
+workers). The Frappe base image has only DejaVu, and with it wkhtmltopdf and Chromium both
+produce the PDF but leave every Tamil character out, without an error. The runtime image
+therefore installs `fonts-noto-core` (Noto Sans Tamil, Noto Serif Tamil, the faces the print
+formats name) and `fonts-lohit-taml`, and `docker/fontconfig/64-hostel360-tamil.conf` makes
+the Noto faces the ones fontconfig uses for Tamil text in a page that names no Tamil font.
+Installing Noto also makes Noto Sans and Noto Serif the default Latin faces instead of
+DejaVu (Debian's own preference). They are narrower than the DejaVu faces, and a fee
+receipt keeps its one-page layout. The image build fails if fontconfig cannot find the
+Tamil faces, and `deploy/tests/image/run.sh` renders Tamil through both engines and reads
+the PDFs back.
 
 **Outbound connections.** The server's network security group allows outbound TCP 80, 443,
 465 and 587 and NTP to any address (`app_egress_tcp_ports`); ufw allows outgoing traffic; and
@@ -491,6 +504,8 @@ deploy/tests/fail2ban/run.sh   # h360-auth counts failed sign-ins only, never th
 deploy/tests/host/run.sh       # h360-ingest (message_id, retries, spool limits), uptime probe, Kuma relay,
                                # h360-decommission against a stand-in server
 deploy/tests/exit/run.sh       # exit-purge.sh: order of the deletions, confirmations, log hold
+deploy/tests/image/run.sh [image]  # a built image: Tamil text in wkhtmltopdf (get_pdf) and
+                                   # Chromium PDFs; default hostel360:<version> from build.sh
 ```
 
 Capacity (TR 15) is measured with the k6 load test in `tests/load/` against the staging stack;

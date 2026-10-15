@@ -74,13 +74,17 @@ class HostelStudent(Document):
 			["name", "full_name"],
 			as_dict=True,
 		)
-		if duplicate:
-			frappe.throw(
-				_("Mobile number {0} is already registered for {1} ({2}).").format(
-					frappe.bold(self.mobile_number), duplicate.full_name, duplicate.name
-				),
-				frappe.UniqueValidationError,
+		if not duplicate:
+			return
+		if frappe.has_permission("Hostel Student", "read", doc=duplicate.name):
+			message = _("Mobile number {0} is already registered for {1} ({2}).").format(
+				frappe.bold(self.mobile_number), duplicate.full_name, duplicate.name
 			)
+		else:
+			message = _(
+				"Mobile number {0} is already registered for another student, in a hostel or block you do not look after."
+			).format(frappe.bold(self.mobile_number))
+		frappe.throw(message, frappe.UniqueValidationError)
 
 	def validate_dates(self):
 		if self.date_of_birth and getdate(self.date_of_birth) >= getdate(nowdate()):
@@ -94,7 +98,9 @@ class HostelStudent(Document):
 		for row in self.guardians:
 			if row.guardian in seen:
 				frappe.throw(
-					_("Row {0}: guardian {1} is listed more than once.").format(row.idx, frappe.bold(row.guardian))
+					_("Row {0}: guardian {1} is listed more than once.").format(
+						row.idx, frappe.bold(row.guardian)
+					)
 				)
 			seen.add(row.guardian)
 			if row.is_primary:
@@ -110,9 +116,9 @@ class HostelStudent(Document):
 			return
 		if self.status in LEFT_STATUSES and self.current_allotment:
 			frappe.throw(
-				_("{0} still holds bed {1}. Vacate the room allotment before marking the student {2}.").format(
-					self.full_name, frappe.bold(self.current_bed), _(self.status)
-				)
+				_(
+					"{0} still holds bed {1}. Vacate the room allotment before marking the student {2}."
+				).format(self.full_name, frappe.bold(self.current_bed), _(self.status))
 			)
 
 	def validate_gender_change(self):
@@ -165,7 +171,9 @@ class HostelStudent(Document):
 			{
 				"student_name": self.full_name,
 				"register_number": self.register_number,
-				"institution_short_name": frappe.db.get_single_value("Hostel Settings", "institution_short_name"),
+				"institution_short_name": frappe.db.get_single_value(
+					"Hostel Settings", "institution_short_name"
+				),
 			},
 			reference_doctype=self.doctype,
 			reference_name=self.name,

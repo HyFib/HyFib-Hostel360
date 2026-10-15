@@ -44,7 +44,10 @@ class TestHostelGuardian(IntegrationTestCase):
 		guardian.mobile_number = new_mobile
 		guardian.save()
 		row = frappe.db.get_value(
-			"Hostel Student Guardian", {"parent": student.name}, ["guardian_name", "mobile_number"], as_dict=True
+			"Hostel Student Guardian",
+			{"parent": student.name},
+			["guardian_name", "mobile_number"],
+			as_dict=True,
 		)
 		self.assertEqual((row.guardian_name, row.mobile_number), ("New Name", new_mobile))
 		self.assertEqual([w["name"] for w in guardian.get_wards()], [student.name])

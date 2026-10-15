@@ -49,7 +49,11 @@ let countdown: ReturnType<typeof setInterval> | null = null;
 let webOtp: AbortController | null = null;
 
 const title = computed(() =>
-	preferredKind.value === "parent" ? t("login.parentTitle") : preferredKind.value === "student" ? t("login.studentTitle") : t("login.title"),
+	preferredKind.value === "parent"
+		? t("login.parentTitle")
+		: preferredKind.value === "student"
+			? t("login.studentTitle")
+			: t("login.title"),
 );
 const channelLabel = computed(() => (channel.value === "whatsapp" ? t("login.whatsapp") : t("login.sms")));
 
@@ -141,7 +145,9 @@ async function submitCode(kind?: PortalKind) {
 			await finishSignIn();
 			return;
 		}
-		const options = (result.choose || []).filter((value): value is PortalKind => value === "student" || value === "parent");
+		const options = (result.choose || []).filter(
+			(value): value is PortalKind => value === "student" || value === "parent",
+		);
 		if (options.length > 1 && !kind) {
 			if (preferredKind.value && options.includes(preferredKind.value)) {
 				busy.value = false;
@@ -219,7 +225,9 @@ onBeforeUnmount(() => {
 				<div class="min-w-0 flex-1">
 					<p class="font-semibold text-ink">{{ t("login.closedTitle") }}</p>
 					<p class="mt-0.5 text-sm text-muted">{{ session.closedReason }}</p>
-					<button type="button" class="btn-ghost -ml-3 mt-1 min-h-10 px-3 text-sm" @click="clearClosedReason">{{ t("common.dismiss") }}</button>
+					<button type="button" class="btn-ghost -ml-3 mt-1 min-h-10 px-3 text-sm" @click="clearClosedReason">
+						{{ t("common.dismiss") }}
+					</button>
 				</div>
 			</div>
 
@@ -229,7 +237,11 @@ onBeforeUnmount(() => {
 					<h2 class="sr-only" tabindex="-1" data-step-title>{{ t("login.mobileStep") }}</h2>
 					<label for="login-mobile" class="field-label">{{ t("login.mobileLabel") }}</label>
 					<div class="flex items-stretch gap-2">
-						<span class="inline-flex min-h-12 items-center rounded-xl border border-line bg-surface-2 px-3 font-semibold text-muted" aria-hidden="true">+91</span>
+						<span
+							class="inline-flex min-h-12 items-center rounded-xl border border-line bg-surface-2 px-3 font-semibold text-muted"
+							aria-hidden="true"
+							>+91</span
+						>
 						<input
 							id="login-mobile"
 							ref="mobileField"
@@ -243,7 +255,7 @@ onBeforeUnmount(() => {
 							:aria-invalid="fieldError ? 'true' : undefined"
 							:aria-describedby="fieldError ? 'login-mobile-error login-mobile-hint' : 'login-mobile-hint'"
 							required
-						>
+						/>
 					</div>
 					<p v-if="fieldError" id="login-mobile-error" class="field-error" role="alert">
 						<CircleAlert :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ fieldError }}
@@ -254,12 +266,14 @@ onBeforeUnmount(() => {
 						<legend class="field-label">{{ t("login.channelLabel") }}</legend>
 						<div class="grid grid-cols-2 gap-2">
 							<label
-								v-for="option in (['sms', 'whatsapp'] as const)"
+								v-for="option in ['sms', 'whatsapp'] as const"
 								:key="option"
 								class="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-focus"
-								:class="channel === option ? 'border-brand bg-brand-soft text-brand-ink' : 'border-line bg-surface text-ink'"
+								:class="
+									channel === option ? 'border-brand bg-brand-soft text-brand-ink' : 'border-line bg-surface text-ink'
+								"
 							>
-								<input v-model="channel" class="sr-only" type="radio" name="channel" :value="option">
+								<input v-model="channel" class="sr-only" type="radio" name="channel" :value="option" />
 								<Smartphone v-if="option === 'sms'" :size="18" aria-hidden="true" />
 								<MessageCircle v-else :size="18" aria-hidden="true" />
 								{{ option === "sms" ? t("login.sms") : t("login.whatsapp") }}
@@ -267,7 +281,11 @@ onBeforeUnmount(() => {
 						</div>
 					</fieldset>
 
-					<p v-if="error" class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+					<p
+						v-if="error"
+						class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+						role="alert"
+					>
 						<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 					</p>
 
@@ -297,19 +315,37 @@ onBeforeUnmount(() => {
 							@complete="submitCode()"
 						/>
 					</div>
-					<p class="mt-2 text-xs text-muted">{{ t("login.expiresIn", { minutes: Math.max(1, Math.round(expiresIn / 60)) }) }}</p>
+					<p class="mt-2 text-xs text-muted">
+						{{ t("login.expiresIn", { minutes: Math.max(1, Math.round(expiresIn / 60)) }) }}
+					</p>
 
-					<p v-if="error" class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+					<p
+						v-if="error"
+						class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+						role="alert"
+					>
 						<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 					</p>
-					<p v-else-if="info" class="mt-4 rounded-xl bg-success-soft p-3 text-sm font-medium text-success" role="status">{{ info }}</p>
+					<p
+						v-else-if="info"
+						class="mt-4 rounded-xl bg-success-soft p-3 text-sm font-medium text-success"
+						role="status"
+					>
+						{{ info }}
+					</p>
 
-					<button type="submit" class="btn-primary btn-block mt-5 min-h-12" :disabled="busy || code.length !== OTP_LENGTH">
+					<button
+						type="submit"
+						class="btn-primary btn-block mt-5 min-h-12"
+						:disabled="busy || code.length !== OTP_LENGTH"
+					>
 						{{ busy ? t("login.verifying") : t("login.verify") }}
 					</button>
 
 					<div class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
-						<button type="button" class="btn-ghost -ml-3 px-3" @click="changeNumber">{{ t("login.changeNumber") }}</button>
+						<button type="button" class="btn-ghost -ml-3 px-3" @click="changeNumber">
+							{{ t("login.changeNumber") }}
+						</button>
 						<button
 							type="button"
 							class="btn-ghost -mr-3 px-3"
@@ -339,10 +375,19 @@ onBeforeUnmount(() => {
 							<ArrowRight :size="18" class="ml-auto" aria-hidden="true" />
 						</button>
 					</div>
-					<p v-if="error" class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+					<p
+						v-if="error"
+						class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+						role="alert"
+					>
 						<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 					</p>
-					<button type="button" class="btn-ghost -ml-3 mt-4 px-3 text-sm" data-test="choose-change-number" @click="changeNumber">
+					<button
+						type="button"
+						class="btn-ghost -ml-3 mt-4 px-3 text-sm"
+						data-test="choose-change-number"
+						@click="changeNumber"
+					>
 						{{ t("login.changeNumber") }}
 					</button>
 				</div>

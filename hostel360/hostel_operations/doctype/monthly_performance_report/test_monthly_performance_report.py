@@ -51,7 +51,12 @@ def add_alert(severity, category, key, first_seen, occurrences=1, is_outage=0, r
 
 def add_backup(backup_type, status, finished_at):
 	return frappe.get_doc(
-		{"doctype": "Ops Backup Record", "backup_type": backup_type, "status": status, "finished_at": finished_at}
+		{
+			"doctype": "Ops Backup Record",
+			"backup_type": backup_type,
+			"status": status,
+			"finished_at": finished_at,
+		}
 	).insert()
 
 
@@ -70,7 +75,11 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 		# checks every five minutes cover the rest of the month except a 30-minute gap
 		# (15 March 10:00-10:30) in which nothing was measured at all.
 		probe = [
-			{"metric": "uptime_probe", "value": 0 if 40 <= i < 90 else 1, "recorded_at": add_to_date(MONTH_START, minutes=i)}
+			{
+				"metric": "uptime_probe",
+				"value": 0 if 40 <= i < 90 else 1,
+				"recorded_at": add_to_date(MONTH_START, minutes=i),
+			}
 			for i in range(100)
 		]
 		record_metrics(probe, source="Uptime Probe")
@@ -102,12 +111,28 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 			host="test-host",
 		)
 
-		add_alert("Critical", "Availability", "test.report.portal", at(8), occurrences=3, is_outage=1, resolved_after=30)
-		add_alert("Critical", "Security", "malware-detected-report0001", at(9), occurrences=2, resolved_after=5)
+		add_alert(
+			"Critical",
+			"Availability",
+			"test.report.portal",
+			at(8),
+			occurrences=3,
+			is_outage=1,
+			resolved_after=30,
+		)
+		add_alert(
+			"Critical", "Security", "malware-detected-report0001", at(9), occurrences=2, resolved_after=5
+		)
 		add_alert("Warning", "Security", "security.failed_logins.report", at(11), resolved_after=15)
 		# A scanner outage is a security event but not a detection.
 		add_alert("Warning", "Security", "malware-scanner-unreachable", at(12), resolved_after=20)
-		add_alert("Critical", "Availability", "test.report.april", get_datetime("2001-04-02 10:00:00"), resolved_after=5)
+		add_alert(
+			"Critical",
+			"Availability",
+			"test.report.april",
+			get_datetime("2001-04-02 10:00:00"),
+			resolved_after=5,
+		)
 
 		for day in (1, 2, 3):
 			add_backup("Daily", "Success", at(day, 2))
@@ -148,7 +173,13 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 			).insert(ignore_permissions=True)
 		for user in (PORTAL_USER, "Administrator"):
 			log = frappe.get_doc(
-				{"doctype": "Activity Log", "user": user, "operation": "Login", "status": "Success", "subject": "Login"}
+				{
+					"doctype": "Activity Log",
+					"user": user,
+					"operation": "Login",
+					"status": "Success",
+					"subject": "Login",
+				}
 			).insert(ignore_permissions=True)
 			frappe.db.set_value("Activity Log", log.name, "creation", at(14), update_modified=False)
 
@@ -195,7 +226,9 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 
 		self.assertEqual(doc.portal_logins, 1)
 		expected_students = (
-			frappe.db.count("Hostel Student", {"status": "Active"}) if frappe.db.table_exists("Hostel Student") else 0
+			frappe.db.count("Hostel Student", {"status": "Active"})
+			if frappe.db.table_exists("Hostel Student")
+			else 0
 		)
 		self.assertEqual(doc.active_students, expected_students)
 		self.assertIn("99.821%", doc.summary)
@@ -217,7 +250,9 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 			self.generate(send=True)
 		sendmail.assert_called_once()
 		kwargs = sendmail.call_args.kwargs
-		self.assertEqual(set(kwargs["recipients"]), {"principal@example.edu", "warden@example.edu", LEVEL_ONE_EMAIL})
+		self.assertEqual(
+			set(kwargs["recipients"]), {"principal@example.edu", "warden@example.edu", LEVEL_ONE_EMAIL}
+		)
 		self.assertEqual(kwargs["attachments"][0]["fname"], f"MPR-{MONTH}.pdf")
 		self.assertIn("March 2001", kwargs["subject"])
 		doc = frappe.get_doc("Monthly Performance Report", name)
@@ -267,7 +302,9 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 			frappe.db.set_single_value("Hostel Settings", "office_email", "office@example.edu")
 			reports.generate_monthly_performance_report(month=OTHER_MONTH, send=True)
 		sendmail.assert_called_once()
-		self.assertEqual(set(sendmail.call_args.kwargs["recipients"]), {"office@example.edu", LEVEL_ONE_EMAIL})
+		self.assertEqual(
+			set(sendmail.call_args.kwargs["recipients"]), {"office@example.edu", LEVEL_ONE_EMAIL}
+		)
 		self.assertTrue(frappe.db.get_value("Monthly Performance Report", name, "sent_on"))
 		self.assertEqual(frappe.db.get_value("Ops Alert", alert, "status"), "Resolved")
 
@@ -293,7 +330,9 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 			self.assertEqual(reports.catch_up_monthly_report(moment), name)
 			self.assertIsNone(reports.catch_up_monthly_report(moment), "never e-mailed twice")
 		sendmail.assert_called_once()
-		self.assertFalse(reports.delivery_status(get_datetime("2001-06-01 06:00:00"))["applicable"], "before the 07:00 run")
+		self.assertFalse(
+			reports.delivery_status(get_datetime("2001-06-01 06:00:00"))["applicable"], "before the 07:00 run"
+		)
 
 	def test_health_check_retries_and_escalates_an_unsent_report(self):
 		from hostel360.hostel_operations import health
@@ -301,7 +340,11 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 
 		self.isolate()
 		self.clear_institution_contacts()
-		with DeliveryRecorder(), patch.object(reports, "render_pdf", return_value=(b"%PDF", "report.pdf")), patch("frappe.sendmail"):
+		with (
+			DeliveryRecorder(),
+			patch.object(reports, "render_pdf", return_value=(b"%PDF", "report.pdf")),
+			patch("frappe.sendmail"),
+		):
 			reports.generate_monthly_performance_report(month=OTHER_MONTH, send=True)
 
 			def ctx(moment, read_only=True):

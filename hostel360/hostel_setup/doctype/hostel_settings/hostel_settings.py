@@ -35,16 +35,16 @@ class HostelSettings(Document):
 			frappe.throw(_("Grievance Urgent Escalation Hours must be at least 1."))
 		if cint(self.grievance_urgent_escalation_hours) > cint(self.grievance_escalation_hours):
 			frappe.throw(
-				_("Urgent grievances must escalate sooner than normal ones. Reduce Grievance Urgent Escalation Hours.")
+				_(
+					"Urgent grievances must escalate sooner than normal ones. Reduce Grievance Urgent Escalation Hours."
+				)
 			)
 
 	def clean_urls(self):
 		for fieldname in ("portal_url", "hostel_website_url"):
 			value = (self.get(fieldname) or "").strip()
 			if value and not value.startswith(("https://", "http://")):
-				frappe.throw(
-					_("{0} must start with https://").format(_(self.meta.get_label(fieldname)))
-				)
+				frappe.throw(_("{0} must start with https://").format(_(self.meta.get_label(fieldname))))
 			self.set(fieldname, value.rstrip("/"))
 
 

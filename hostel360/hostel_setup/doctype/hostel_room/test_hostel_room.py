@@ -5,7 +5,15 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, nowdate
 
-from hostel360.hostel_people.testing import allot, beds_of, make_block, make_floor, make_hostel, make_room, make_student
+from hostel360.hostel_people.testing import (
+	allot,
+	beds_of,
+	make_block,
+	make_floor,
+	make_hostel,
+	make_room,
+	make_student,
+)
 
 
 class TestHostelRoom(IntegrationTestCase):
@@ -82,7 +90,13 @@ class TestHostelRoom(IntegrationTestCase):
 
 	def test_room_type_must_match_capacity(self):
 		room = frappe.get_doc(
-			{"doctype": "Hostel Room", "hostel": self.hostel.name, "room_number": "X1", "room_type": "Double", "capacity": 3}
+			{
+				"doctype": "Hostel Room",
+				"hostel": self.hostel.name,
+				"room_number": "X1",
+				"room_type": "Double",
+				"capacity": 3,
+			}
 		)
 		self.assertRaises(frappe.ValidationError, room.insert)
 
@@ -140,6 +154,12 @@ class TestHostelRoom(IntegrationTestCase):
 		self.assertEqual(room.room_number, "G-12")
 		self.assertEqual(room.name, f"{self.hostel.name}-G-12")
 		bad = frappe.get_doc(
-			{"doctype": "Hostel Room", "hostel": self.hostel.name, "room_number": "1/2", "room_type": "Single", "capacity": 1}
+			{
+				"doctype": "Hostel Room",
+				"hostel": self.hostel.name,
+				"room_number": "1/2",
+				"room_type": "Single",
+				"capacity": 1,
+			}
 		)
 		self.assertRaises(frappe.ValidationError, bad.insert)

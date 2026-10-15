@@ -94,11 +94,15 @@ class BonafideCertificateRequest(Document):
 		if in_migration():
 			return
 		assert_unchanged(
-			self, CERTIFICATE_FIELDS, _("{0} cannot be changed. Please raise a new request if they are wrong.")
+			self,
+			CERTIFICATE_FIELDS,
+			_("{0} cannot be changed. Please raise a new request if they are wrong."),
 		)
 		if not self.flags.recording_decision:
 			assert_unchanged(
-				self, DECISION_FIELDS, _("{0} can only be changed with the Approve, Reject and Mark Issued actions.")
+				self,
+				DECISION_FIELDS,
+				_("{0} can only be changed with the Approve, Reject and Mark Issued actions."),
 			)
 
 	def set_student_details(self) -> frappe._dict:
@@ -117,11 +121,18 @@ class BonafideCertificateRequest(Document):
 	def validate_duplicate(self):
 		existing = frappe.db.get_value(
 			"Bonafide Certificate Request",
-			{"student": self.student, "purpose": self.purpose, "status": "Pending", "name": ["!=", self.name or ""]},
+			{
+				"student": self.student,
+				"purpose": self.purpose,
+				"status": "Pending",
+				"name": ["!=", self.name or ""],
+			},
 		)
 		if existing:
 			frappe.throw(
-				_("A request for a {0} certificate is already pending ({1}).").format(_(self.purpose), existing),
+				_("A request for a {0} certificate is already pending ({1}).").format(
+					_(self.purpose), existing
+				),
 				frappe.DuplicateEntryError,
 			)
 
@@ -233,7 +244,8 @@ class BonafideCertificateRequest(Document):
 			subject=pronouns["subject"],
 			guardian_name=self.get_primary_guardian_name(),
 			year_words=YEAR_WORDS.get(str(self.year_of_study or ""), ""),
-			hostel_name=(self.hostel and frappe.db.get_value("Hostel", self.hostel, "hostel_name")) or self.hostel,
+			hostel_name=(self.hostel and frappe.db.get_value("Hostel", self.hostel, "hostel_name"))
+			or self.hostel,
 			room_number=(self.room and frappe.db.get_value("Hostel Room", self.room, "room_number")) or "",
 			purpose_phrase=self.get_purpose_phrase(),
 			contact_line="  |  ".join(part for part in contact if part),

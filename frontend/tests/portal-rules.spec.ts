@@ -46,7 +46,10 @@ describe("the hostel clock", () => {
 	it("is what the leave form checks 'in the past' against", async () => {
 		vi.useFakeTimers({ toFake: ["Date"] });
 		vi.setSystemTime(new Date(Date.UTC(2026, 9, 15, 12, 0, 0))); // 17:30 in India
-		const wrapper = mount(LeaveForm, { props: { reductionMinDays: 3, timeZone: "Asia/Kolkata" }, attachTo: document.body });
+		const wrapper = mount(LeaveForm, {
+			props: { reductionMinDays: 3, timeZone: "Asia/Kolkata" },
+			attachTo: document.body,
+		});
 		await wrapper.find('[name="from_datetime"]').setValue("2026-10-15T15:00"); // two and a half hours ago in India
 		await wrapper.find('[name="to_datetime"]').setValue("2026-10-18T15:00");
 		await wrapper.find('[name="destination"]').setValue("Madurai");
@@ -119,13 +122,22 @@ describe("redirect checkout form", () => {
 		expect(() => buildRedirectForm({ action_url: "http://test.payu.in/_payment", method: "POST", fields: {} })).toThrow(
 			RedirectCheckoutError,
 		);
-		expect(() => buildRedirectForm({ action_url: "not a url", method: "POST", fields: {} })).toThrow(RedirectCheckoutError);
+		expect(() => buildRedirectForm({ action_url: "not a url", method: "POST", fields: {} })).toThrow(
+			RedirectCheckoutError,
+		);
 	});
 });
 
 describe("payable invoices", () => {
 	it("stay payable while an abandoned checkout is still open", () => {
-		const base = { name: "INV-1", invoice_type: "Hostel Fee", posting_date: "2026-10-01", total_amount: 100, paid_amount: 0, items: [] };
+		const base = {
+			name: "INV-1",
+			invoice_type: "Hostel Fee",
+			posting_date: "2026-10-01",
+			total_amount: 100,
+			paid_amount: 0,
+			items: [],
+		};
 		expect(canPay({ ...base, outstanding_amount: 100, status: "Unpaid", payment_in_progress: true })).toBe(true);
 		expect(canPay({ ...base, outstanding_amount: 100, status: "Cancelled" })).toBe(false);
 		expect(canPay({ ...base, outstanding_amount: 0, status: "Paid" })).toBe(false);
@@ -135,14 +147,36 @@ describe("payable invoices", () => {
 describe("access by ward", () => {
 	function route(name: string, fullPath: string): RouteLocationNormalized {
 		const record = routes.find((item) => item.name === name);
-		return { name, fullPath, path: fullPath, query: {}, params: {}, hash: "", matched: [], meta: record?.meta ?? {}, redirectedFrom: undefined };
+		return {
+			name,
+			fullPath,
+			path: fullPath,
+			query: {},
+			params: {},
+			hash: "",
+			matched: [],
+			meta: record?.meta ?? {},
+			redirectedFrom: undefined,
+		};
 	}
-	const validated: GuardState = { loggedIn: true, kind: "student", consentRequired: false, profileConfirmed: true, validationStatus: "Validated" };
+	const validated: GuardState = {
+		loggedIn: true,
+		kind: "student",
+		consentRequired: false,
+		profileConfirmed: true,
+		validationStatus: "Validated",
+	};
 
 	it("keeps a validated student who is not Active to their dues", () => {
 		const suspended = { ...validated, studentStatus: "Suspended" };
-		expect(decideNavigation(route("leave", "/leave"), suspended)).toEqual({ name: "home", query: { notice: "restricted" } });
-		expect(decideNavigation(route("grievances", "/grievances"), suspended)).toEqual({ name: "home", query: { notice: "restricted" } });
+		expect(decideNavigation(route("leave", "/leave"), suspended)).toEqual({
+			name: "home",
+			query: { notice: "restricted" },
+		});
+		expect(decideNavigation(route("grievances", "/grievances"), suspended)).toEqual({
+			name: "home",
+			query: { notice: "restricted" },
+		});
 		expect(decideNavigation(route("fees", "/fees"), suspended)).toBe(true);
 		expect(decideNavigation(route("pay", "/fees/pay"), suspended)).toBe(true);
 		expect(decideNavigation(route("receipts", "/receipts"), suspended)).toBe(true);
@@ -176,8 +210,20 @@ describe("access by ward", () => {
 			display_name: "Raman K",
 			validation_status: "Validated",
 			wards: [
-				{ student: "REG001", full_name: "Priya", validation_status: "Validated", status: "Active", payment_enabled: true },
-				{ student: "REG002", full_name: "Arun", validation_status: "Validated", status: "Active", payment_enabled: false },
+				{
+					student: "REG001",
+					full_name: "Priya",
+					validation_status: "Validated",
+					status: "Active",
+					payment_enabled: true,
+				},
+				{
+					student: "REG002",
+					full_name: "Arun",
+					validation_status: "Validated",
+					status: "Active",
+					payment_enabled: false,
+				},
 			],
 			settings: { payment_enabled: true },
 		});
@@ -241,7 +287,10 @@ describe("LoginView", () => {
 		await flushPromises();
 		expect(wrapper.text()).toContain("I am a parent or guardian");
 
-		await wrapper.findAll("button").find((button) => button.text().includes("I am a parent"))!.trigger("click");
+		await wrapper
+			.findAll("button")
+			.find((button) => button.text().includes("I am a parent"))!
+			.trigger("click");
 		await flushPromises();
 		// Back on the code step, where Resend and Change number are.
 		expect(wrapper.findComponent(OtpInput).exists()).toBe(true);

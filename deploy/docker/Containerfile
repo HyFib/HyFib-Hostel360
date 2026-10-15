@@ -9,7 +9,8 @@
 #                          production build of every app (desk bundles + portal SPA)
 #   runtime  frappe/base   the finished bench; built assets live in the image layer and are
 #                          linked into the sites volume at start-up, so a new image can never
-#                          serve stale assets left in the volume by an older one
+#                          serve stale assets left in the volume by an older one; Tamil fonts
+#                          for print PDFs
 #
 # One image runs every role (backend, websocket, worker, scheduler, frontend, configure,
 # migrate); the role is the first argument, see deploy/docker/entrypoint.sh.
@@ -125,6 +126,24 @@ LABEL org.opencontainers.image.title="HyFib Hostel360" \
 	org.opencontainers.image.created="${BUILD_DATE}" \
 	org.opencontainers.image.base.name="docker.io/${FRAPPE_BASE_IMAGE}" \
 	com.hyfib.hostel360.frappe-version="${FRAPPE_VERSION}"
+
+# Fonts with Tamil glyphs for print PDFs. The base image has only DejaVu, which has none, so
+# wkhtmltopdf and Chromium left every Tamil character out of receipts, certificates and bills
+# (labels, names, addresses). fonts-noto-core carries Noto Sans Tamil and Noto Serif Tamil,
+# which the print formats name and the fontconfig rule makes the default for Tamil text;
+# Lohit Tamil is the small fallback stock fontconfig already knows. Kept ahead of the bench
+# copy so this layer is reused across application builds. The checks fail the build if
+# fontconfig cannot find the faces (deploy/tests/image/run.sh renders real PDFs).
+COPY --chmod=0644 deploy/docker/fontconfig/64-hostel360-tamil.conf /etc/fonts/conf.d/64-hostel360-tamil.conf
+RUN set -eux; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends fonts-noto-core fonts-lohit-taml; \
+	rm -rf /var/lib/apt/lists/*; \
+	fc-cache -f; \
+	fc-list :lang=ta family | grep -qx 'Noto Sans Tamil'; \
+	fc-list :lang=ta family | grep -qx 'Noto Serif Tamil'; \
+	test "$(fc-match -f '%{family[0]}' 'sans-serif:lang=ta')" = 'Noto Sans Tamil'; \
+	test "$(fc-match -f '%{family[0]}' 'serif:lang=ta')" = 'Noto Serif Tamil'
 
 COPY --from=builder --chown=frappe:root /home/frappe/frappe-bench /home/frappe/frappe-bench
 COPY --chmod=0755 deploy/docker/entrypoint.sh /usr/local/bin/h360-entrypoint

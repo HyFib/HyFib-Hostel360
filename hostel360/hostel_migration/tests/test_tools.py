@@ -69,7 +69,9 @@ def sample_reconciliation() -> dict:
 
 
 class TestReportRendering(UnitTestCase):
-	failures = [{"entity": "students", "line": 7, "source_id": "S6", "error": "mobile_number: '123' | not valid"}]
+	failures = [
+		{"entity": "students", "line": 7, "source_id": "S6", "error": "mobile_number: '123' | not valid"}
+	]
 
 	def test_markdown(self):
 		text = render_markdown(sample_reconciliation(), self.failures)
@@ -111,7 +113,10 @@ class TestExitExport(IntegrationTestCase):
 		self.assertTrue(result["encrypted"])
 		self.assertIsNone(result["directory"])
 		self.assertTrue(result["archive"].endswith(".tar.gz.h360enc"))
-		self.assertEqual(sorted(os.listdir(self.output)), sorted([os.path.basename(result["archive"]), os.path.basename(result["archive"]) + ".sha256"]))
+		self.assertEqual(
+			sorted(os.listdir(self.output)),
+			sorted([os.path.basename(result["archive"]), os.path.basename(result["archive"]) + ".sha256"]),
+		)
 
 		extracted = os.path.join(self.output, "check")
 		verified = verify_export(result["archive"], passphrase=PASSPHRASE, extract_to=extracted)
@@ -164,7 +169,9 @@ class TestDemoData(IntegrationTestCase):
 
 		generate(students=6, seed=11)
 		students = frappe.get_all(
-			"Hostel Student", filters={"register_number": ["like", "UAT%"]}, fields=["name", "email", "status"]
+			"Hostel Student",
+			filters={"register_number": ["like", "UAT%"]},
+			fields=["name", "email", "status"],
 		)
 		self.assertGreaterEqual(len(students), 6)
 		self.assertTrue(all(s.email.endswith(".invalid") for s in students if s.email))
@@ -196,7 +203,12 @@ class TestSiteSetup(IntegrationTestCase):
 	def test_portal_url(self):
 		self.assertEqual(clean_portal_url(" https://hostel.example.ac.in/ "), "https://hostel.example.ac.in")
 		self.assertEqual(clean_portal_url("http://b8.localhost:8000"), "http://b8.localhost:8000")
-		for bad in ("hostel.example.ac.in", "http://hostel.example.ac.in", "https://x.in/hostel", "ftp://x.in"):
+		for bad in (
+			"hostel.example.ac.in",
+			"http://hostel.example.ac.in",
+			"https://x.in/hostel",
+			"ftp://x.in",
+		):
 			with self.assertRaises(SiteSetupError, msg=bad):
 				clean_portal_url(bad)
 
@@ -210,7 +222,9 @@ class TestSiteSetup(IntegrationTestCase):
 
 	def test_admin_user_created_once(self):
 		email = f"h360-admin-{frappe.generate_hash(length=8)}@example.com"
-		user, password = ensure_admin_user(email, "Hostel", "Admin", system_manager=False, reset_password=False)
+		user, password = ensure_admin_user(
+			email, "Hostel", "Admin", system_manager=False, reset_password=False
+		)
 		self.assertTrue(password)
 		self.assertEqual(frappe.db.get_value("User", user, "user_type"), "System User")
 		self.assertIn("Hostel Administrator", frappe.get_roles(user))

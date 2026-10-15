@@ -56,7 +56,9 @@ class TestHealthChecks(IntegrationTestCase):
 		metric = unique_key("fake_metric")
 		with patch.object(health, "CHECKS", (fake_check(key, health.CRIT, metric=metric),)):
 			summary = health._run_and_apply()
-		alert = frappe.db.get_value("Ops Alert", {"open_key": key}, ["name", "severity", "source"], as_dict=True)
+		alert = frappe.db.get_value(
+			"Ops Alert", {"open_key": key}, ["name", "severity", "source"], as_dict=True
+		)
 		self.assertEqual((alert.severity, alert.source), ("Critical", "Health Check"))
 		self.assertEqual(summary["results"][0]["status"], "critical")
 		self.assertEqual(frappe.db.count("Ops Metric Sample", {"metric": metric}), 1)
@@ -99,7 +101,12 @@ class TestHealthChecks(IntegrationTestCase):
 
 	def test_real_checks_run(self):
 		results = {r.key: r for r in health.run_checks(read_only=True)}
-		for key in ("health.database.latency", "health.redis.cache", "health.redis.queue", "capacity.disk.sites"):
+		for key in (
+			"health.database.latency",
+			"health.redis.cache",
+			"health.redis.queue",
+			"capacity.disk.sites",
+		):
 			self.assertIn(key, results)
 			self.assertNotEqual(results[key].status, health.UNKNOWN, results[key].message)
 		self.assertEqual(results["health.redis.cache"].status, health.OK)
@@ -153,7 +160,13 @@ class TestHealthChecks(IntegrationTestCase):
 	def test_silent_host_agent(self):
 		host = unique_key("host")
 		metrics.record_metrics(
-			[{"metric": "agent_heartbeat", "value": 1, "recorded_at": add_to_date(now_datetime(), minutes=-30)}],
+			[
+				{
+					"metric": "agent_heartbeat",
+					"value": 1,
+					"recorded_at": add_to_date(now_datetime(), minutes=-30),
+				}
+			],
 			source="Host Agent",
 			host=host,
 		)
@@ -163,7 +176,9 @@ class TestHealthChecks(IntegrationTestCase):
 	def test_tls_check_uses_cached_certificate_details(self):
 		with (
 			patch.object(health, "_portal_url", return_value="https://hostel.example.edu"),
-			patch.object(health, "_inspect_certificate", return_value={"not_after": 0, "not_after_text": "x"}) as inspect,
+			patch.object(
+				health, "_inspect_certificate", return_value={"not_after": 0, "not_after_text": "x"}
+			) as inspect,
 		):
 			frappe.cache.delete_value(f"{health.TLS_CACHE_PREFIX}hostel.example.edu:443")
 			import time
@@ -187,7 +202,10 @@ class TestMetrics(IntegrationTestCase):
 
 		# Readiness samples every five minutes for the first 20 minutes, one of them down.
 		metrics.record_metrics(
-			[{"metric": "app_ready", "value": v, "recorded_at": add_to_date(start, minutes=5 * i)} for i, v in enumerate([1, 1, 0, 1])],
+			[
+				{"metric": "app_ready", "value": v, "recorded_at": add_to_date(start, minutes=5 * i)}
+				for i, v in enumerate([1, 1, 0, 1])
+			],
 			source="Health Check",
 		)
 		fallback = metrics.compute_uptime(start, end)
@@ -201,7 +219,10 @@ class TestMetrics(IntegrationTestCase):
 
 		# Probe samples take precedence over readiness for the minutes they cover.
 		metrics.record_metrics(
-			[{"metric": "uptime_probe", "value": 1, "recorded_at": add_to_date(start, minutes=i)} for i in range(60)],
+			[
+				{"metric": "uptime_probe", "value": 1, "recorded_at": add_to_date(start, minutes=i)}
+				for i in range(60)
+			],
 			source="Uptime Probe",
 		)
 		probe = metrics.compute_uptime(start, end)
@@ -233,7 +254,10 @@ class TestMetrics(IntegrationTestCase):
 
 		# Readiness checks from inside the application fill the gap where they ran.
 		metrics.record_metrics(
-			[{"metric": "app_ready", "value": 1, "recorded_at": add_to_date(start, minutes=minute)} for minute in range(600, 690, 5)],
+			[
+				{"metric": "app_ready", "value": 1, "recorded_at": add_to_date(start, minutes=minute)}
+				for minute in range(600, 690, 5)
+			],
 			source="Health Check",
 		)
 		filled = metrics.compute_uptime(start, end)
@@ -247,7 +271,10 @@ class TestMetrics(IntegrationTestCase):
 		start = get_datetime("1998-06-01 00:00:00")
 		# Probe installed at noon: the morning is not "unmonitored downtime".
 		metrics.record_metrics(
-			[{"metric": "uptime_probe", "value": 1, "recorded_at": add_to_date(start, minutes=720 + i)} for i in range(120)],
+			[
+				{"metric": "uptime_probe", "value": 1, "recorded_at": add_to_date(start, minutes=720 + i)}
+				for i in range(120)
+			],
 			source="Uptime Probe",
 		)
 		uptime = metrics.compute_uptime(start, add_to_date(start, minutes=840))

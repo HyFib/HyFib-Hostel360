@@ -57,7 +57,10 @@ async function retry() {
 	<div v-if="unreachable" class="flex min-h-dvh flex-col">
 		<OfflineBanner />
 		<main class="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-6 text-center">
-			<span class="mb-4 inline-flex size-16 items-center justify-center rounded-full bg-warning-soft text-warning" aria-hidden="true">
+			<span
+				class="mb-4 inline-flex size-16 items-center justify-center rounded-full bg-warning-soft text-warning"
+				aria-hidden="true"
+			>
 				<WifiOff :size="30" />
 			</span>
 			<h1 class="text-xl font-bold text-ink" tabindex="-1" data-page-title>{{ t("network.offlineTitle") }}</h1>

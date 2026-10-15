@@ -18,9 +18,12 @@ const emit = defineEmits<{ pay: [invoices: string[]] }>();
 const expanded = ref<string | null>(null);
 
 const payableInvoices = computed(() => props.invoices.filter(canPay));
-const total = computed(() => totalOutstanding(props.invoices.filter((invoice) => selected.value.includes(invoice.name))));
+const total = computed(() =>
+	totalOutstanding(props.invoices.filter((invoice) => selected.value.includes(invoice.name))),
+);
 const allSelected = computed(
-	() => payableInvoices.value.length > 0 && payableInvoices.value.every((invoice) => selected.value.includes(invoice.name)),
+	() =>
+		payableInvoices.value.length > 0 && payableInvoices.value.every((invoice) => selected.value.includes(invoice.name)),
 );
 
 function toggle(invoice: Invoice) {
@@ -55,23 +58,39 @@ defineExpose({ total });
 						:checked="selected.includes(invoice.name)"
 						:aria-label="t('fees.select', { name: invoice.name, amount: formatINR(invoice.outstanding_amount) })"
 						@change="toggle(invoice)"
-					>
+					/>
 					<div class="min-w-0 flex-1">
 						<div class="flex flex-wrap items-center justify-between gap-2">
 							<p class="font-semibold text-ink">{{ tv("invoiceTypes", invoice.invoice_type) }}</p>
-							<StatusChip :status="invoice.payment_in_progress ? 'Initiated' : invoice.status" :label="invoice.payment_in_progress ? t('fees.paymentInProgress') : undefined" />
+							<StatusChip
+								:status="invoice.payment_in_progress ? 'Initiated' : invoice.status"
+								:label="invoice.payment_in_progress ? t('fees.paymentInProgress') : undefined"
+							/>
 						</div>
 						<p class="text-xs text-muted">
 							{{ invoice.name }} · {{ t("fees.issuedOn", { date: formatDate(invoice.posting_date) }) }}
 						</p>
 						<div class="mt-2 flex flex-wrap items-end justify-between gap-2">
 							<div>
-								<p class="text-lg font-bold text-ink">{{ formatINR(invoice.outstanding_amount > 0 ? invoice.outstanding_amount : invoice.total_amount, "always") }}</p>
+								<p class="text-lg font-bold text-ink">
+									{{
+										formatINR(
+											invoice.outstanding_amount > 0 ? invoice.outstanding_amount : invoice.total_amount,
+											"always",
+										)
+									}}
+								</p>
 								<p v-if="invoice.outstanding_amount > 0 && invoice.paid_amount > 0" class="text-xs text-muted">
-									{{ t("fees.paidOf", { paid: formatINR(invoice.paid_amount), total: formatINR(invoice.total_amount) }) }}
+									{{
+										t("fees.paidOf", { paid: formatINR(invoice.paid_amount), total: formatINR(invoice.total_amount) })
+									}}
 								</p>
 							</div>
-							<p v-if="invoice.due_date && invoice.outstanding_amount > 0" class="text-sm" :class="invoice.status === 'Overdue' ? 'font-semibold text-danger' : 'text-muted'">
+							<p
+								v-if="invoice.due_date && invoice.outstanding_amount > 0"
+								class="text-sm"
+								:class="invoice.status === 'Overdue' ? 'font-semibold text-danger' : 'text-muted'"
+							>
 								{{ t("fees.dueOn", { date: formatDate(invoice.due_date) }) }}
 							</p>
 						</div>
@@ -84,9 +103,18 @@ defineExpose({ total });
 							@click="expanded = expanded === invoice.name ? null : invoice.name"
 						>
 							{{ t("fees.details") }}
-							<ChevronDown :size="16" aria-hidden="true" :class="expanded === invoice.name ? 'rotate-180' : ''" class="transition-transform" />
+							<ChevronDown
+								:size="16"
+								aria-hidden="true"
+								:class="expanded === invoice.name ? 'rotate-180' : ''"
+								class="transition-transform"
+							/>
 						</button>
-						<dl v-if="expanded === invoice.name" :id="`items-${invoice.name}`" class="mt-1 space-y-1 rounded-xl bg-surface-2 p-3 text-sm">
+						<dl
+							v-if="expanded === invoice.name"
+							:id="`items-${invoice.name}`"
+							class="mt-1 space-y-1 rounded-xl bg-surface-2 p-3 text-sm"
+						>
 							<div v-for="(item, index) in invoice.items" :key="index" class="flex justify-between gap-3">
 								<dt class="text-muted">{{ item.description || item.fee_head }}</dt>
 								<dd class="font-medium text-ink">{{ formatINR(item.amount, "always") }}</dd>

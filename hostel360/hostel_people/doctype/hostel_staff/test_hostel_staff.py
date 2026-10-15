@@ -37,7 +37,9 @@ def make_staff(designation: str, hostels: list[str], **values):
 
 
 def hostel_permissions(user: str) -> set[str]:
-	return set(frappe.get_all("User Permission", filters={"user": user, "allow": "Hostel"}, pluck="for_value"))
+	return set(
+		frappe.get_all("User Permission", filters={"user": user, "allow": "Hostel"}, pluck="for_value")
+	)
 
 
 def open_session(user: str) -> str:

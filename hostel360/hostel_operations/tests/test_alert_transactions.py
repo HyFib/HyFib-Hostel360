@@ -54,7 +54,10 @@ class TestIndependentAlertTransactions(IntegrationTestCase):
 				raise frappe.QueryDeadlockError("1213 Deadlock found when trying to get lock")
 			return real_record(*args, **kwargs)
 
-		with IndependentAlerts(key) as independent, patch.object(alerts, "_record", side_effect=deadlock_once):
+		with (
+			IndependentAlerts(key) as independent,
+			patch.object(alerts, "_record", side_effect=deadlock_once),
+		):
 			todo = frappe.get_doc({"doctype": "ToDo", "description": key}).insert(ignore_permissions=True)
 			name = alerts.raise_alert(key, "Gateway unreachable", "Critical", "Payments")
 			rows = independent.committed(key)
@@ -81,7 +84,11 @@ class TestIndependentAlertTransactions(IntegrationTestCase):
 		key = unique_key("independent")
 		with (
 			IndependentAlerts(key) as independent,
-			patch.object(transaction, "open_connection", side_effect=transaction.IndependentConnectionUnavailable("max")),
+			patch.object(
+				transaction,
+				"open_connection",
+				side_effect=transaction.IndependentConnectionUnavailable("max"),
+			),
 		):
 			name = alerts.raise_alert(key, "Too many connections", "Warning", "Other")
 			self.assertTrue(frappe.db.exists("Ops Alert", name))
@@ -162,7 +169,10 @@ class TestIndependentAlertTransactions(IntegrationTestCase):
 				frappe.destroy()
 
 		try:
-			with IndependentAlerts(key) as independent, patch.object(alerts, "_recently_resolved", side_effect=after_lookup):
+			with (
+				IndependentAlerts(key) as independent,
+				patch.object(alerts, "_recently_resolved", side_effect=after_lookup),
+			):
 				threads = [threading.Thread(target=caller, args=(index,)) for index in (1, 2)]
 				for thread in threads:
 					thread.start()
@@ -170,7 +180,8 @@ class TestIndependentAlertTransactions(IntegrationTestCase):
 					thread.join(timeout=60)
 				rows = independent.committed(key)
 				work = committed_rows(
-					"select description from `tabToDo` where description like %(marker)s", {"marker": f"{marker}%"}
+					"select description from `tabToDo` where description like %(marker)s",
+					{"marker": f"{marker}%"},
 				)
 		finally:
 			_delete_todos(marker)

@@ -7,14 +7,17 @@ import { nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { t } from "@/i18n";
 
 // Boolean props default to false in Vue, so dismissible must be turned on explicitly here.
-const props = withDefaults(defineProps<{ open: boolean; title: string; dismissible?: boolean }>(), { dismissible: true });
+const props = withDefaults(defineProps<{ open: boolean; title: string; dismissible?: boolean }>(), {
+	dismissible: true,
+});
 const emit = defineEmits<{ close: [] }>();
 
 const panel = ref<HTMLElement | null>(null);
 const titleId = useId();
 let previouslyFocused: HTMLElement | null = null;
 
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+	'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function focusables(): HTMLElement[] {
 	return panel.value ? Array.from(panel.value.querySelectorAll<HTMLElement>(FOCUSABLE)) : [];

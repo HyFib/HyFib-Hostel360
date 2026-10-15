@@ -534,22 +534,13 @@ class TestFloodLimit(IntegrationTestCase):
 			self.assertIn(auth.flood_limit, list(bound_values(endpoint)), endpoint.__name__)
 
 
-class TestIdentityResolution(IntegrationTestCase):
-	"""Real Hostel Student and Hostel Guardian records."""
+class PeopleRecords:
+	"""Real Hostel Student and Hostel Guardian records, built from the contract DocTypes."""
 
 	def setUp(self):
 		super().setUp()
 		if not frappe.db.exists("DocType", "Hostel Student"):
 			self.skipTest("Hostel People is not installed on this site")
-		self._portal_flags = {
-			field: int(otp.portal_enabled(field))
-			for field in ("student_portal_enabled", "parent_portal_enabled")
-		}
-		self.addCleanup(self._restore_portal_flags)
-
-	def _restore_portal_flags(self):
-		for field, value in self._portal_flags.items():
-			frappe.db.set_single_value("Hostel Settings", field, value)
 
 	def make_student(self, **state) -> frappe._dict:
 		doc = frappe.get_doc(
@@ -584,6 +575,22 @@ class TestIdentityResolution(IntegrationTestCase):
 			frappe.db.set_value("Hostel Guardian", guardian.name, state)
 			guardian.reload()
 		return guardian
+
+
+class TestIdentityResolution(PeopleRecords, IntegrationTestCase):
+	"""Real Hostel Student and Hostel Guardian records."""
+
+	def setUp(self):
+		super().setUp()
+		self._portal_flags = {
+			field: int(otp.portal_enabled(field))
+			for field in ("student_portal_enabled", "parent_portal_enabled")
+		}
+		self.addCleanup(self._restore_portal_flags)
+
+	def _restore_portal_flags(self):
+		for field, value in self._portal_flags.items():
+			frappe.db.set_single_value("Hostel Settings", field, value)
 
 	def test_active_student_and_linked_guardian(self):
 		student = self.make_student()
@@ -636,3 +643,135 @@ class TestIdentityResolution(IntegrationTestCase):
 
 		frappe.db.set_single_value("Hostel Settings", "parent_portal_enabled", 0)
 		self.assertEqual(otp.resolve_identities(guardian.mobile_number), [])
+
+
+class TestUnlockScope(PeopleRecords, IntegrationTestCase):
+	"""Office staff scoped to some hostels lift sign-in locks only within them."""
+
+	def setUp(self):
+		super().setUp()
+		from hostel360.setup.roles import ADMIN_ROLE, OFFICE_ROLE
+
+		self.hostel_a, self.hostel_b = self.make_hostel(), self.make_hostel()
+		self.student_a = self.make_student(current_hostel=self.hostel_a)
+		self.student_b = self.make_student(current_hostel=self.hostel_b)
+		self.guardian_a = self.make_guardian(self.student_a)
+		self.guardian_b = self.make_guardian(self.student_b)
+		self.office_a = self.desk_user(OFFICE_ROLE, hostel=self.hostel_a)
+		self.office_all = self.desk_user(OFFICE_ROLE)
+		self.administrator = self.desk_user(ADMIN_ROLE)
+		self.numbers = [
+			doc.mobile_number for doc in (self.student_a, self.student_b, self.guardian_a, self.guardian_b)
+		]
+		for number in self.numbers:
+			self.lock(number)
+			self.addCleanup(clear_otp_keys, number)
+
+	def make_hostel(self) -> str:
+		code = f"U{frappe.generate_hash(length=5).upper()}"
+		return (
+			frappe.get_doc(
+				{
+					"doctype": "Hostel",
+					"hostel_name": f"Unlock Test {code}",
+					"hostel_code": code,
+					"gender": "Male",
+					"is_active": 1,
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
+
+	def desk_user(self, role: str, hostel: str | None = None) -> str:
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": f"unlock-{frappe.generate_hash(length=8)}@example.com",
+				"first_name": "Unlock",
+				"send_welcome_email": 0,
+				"roles": [{"role": role}],
+			}
+		)
+		user.flags.no_welcome_mail = True
+		user.insert(ignore_permissions=True)
+		if hostel:
+			# What a Hostel Staff assignment to that hostel gives the account.
+			frappe.get_doc(
+				{
+					"doctype": "User Permission",
+					"user": user.name,
+					"allow": "Hostel",
+					"for_value": hostel,
+					"apply_to_all_doctypes": 1,
+				}
+			).insert(ignore_permissions=True)
+		return user.name
+
+	def lock(self, number: str) -> None:
+		frappe.cache.set(otp._key(f"lock:{otp.mobile_ref(number)}"), "1", ex=otp.LOCKOUT_SECONDS)
+
+	def locked(self, number: str) -> bool:
+		return otp._ttl(f"lock:{otp.mobile_ref(number)}") > 0
+
+	def unlock(self, user: str, **kwargs):
+		from hostel360.api.auth import unlock_sign_in
+
+		with self.set_user(user):
+			return unlock_sign_in(**kwargs)
+
+	def test_scoped_office_unlocks_its_own_hostels_records(self):
+		self.assertEqual(
+			self.unlock(self.office_a, doctype="Hostel Student", name=self.student_a.name), {"ok": True}
+		)
+		self.assertFalse(self.locked(self.student_a.mobile_number))
+		self.assertEqual(
+			self.unlock(self.office_a, doctype="Hostel Guardian", name=self.guardian_a.name), {"ok": True}
+		)
+		self.assertFalse(self.locked(self.guardian_a.mobile_number))
+		# The number alone works too when everyone holding it is within the caller's hostels.
+		self.lock(self.student_a.mobile_number)
+		self.assertEqual(self.unlock(self.office_a, mobile=self.student_a.mobile_number), {"ok": True})
+		self.assertFalse(self.locked(self.student_a.mobile_number))
+
+	def test_scoped_office_cannot_unlock_another_hostels_numbers(self):
+		refused = (
+			{"doctype": "Hostel Student", "name": self.student_b.name},
+			{"doctype": "Hostel Guardian", "name": self.guardian_b.name},
+			{"mobile": self.student_b.mobile_number},
+			{"mobile": f"+91 {self.guardian_b.mobile_number}"},
+			# A record of its own hostel does not carry another number with it.
+			{
+				"doctype": "Hostel Student",
+				"name": self.student_a.name,
+				"mobile": self.student_b.mobile_number,
+			},
+		)
+		for kwargs in refused:
+			with self.assertRaises((frappe.PermissionError, frappe.ValidationError), msg=str(kwargs)):
+				self.unlock(self.office_a, **kwargs)
+		self.assertTrue(self.locked(self.student_b.mobile_number))
+		self.assertTrue(self.locked(self.guardian_b.mobile_number))
+
+	def test_missing_and_foreign_records_get_the_same_refusal(self):
+		with self.assertRaises(frappe.PermissionError) as missing:
+			self.unlock(self.office_a, doctype="Hostel Student", name="NO-SUCH-STUDENT")
+		with self.assertRaises(frappe.PermissionError) as foreign:
+			self.unlock(self.office_a, doctype="Hostel Student", name=self.student_b.name)
+		self.assertEqual(str(missing.exception), str(foreign.exception))
+		# Only the two portal record types carry a sign-in number.
+		with self.assertRaises(frappe.ValidationError):
+			self.unlock(self.office_all, doctype="User", name=self.office_a)
+		with self.assertRaises(frappe.ValidationError):
+			self.unlock(self.office_all, doctype="Hostel Student")
+
+	def test_unscoped_staff_unlock_any_hostel(self):
+		for user in (self.office_all, self.administrator):
+			self.lock(self.student_b.mobile_number)
+			self.assertEqual(
+				self.unlock(user, doctype="Hostel Student", name=self.student_b.name), {"ok": True}
+			)
+			self.assertFalse(self.locked(self.student_b.mobile_number))
+			self.lock(self.guardian_b.mobile_number)
+			self.assertEqual(self.unlock(user, mobile=self.guardian_b.mobile_number), {"ok": True})
+			self.assertFalse(self.locked(self.guardian_b.mobile_number))

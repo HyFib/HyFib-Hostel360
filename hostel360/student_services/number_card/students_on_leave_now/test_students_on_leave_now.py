@@ -42,14 +42,20 @@ class TestStudentsOnLeaveNow(IntegrationTestCase):
 
 	def test_recorded_return_ends_the_leave(self):
 		now = now_datetime()
-		back = leave(status="Returned", checked_out_on=add_to_date(now, hours=-4), returned_on=add_to_date(now, hours=-1))
+		back = leave(
+			status="Returned",
+			checked_out_on=add_to_date(now, hours=-4),
+			returned_on=add_to_date(now, hours=-1),
+		)
 		self.assertFalse(is_away(back, now))
 		later = leave(status="Returned", returned_on=add_to_date(now, hours=3))
 		self.assertTrue(is_away(later, now))
 
 	def test_overdue_leave_stays_away_until_return(self):
 		now = now_datetime()
-		overdue = leave(status="Overdue", from_datetime=add_to_date(now, days=-3), to_datetime=add_to_date(now, days=-1))
+		overdue = leave(
+			status="Overdue", from_datetime=add_to_date(now, days=-3), to_datetime=add_to_date(now, days=-1)
+		)
 		self.assertTrue(is_away(overdue, now))
 
 	def test_card_agrees_with_students_on_leave_report(self):

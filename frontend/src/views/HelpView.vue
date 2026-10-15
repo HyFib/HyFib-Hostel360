@@ -23,7 +23,11 @@ const tel = (value: string) => `tel:${value.replace(/[^\d+]/g, "")}`;
 	<div>
 		<PublicHeader v-if="!session.loggedIn" />
 		<div :class="session.loggedIn ? '' : 'mx-auto max-w-3xl px-4 py-6'">
-			<PageHeader :title="t('help.title')" :subtitle="t('help.intro')" :back="session.loggedIn ? undefined : { name: 'login' }" />
+			<PageHeader
+				:title="t('help.title')"
+				:subtitle="t('help.intro')"
+				:back="session.loggedIn ? undefined : { name: 'login' }"
+			/>
 
 			<div class="grid gap-4 sm:grid-cols-2">
 				<section v-if="officePhone || officeEmail" class="card" aria-labelledby="help-office">
@@ -86,10 +90,17 @@ const tel = (value: string) => `tel:${value.replace(/[^\d+]/g, "")}`;
 								@click="open = open === faq ? null : faq"
 							>
 								{{ t(`help.faq.${faq}.q`) }}
-								<ChevronDown :size="18" class="shrink-0 text-muted transition-transform" :class="open === faq ? 'rotate-180' : ''" aria-hidden="true" />
+								<ChevronDown
+									:size="18"
+									class="shrink-0 text-muted transition-transform"
+									:class="open === faq ? 'rotate-180' : ''"
+									aria-hidden="true"
+								/>
 							</button>
 						</h3>
-						<p v-if="open === faq" :id="`faq-${faq}`" class="px-4 pb-4 text-sm text-muted">{{ t(`help.faq.${faq}.a`) }}</p>
+						<p v-if="open === faq" :id="`faq-${faq}`" class="px-4 pb-4 text-sm text-muted">
+							{{ t(`help.faq.${faq}.a`) }}
+						</p>
 					</li>
 				</ul>
 			</section>

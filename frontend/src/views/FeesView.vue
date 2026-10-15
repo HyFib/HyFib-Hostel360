@@ -88,12 +88,19 @@ onBeforeUnmount(() => {
 
 const summary = computed(() => fees.data.value);
 const canPayOnline = computed(() => paymentEnabled.value && summary.value?.payment_enabled !== false);
-const openInvoices = computed(() => (summary.value?.invoices ?? []).filter((invoice) => toNumber(invoice.outstanding_amount) > 0));
-const settledInvoices = computed(() => (summary.value?.invoices ?? []).filter((invoice) => toNumber(invoice.outstanding_amount) <= 0));
+const openInvoices = computed(() =>
+	(summary.value?.invoices ?? []).filter((invoice) => toNumber(invoice.outstanding_amount) > 0),
+);
+const settledInvoices = computed(() =>
+	(summary.value?.invoices ?? []).filter((invoice) => toNumber(invoice.outstanding_amount) <= 0),
+);
 
-watch(() => session.activeStudent, () => {
-	selected.value = [];
-});
+watch(
+	() => session.activeStudent,
+	() => {
+		selected.value = [];
+	},
+);
 
 function pay(invoices: string[]) {
 	if (!invoices.length) return;
@@ -130,11 +137,15 @@ function pay(invoices: string[]) {
 				<div class="card">
 					<p class="text-xs font-medium text-muted">{{ t("fees.outstanding") }}</p>
 					<p class="mt-1 text-2xl font-bold text-ink">{{ formatINR(summary.outstanding) }}</p>
-					<p v-if="summary.next_due_date" class="mt-0.5 text-xs text-muted">{{ t("fees.nextDue", { date: formatDate(summary.next_due_date) }) }}</p>
+					<p v-if="summary.next_due_date" class="mt-0.5 text-xs text-muted">
+						{{ t("fees.nextDue", { date: formatDate(summary.next_due_date) }) }}
+					</p>
 				</div>
 				<div class="card" :class="toNumber(summary.overdue) > 0 ? 'border-danger' : ''">
 					<p class="text-xs font-medium text-muted">{{ t("fees.overdue") }}</p>
-					<p class="mt-1 text-2xl font-bold" :class="toNumber(summary.overdue) > 0 ? 'text-danger' : 'text-ink'">{{ formatINR(summary.overdue) }}</p>
+					<p class="mt-1 text-2xl font-bold" :class="toNumber(summary.overdue) > 0 ? 'text-danger' : 'text-ink'">
+						{{ formatINR(summary.overdue) }}
+					</p>
 				</div>
 			</section>
 
@@ -145,7 +156,11 @@ function pay(invoices: string[]) {
 			<section v-if="openInvoices.length" aria-labelledby="fees-open" class="mb-6">
 				<h2 id="fees-open" class="section-title mb-1">{{ t("fees.dueInvoices") }}</h2>
 				<p v-if="canPayOnline" class="mb-3 text-sm text-muted">{{ t("fees.selectToPay") }}</p>
-				<p v-if="canPayOnline && summary.payment_test_mode" class="mb-3 flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-sm font-medium text-info" data-test="test-mode">
+				<p
+					v-if="canPayOnline && summary.payment_test_mode"
+					class="mb-3 flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-sm font-medium text-info"
+					data-test="test-mode"
+				>
 					<FlaskConical :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("fees.testMode") }}
 				</p>
 				<InvoiceList v-model="selected" :invoices="openInvoices" :payable="canPayOnline" @pay="pay" />

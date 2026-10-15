@@ -50,9 +50,9 @@ class Hostel(Document):
 		occupied = frappe.db.count("Hostel Bed", {"hostel": self.name, "status": "Occupied"})
 		if occupied:
 			frappe.throw(
-				_("{0} beds in this hostel are occupied. Vacate or transfer the residents before deactivating it.").format(
-					occupied
-				)
+				_(
+					"{0} beds in this hostel are occupied. Vacate or transfer the residents before deactivating it."
+				).format(occupied)
 			)
 
 	def on_update(self):

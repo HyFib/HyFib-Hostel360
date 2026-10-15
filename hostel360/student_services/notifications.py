@@ -23,7 +23,7 @@ def send(event: str, recipients: list[dict], context: dict, doc=None) -> None:
 		return
 	try:
 		notify = _dispatch().notify
-	except (ImportError, AttributeError):
+	except ImportError, AttributeError:
 		frappe.logger("hostel360").warning(f"Messaging is not available; {event} not sent")
 		return
 	try:
@@ -56,7 +56,7 @@ def for_student(student: str, include_student: bool = True, include_guardians: b
 		return _dispatch().recipients_for_student(
 			student, include_student=include_student, include_guardians=include_guardians
 		)
-	except (ImportError, AttributeError):
+	except ImportError, AttributeError:
 		recipients = []
 		if include_student:
 			row = frappe.db.get_value(
@@ -95,7 +95,7 @@ def for_users(users: list[str]) -> list[dict]:
 		return []
 	try:
 		return _dispatch().recipients_for_users(users)
-	except (ImportError, AttributeError):
+	except ImportError, AttributeError:
 		return [{"user": u} for u in users]
 
 

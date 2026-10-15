@@ -280,13 +280,23 @@ def _caller_record(identity) -> frappe._dict:
 		row = frappe.db.get_value(
 			GUARDIAN_DOCTYPE,
 			identity.guardian,
-			["name", "guardian_name", "mobile_number", "validation_status", "privacy_consent_version", "privacy_consent_on"],
+			[
+				"name",
+				"guardian_name",
+				"mobile_number",
+				"validation_status",
+				"privacy_consent_version",
+				"privacy_consent_on",
+			],
 			as_dict=True,
 		)
 		if row:
 			row.update(doctype=GUARDIAN_DOCTYPE, display_name=row.guardian_name, profile_confirmed=1)
 	if not row:
-		frappe.throw(_("Your portal account is not linked to a hostel record. Please contact the hostel office."), frappe.PermissionError)
+		frappe.throw(
+			_("Your portal account is not linked to a hostel record. Please contact the hostel office."),
+			frappe.PermissionError,
+		)
 	return row
 
 
@@ -334,7 +344,9 @@ def _portal_for_record(
 	if not student:
 		frappe.throw(_("{0} {1} was not found.").format(label, name), frappe.DoesNotExistError)
 	if student not in identity.wards:
-		frappe.throw(_("You are not permitted to access {0} {1}.").format(label, name), frappe.PermissionError)
+		frappe.throw(
+			_("You are not permitted to access {0} {1}.").format(label, name), frappe.PermissionError
+		)
 	if full_access:
 		_assert_full_access(identity, student, dues=dues)
 	return frappe._dict(identity=identity, kind=identity.kind, user=identity.user, student=student, name=name)
@@ -372,7 +384,9 @@ def _assert_full_access(identity, student: str, *, dues: bool = False) -> None:
 	"""
 	_require_consent(identity)
 
-	row = frappe.db.get_value(STUDENT_DOCTYPE, student, ["full_name", "validation_status", "status"], as_dict=True)
+	row = frappe.db.get_value(
+		STUDENT_DOCTYPE, student, ["full_name", "validation_status", "status"], as_dict=True
+	)
 	status = row.validation_status if row else None
 	if status == VALIDATED:
 		if dues or row.status == ACTIVE:
@@ -439,7 +453,9 @@ def _clean_name(value, label: str) -> str:
 	return value
 
 
-def _text(value, label: str, max_length: int, *, required: bool = False, multiline: bool = True) -> str | None:
+def _text(
+	value, label: str, max_length: int, *, required: bool = False, multiline: bool = True
+) -> str | None:
 	if value is None:
 		value = ""
 	if not isinstance(value, str | int | float):
@@ -516,7 +532,7 @@ def _stars(value, label: str, *, required: bool = False) -> int | None:
 		return None
 	try:
 		stars = int(value)
-	except (TypeError, ValueError):
+	except TypeError, ValueError:
 		stars = -1
 	if stars < 0 or stars > 5 or (required and stars == 0):
 		frappe.throw(_("{0} must be between 1 and 5 stars.").format(label))
@@ -556,7 +572,9 @@ def _attachment_url(value, label: str) -> str:
 		frappe.throw(_("{0} is not valid.").format(label))
 	url = value.strip()
 	if not url.startswith("/private/files/") or len(url) > FILE_URL_MAX or ".." in url:
-		frappe.throw(_("Attachment {0} was not found. Please upload it again.").format(url.rsplit("/", 1)[-1][:60]))
+		frappe.throw(
+			_("Attachment {0} was not found. Please upload it again.").format(url.rsplit("/", 1)[-1][:60])
+		)
 	return url
 
 
@@ -727,7 +745,9 @@ def _online_payment_by_ward(identity) -> dict:
 	from hostel360.hostel_fees.utils import get_payment_settings
 
 	settings = get_payment_settings()
-	return {ward: bool(online_payment_available(ward, identity.user, settings)) for ward in identity.wards or []}
+	return {
+		ward: bool(online_payment_available(ward, identity.user, settings)) for ward in identity.wards or []
+	}
 
 
 def _payment_test_mode() -> bool:
@@ -851,7 +871,9 @@ def confirm_profile(updates: dict | str | None = None) -> dict:
 	updates = _parse_dict(updates or {}, _("Profile details"))
 	if len(updates) > len(PROFILE_EDITABLE_FIELDS) * 2:
 		frappe.throw(_("Profile details are not valid."))
-	confirm_student_profile(ctx.student, {key: updates[key] for key in PROFILE_EDITABLE_FIELDS if key in updates})
+	confirm_student_profile(
+		ctx.student, {key: updates[key] for key in PROFILE_EDITABLE_FIELDS if key in updates}
+	)
 	return {"ok": True}
 
 
@@ -861,9 +883,7 @@ def download_photo(student: str | None = None) -> None:
 	"""The student's photo, for the portal header and profile (photos are private files)."""
 	ctx = _portal(student, full_access=False)
 	photo = frappe.db.get_value(STUDENT_DOCTYPE, ctx.student, "photo")
-	file_name = (
-		frappe.db.get_value("File", {"file_url": photo, "is_folder": 0}, "name") if photo else None
-	)
+	file_name = frappe.db.get_value("File", {"file_url": photo, "is_folder": 0}, "name") if photo else None
 	extension = (photo or "").rsplit(".", 1)[-1].lower()
 	if not file_name or extension not in PHOTO_EXTENSIONS:
 		frappe.throw(_("No photo is on record."), frappe.DoesNotExistError)
@@ -905,7 +925,9 @@ def get_dashboard(student: str | None = None) -> dict:
 		"room": summary.get("room"),
 		"fees": fees,
 		"today_menu": None if restricted else _optional("menu", _today_menu, ctx.student, failed=unavailable),
-		"pending": {} if restricted else (_optional("pending", _pending_counts, ctx, failed=unavailable) or {}),
+		"pending": {}
+		if restricted
+		else (_optional("pending", _pending_counts, ctx, failed=unavailable) or {}),
 		"notifications": _notification_rows(ctx.user, DASHBOARD_NOTIFICATIONS, wards=ctx.identity.wards),
 		"unread_notifications": _unread_count(ctx.user),
 		# Sections that failed to load, so the app never shows an empty section as "nothing due".
@@ -1028,7 +1050,9 @@ def verify_payment(
 	# must not stop because, say, a new privacy notice was published in between.
 	ctx = _portal_for_record(TRANSACTION, transaction, _("Payment"), full_access=False)
 	payload = {
-		"razorpay_payment_id": _text(razorpay_payment_id, _("Payment ID"), 64, required=True, multiline=False),
+		"razorpay_payment_id": _text(
+			razorpay_payment_id, _("Payment ID"), 64, required=True, multiline=False
+		),
 		"razorpay_order_id": _text(razorpay_order_id, _("Order ID"), 64, required=True, multiline=False),
 		"razorpay_signature": _text(razorpay_signature, _("Signature"), 256, required=True, multiline=False),
 	}
@@ -1083,7 +1107,9 @@ def _transaction_outcome(transaction: str) -> dict:
 		"transaction": row.name,
 	}
 	if row.status == REFUNDED_TRANSACTION_STATUS:
-		outcome["message"] = _("This payment was refunded. Please contact the hostel office if you need help.")
+		outcome["message"] = _(
+			"This payment was refunded. Please contact the hostel office if you need help."
+		)
 	elif closed:
 		outcome["message"] = _("The payment did not go through. You can try again.")
 	elif not paid:
@@ -1214,7 +1240,9 @@ def apply_leave(
 		"to_datetime": _datetime(to_datetime, _("To")),
 		"destination": _text(destination, _("Destination"), DESTINATION_MAX, required=True, multiline=False),
 		"reason": _text(reason, _("Reason"), REASON_MAX, required=True),
-		"contact_during_leave": _text(contact_during_leave, _("Contact during leave"), CONTACT_MAX, multiline=False),
+		"contact_during_leave": _text(
+			contact_during_leave, _("Contact during leave"), CONTACT_MAX, multiline=False
+		),
 		"apply_mess_reduction": _flag(apply_mess_reduction),
 	}
 	applied_by = "Student" if ctx.kind == STUDENT else "Parent"
@@ -1252,7 +1280,9 @@ def _pending_approvals_for(identity) -> list[dict]:
 	)
 	if not validated:
 		return []
-	return [row for row in list_pending_parent_approvals(identity.guardian) if row.get("student") in validated]
+	return [
+		row for row in list_pending_parent_approvals(identity.guardian) if row.get("student") in validated
+	]
 
 
 @frappe.whitelist(methods=["POST"])
@@ -1288,9 +1318,13 @@ def _grievance_for(name, *, rating: bool = False):
 	ctx = _portal_for_record(GRIEVANCE, name, _("Grievance"))
 	row = frappe.db.get_value(GRIEVANCE, ctx.name, ["is_confidential", "raised_by_user"], as_dict=True)
 	if not _grievance_visible(ctx, row):
-		frappe.throw(_("You are not permitted to access Grievance {0}.").format(ctx.name), frappe.PermissionError)
+		frappe.throw(
+			_("You are not permitted to access Grievance {0}.").format(ctx.name), frappe.PermissionError
+		)
 	if rating and ctx.kind == PARENT and row.raised_by_user != ctx.user:
-		frappe.throw(_("Only the student or the person who raised this grievance can rate it."), frappe.PermissionError)
+		frappe.throw(
+			_("Only the student or the person who raised this grievance can rate it."), frappe.PermissionError
+		)
 	return ctx
 
 
@@ -1371,11 +1405,15 @@ def _grievance_attachments(grievance: str, raised_by: str | None) -> list[dict]:
 
 
 def _timeline_for_viewer(grievance: str, timeline: list[dict], viewer: str) -> list[dict]:
-	"""Mark the viewer's own entries and show system entries in the viewer's language.
+	"""Mark the viewer's own entries.
 
 	The public timeline names authors only by display name, so the authors are read again
 	here from the same rows, in the same order. If the two ever disagree (the timeline format
 	changed), nothing is marked as the viewer's rather than risk marking someone else's.
+
+	``message`` stays as stored and ``display_message`` carries the entry in the viewer's
+	language. Translating ``message`` here would miss system entries with arguments ("Assigned
+	to {0}.") and would change typed text that happens to match a catalogue string ("Closed").
 	"""
 	rows = frappe.get_all(
 		GRIEVANCE_UPDATE,
@@ -1384,14 +1422,12 @@ def _timeline_for_viewer(grievance: str, timeline: list[dict], viewer: str) -> l
 		order_by="idx asc",
 	)
 	aligned = len(rows) == len(timeline) and all(
-		(row.message or "") == (entry.get("message") or "") for row, entry in zip(rows, timeline, strict=False)
+		(row.message or "") == (entry.get("message") or "")
+		for row, entry in zip(rows, timeline, strict=False)
 	)
 	for index, entry in enumerate(timeline):
 		entry["is_mine"] = bool(aligned and rows[index].update_by == viewer)
-		if entry.get("message"):
-			# Entries the system writes ("Grievance registered.") are stored in English; a
-			# message someone typed is not in the catalogue and comes back unchanged.
-			entry["message"] = _(entry["message"])
+		entry.setdefault("display_message", entry.get("message"))
 	return timeline
 
 
@@ -1418,7 +1454,9 @@ def download_grievance_attachment(name: str, file: str) -> None:
 	frappe.local.response.filename = row.file_name
 	frappe.local.response.filecontent = content
 	frappe.local.response.content_type = guess_type(row.file_name or "")[0] or "application/octet-stream"
-	frappe.local.response.display_content_as = "inline" if extension in ATTACHMENT_INLINE_EXTENSIONS else "attachment"
+	frappe.local.response.display_content_as = (
+		"inline" if extension in ATTACHMENT_INLINE_EXTENSIONS else "attachment"
+	)
 	frappe.local.response.type = "download"
 	headers = getattr(frappe.local, "response_headers", None)
 	if headers is not None:
@@ -1548,7 +1586,9 @@ def _checked_upload(upload) -> tuple[str, bytes]:
 		frappe.throw(_("The file is empty. Please choose the file again."), title=_("Upload Not Allowed"))
 	if len(content) > UPLOAD_MAX_BYTES:
 		frappe.throw(
-			_("This file is too large. Please upload a file smaller than {0} MB.").format(UPLOAD_MAX_BYTES // (1024 * 1024)),
+			_("This file is too large. Please upload a file smaller than {0} MB.").format(
+				UPLOAD_MAX_BYTES // (1024 * 1024)
+			),
 			title=_("Upload Not Allowed"),
 		)
 
@@ -1576,7 +1616,9 @@ def _check_upload_quota(user: str) -> None:
 	)
 	if pending >= UNATTACHED_UPLOADS_PER_DAY:
 		frappe.throw(
-			_("You have uploaded many files that are not attached to a request yet. Please submit your request first."),
+			_(
+				"You have uploaded many files that are not attached to a request yet. Please submit your request first."
+			),
 			frappe.RateLimitExceededError,
 		)
 
@@ -1610,7 +1652,9 @@ def delete_stale_uploads() -> int:
 			frappe.delete_doc("File", name, ignore_permissions=True)
 			removed += 1
 		except Exception:
-			frappe.log_error(title="Hostel360 portal: could not remove an unused upload", message=frappe.get_traceback())
+			frappe.log_error(
+				title="Hostel360 portal: could not remove an unused upload", message=frappe.get_traceback()
+			)
 	return removed
 
 
@@ -1718,7 +1762,17 @@ def _notification_rows(user: str, limit: int, start: int = 0, wards: list[str] |
 	rows = frappe.get_all(
 		NOTIFICATION_LOG,
 		filters={"for_user": user},
-		fields=["name", "subject", "title", "description", "creation", "read", "link", "document_type", "document_name"],
+		fields=[
+			"name",
+			"subject",
+			"title",
+			"description",
+			"creation",
+			"read",
+			"link",
+			"document_type",
+			"document_name",
+		],
 		order_by="creation desc",
 		start=start,
 		limit=limit,
@@ -1755,7 +1809,9 @@ def _notification_students(rows: list, wards: list[str]) -> dict:
 	for doctype, names in names_by_doctype.items():
 		if not _has_student_field(doctype):
 			continue
-		for record in frappe.get_all(doctype, filters={"name": ("in", list(names))}, fields=["name", "student"]):
+		for record in frappe.get_all(
+			doctype, filters={"name": ("in", list(names))}, fields=["name", "student"]
+		):
 			owners[(doctype, record.name)] = record.student
 
 	allowed = set(wards)

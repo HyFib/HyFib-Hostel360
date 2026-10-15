@@ -33,8 +33,7 @@ export function useResource<T>(
 			if (current === generation) data.value = result;
 		} catch (caught) {
 			if (current !== generation) return;
-			error.value =
-				caught instanceof ApiError ? caught : new ApiError("server", t("errors.generic"));
+			error.value = caught instanceof ApiError ? caught : new ApiError("server", t("errors.generic"));
 		} finally {
 			if (current === generation) loading.value = false;
 		}

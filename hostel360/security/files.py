@@ -20,9 +20,11 @@ override is not active: it runs after Frappe has written the upload and removes 
 bytes again when the upload is refused. With the override active it does nothing.
 
 ``block_portal_generic_upload`` (``before_request``) stops portal users and visitors at
-Frappe's generic upload and insert endpoints before the request body is read. That
-matters for ``upload_file``: a chunked call appends to a temporary file and returns
-before any File record exists, so no File hook would ever see it.
+Frappe's generic upload and insert endpoints before Frappe's handler runs, judged by the
+user the request really authenticates as. That matters for ``upload_file``: a chunked
+call appends to a temporary file and returns before any File record exists, so no File
+hook would ever see it. ``delete_stale_chunk_files`` (scheduled) removes temporary chunk
+files that uploads left behind.
 
 ``enqueue_malware_scan`` (File ``after_insert``) queues a ClamAV scan. Infected files are
 deleted with every record that points to the same content and HyFib operations get a
@@ -370,7 +372,7 @@ def _zip_names(content: bytes) -> set[str] | None:
 	try:
 		with zipfile.ZipFile(io.BytesIO(content)) as archive:
 			return set(archive.namelist())
-	except (zipfile.BadZipFile, OSError, ValueError):
+	except zipfile.BadZipFile, OSError, ValueError:
 		return None
 
 
@@ -443,17 +445,25 @@ def _reject(doc, message: str, reason: str = "rejected", exc=UploadRejected) -> 
 def block_portal_generic_upload() -> None:
 	"""before_request: keep students, parents and visitors off Frappe's generic upload paths.
 
-	Runs before the upload body is read, so a chunked ``upload_file`` call is refused
-	before Frappe appends to a temporary file. Requests that authenticate with an API key
-	or token are not judged here (Frappe resolves that user later); every File they insert
-	still meets the policy above.
+	Runs before Frappe's handler, so a chunked ``upload_file`` call is refused before
+	Frappe appends anything to a temporary file.
+
+	The refusal is about the account the request will really run as. Frappe resolves API
+	keys, tokens and OAuth bearer tokens only after before_request, so for the requests
+	judged here that resolution is run first (``_resolve_request_user``). The shape of an
+	Authorization header never exempts a request: a junk header next to a portal session
+	leaves the portal user in place and is refused, and a token that authenticates nobody
+	fails here exactly as it would a moment later.
 	"""
 	request = getattr(frappe.local, "request", None)
 	if request is None or request.method == "OPTIONS":
 		return
 	# Every request passes through here; the path test is cheap, the user lookup is not.
 	target = generic_upload_target(request)
-	if not target or _authenticates_with_token(request) or not is_portal_uploader():
+	if not target:
+		return
+	_resolve_request_user()
+	if not is_portal_uploader():
 		return
 	security_log(
 		"generic_upload_blocked",
@@ -500,11 +510,71 @@ def _form_inserts_file() -> bool:
 	return False
 
 
-def _authenticates_with_token(request) -> bool:
-	# Split exactly as frappe.auth.validate_auth does: only "<scheme> <credentials>" is
-	# authenticated (or refused) there; any other header leaves a cookie or Guest request.
-	header = cstr((getattr(request, "headers", None) or {}).get("Authorization"))
-	return len(header.split(" ")) == 2
+def _resolve_request_user() -> None:
+	"""Settle who the request runs as, with Frappe's own ``validate_auth``.
+
+	Frappe calls validate_auth right after the before_request hooks. Running it once more
+	is harmless - it reads the Authorization header and sets the same user again - and it is
+	only done for the few requests that reach a generic upload endpoint. The guard flag
+	keeps this safe if the check is ever registered as an ``auth_hooks`` entry, where
+	validate_auth is already running.
+	"""
+	if getattr(frappe.local, "hostel360_resolving_user", False):
+		return
+	from frappe.auth import validate_auth
+
+	frappe.local.hostel360_resolving_user = True
+	try:
+		validate_auth()
+	finally:
+		frappe.local.hostel360_resolving_user = False
+
+
+# ---------------------------------------------------------------- chunk clean-up
+
+# Frappe's upload_file appends each chunk of an upload to ".temp-<file name>" in the public or
+# private files folder and removes it only when the last chunk arrives.
+CHUNK_FILE_PREFIX = ".temp-"
+# A chunk file that has not grown for this long belongs to an upload nobody will finish.
+STALE_CHUNK_SECONDS = 60 * 60
+
+
+def delete_stale_chunk_files(max_age_seconds: int = STALE_CHUNK_SECONDS) -> int:
+	"""Scheduled job: remove abandoned chunked-upload files. Returns how many went.
+
+	Nothing in Frappe removes them, and an upload that stops half way leaves its partial
+	bytes on disk - in the public folder unless the upload asked for a private file.
+	"""
+	import time
+
+	from frappe.utils import get_files_path
+
+	cutoff = time.time() - max(cint(max_age_seconds), 60)
+	removed = 0
+	for is_private in (False, True):
+		try:
+			entries = list(os.scandir(get_files_path(is_private=is_private)))
+		except OSError:
+			continue
+		for entry in entries:
+			if not entry.name.startswith(CHUNK_FILE_PREFIX):
+				continue
+			try:
+				if (
+					not entry.is_file(follow_symlinks=False)
+					or entry.stat(follow_symlinks=False).st_mtime > cutoff
+				):
+					continue
+				os.remove(entry.path)
+				removed += 1
+			except FileNotFoundError:
+				# The last chunk arrived in the meantime and Frappe moved the file on.
+				continue
+			except OSError:
+				frappe.logger("hostel360").warning("Could not remove a stale upload chunk", exc_info=True)
+	if removed:
+		security_log("stale_upload_chunks_removed", count=removed)
+	return removed
 
 
 # ---------------------------------------------------------------- after_insert: malware scan

@@ -6,7 +6,16 @@ import json
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import add_days, add_to_date, cint, cstr, flt, get_datetime, now_datetime, time_diff_in_hours
+from frappe.utils import (
+	add_days,
+	add_to_date,
+	cint,
+	cstr,
+	flt,
+	get_datetime,
+	now_datetime,
+	time_diff_in_hours,
+)
 
 from hostel360.setup.roles import GRIEVANCE_HANDLER_ROLES, MESS_MANAGER_ROLE
 from hostel360.student_services import notifications
@@ -101,7 +110,9 @@ class HostelGrievance(Document):
 	def validate_protected_fields(self):
 		if in_migration():
 			return
-		assert_unchanged(self, IDENTITY_FIELDS, _("{0} cannot be changed on a grievance that has been raised."))
+		assert_unchanged(
+			self, IDENTITY_FIELDS, _("{0} cannot be changed on a grievance that has been raised.")
+		)
 		if not self.flags.via_controller:
 			assert_unchanged(
 				self,
@@ -134,6 +145,11 @@ class HostelGrievance(Document):
 
 	def set_initial_state(self):
 		if in_migration() and self.status:
+			# Historical records keep their state. One still open needs a deadline, or the
+			# hourly escalation would never see it; the period starts when it is loaded so that
+			# go-live does not escalate every open complaint at once.
+			if self.status in OPEN_STATUSES and not self.sla_due_by:
+				self.sla_due_by = self.compute_sla_due_by()
 			return
 		# A new grievance has no handling history, whatever the request said.
 		for fieldname in WORKFLOW_FIELDS:
@@ -154,7 +170,9 @@ class HostelGrievance(Document):
 			)
 
 	def compute_sla_due_by(self, start=None):
-		key = "grievance_urgent_escalation_hours" if self.priority == "Urgent" else "grievance_escalation_hours"
+		key = (
+			"grievance_urgent_escalation_hours" if self.priority == "Urgent" else "grievance_escalation_hours"
+		)
 		hours = max(cint(get_setting(key)), 1)
 		return add_to_date(start or now_datetime(), hours=hours)
 
@@ -264,16 +282,25 @@ class HostelGrievance(Document):
 		self.assigned_to = assignee
 		self.assigned_on = now_datetime()
 		new_status = "In Progress" if self.status in ("Open", "Reopened") else self.status
-		self.set_status(
-			new_status, ASSIGNED_MESSAGE, user, args=[user_display_name(assignee)], system=True
-		)
+		self.set_status(new_status, ASSIGNED_MESSAGE, user, args=[user_display_name(assignee)], system=True)
 		if note:
 			self.append_update(note, is_internal=1, user=user)
 		self.save_changes()
 
-		context = notifications.grievance_context(self, note)
-		notifications.send("grievance_assigned", notifications.for_users([assignee]), context, self)
-		notifications.send("grievance_updated", notifications.for_student(self.student), context, self)
+		notifications.send(
+			"grievance_assigned",
+			notifications.for_users([assignee]),
+			notifications.grievance_context(self, note),
+			self,
+		)
+		# The note is internal: the student hears only that the grievance moved, never what the
+		# staff wrote to each other about it.
+		notifications.send(
+			"grievance_updated",
+			notifications.for_student(self.student),
+			notifications.grievance_context(self),
+			self,
+		)
 
 	def add_staff_update(self, message: str, user: str, is_internal: int = 0, status: str | None = None):
 		self.check_staff_action(user)
@@ -349,9 +376,9 @@ class HostelGrievance(Document):
 			frappe.throw(_("Only a resolved grievance can be reopened."))
 		if not self.reopen_window_open():
 			frappe.throw(
-				_("A grievance can be reopened within {0} days of its resolution. Please raise a new one.").format(
-					REOPEN_WINDOW_DAYS
-				)
+				_(
+					"A grievance can be reopened within {0} days of its resolution. Please raise a new one."
+				).format(REOPEN_WINDOW_DAYS)
 			)
 		self.reopen_count = cint(self.reopen_count) + 1
 		self.closed_on = None
@@ -482,7 +509,7 @@ def timeline_message(row) -> str:
 	try:
 		args = json.loads(row.get("message_args") or "[]")
 		return _(template).format(*args)
-	except (ValueError, TypeError, IndexError, KeyError):
+	except ValueError, TypeError, IndexError, KeyError:
 		# A translation with a broken placeholder must not hide the entry.
 		return row.get("message")
 

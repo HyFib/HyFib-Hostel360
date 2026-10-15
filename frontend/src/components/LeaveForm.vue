@@ -65,7 +65,9 @@ const cutoffLabel = computed(() => formatTime(new Date(2000, 0, 1, props.cutoffH
 const reductionHint = computed(() => {
 	const rule = { days: props.reductionMinDays, cutoff: cutoffLabel.value, count: messDays.value };
 	if (!days.value) return t("leave.messReductionHint", rule);
-	return longEnough.value ? tc("leave.messReductionCovers", messDays.value, rule) : tc("leave.messReductionTooShort", messDays.value, rule);
+	return longEnough.value
+		? tc("leave.messReductionCovers", messDays.value, rule)
+		: tc("leave.messReductionTooShort", messDays.value, rule);
 });
 /** The phone's clock is not India time: say which clock the times are in. */
 const showSiteTimeHint = computed(() => !props.now && deviceOffSiteTime(props.timeZone));
@@ -115,7 +117,12 @@ defineExpose({ errors, form });
 
 <template>
 	<form ref="root" class="card" novalidate @submit.prevent="submit">
-		<p v-if="summary" class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert" data-test="summary">
+		<p
+			v-if="summary"
+			class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+			role="alert"
+			data-test="summary"
+		>
 			<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ summary }}
 		</p>
 
@@ -131,7 +138,7 @@ defineExpose({ errors, form });
 					:aria-describedby="describedBy"
 					:aria-invalid="invalid"
 					required
-				>
+				/>
 			</FormField>
 			<FormField v-slot="{ id, describedBy, invalid }" :label="t('leave.to')" :error="errors.to_datetime" required>
 				<input
@@ -144,23 +151,60 @@ defineExpose({ errors, form });
 					:aria-describedby="describedBy"
 					:aria-invalid="invalid"
 					required
-				>
+				/>
 			</FormField>
 		</div>
-		<p v-if="showSiteTimeHint" class="-mt-2 mb-3 flex items-start gap-1.5 text-sm text-muted" data-test="site-time-hint">
+		<p
+			v-if="showSiteTimeHint"
+			class="-mt-2 mb-3 flex items-start gap-1.5 text-sm text-muted"
+			data-test="site-time-hint"
+		>
 			<Globe :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("leave.siteTimeHint") }}
 		</p>
 		<p v-if="days" class="-mt-2 mb-4 text-sm text-muted" aria-live="polite">{{ tc("common.days", days) }}</p>
 
-		<FormField v-slot="{ id, describedBy, invalid }" :label="t('leave.destination')" :hint="t('leave.destinationHint')" :error="errors.destination" required>
-			<input :id="id" v-model="form.destination" name="destination" class="input" type="text" maxlength="140" autocomplete="address-level2" :aria-describedby="describedBy" :aria-invalid="invalid" required>
+		<FormField
+			v-slot="{ id, describedBy, invalid }"
+			:label="t('leave.destination')"
+			:hint="t('leave.destinationHint')"
+			:error="errors.destination"
+			required
+		>
+			<input
+				:id="id"
+				v-model="form.destination"
+				name="destination"
+				class="input"
+				type="text"
+				maxlength="140"
+				autocomplete="address-level2"
+				:aria-describedby="describedBy"
+				:aria-invalid="invalid"
+				required
+			/>
 		</FormField>
 
 		<FormField v-slot="{ id, describedBy, invalid }" :label="t('leave.reason')" :error="errors.reason" required>
-			<textarea :id="id" v-model="form.reason" name="reason" class="input" rows="3" maxlength="500" :aria-describedby="describedBy" :aria-invalid="invalid" required />
+			<textarea
+				:id="id"
+				v-model="form.reason"
+				name="reason"
+				class="input"
+				rows="3"
+				maxlength="500"
+				:aria-describedby="describedBy"
+				:aria-invalid="invalid"
+				required
+			/>
 		</FormField>
 
-		<FormField v-slot="{ id, describedBy, invalid }" :label="t('leave.contact')" :hint="t('leave.contactHint')" :error="errors.contact_during_leave" required>
+		<FormField
+			v-slot="{ id, describedBy, invalid }"
+			:label="t('leave.contact')"
+			:hint="t('leave.contactHint')"
+			:error="errors.contact_during_leave"
+			required
+		>
 			<input
 				:id="id"
 				v-model="form.contact_during_leave"
@@ -173,7 +217,7 @@ defineExpose({ errors, form });
 				:aria-describedby="describedBy"
 				:aria-invalid="invalid"
 				required
-			>
+			/>
 		</FormField>
 
 		<ToggleSwitch
@@ -183,7 +227,11 @@ defineExpose({ errors, form });
 			:disabled="Boolean(days) && !longEnough"
 		/>
 
-		<p v-if="serverError" class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+		<p
+			v-if="serverError"
+			class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+			role="alert"
+		>
 			<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ serverError }}
 		</p>
 		<button type="submit" class="btn-primary btn-block" :disabled="busy">

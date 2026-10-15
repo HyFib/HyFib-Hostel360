@@ -37,7 +37,13 @@ def make_ticket(**kwargs):
 def ensure_user(email: str) -> str:
 	if not frappe.db.exists("User", email):
 		frappe.get_doc(
-			{"doctype": "User", "email": email, "first_name": "Ticket", "send_welcome_email": 0, "user_type": "System User"}
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": "Ticket",
+				"send_welcome_email": 0,
+				"user_type": "System User",
+			}
 		).insert(ignore_permissions=True)
 	return email
 
@@ -72,8 +78,12 @@ class TestSupportTicket(IntegrationTestCase):
 	def test_due_dates_and_helpdesk_alert_on_creation(self):
 		ticket = make_ticket()
 		created = get_datetime(ticket.creation)
-		self.assertAlmostEqual((get_datetime(ticket.response_due_by) - created).total_seconds(), 3600, delta=5)
-		self.assertAlmostEqual((get_datetime(ticket.resolution_due_by) - created).total_seconds(), 4 * 3600, delta=5)
+		self.assertAlmostEqual(
+			(get_datetime(ticket.response_due_by) - created).total_seconds(), 3600, delta=5
+		)
+		self.assertAlmostEqual(
+			(get_datetime(ticket.resolution_due_by) - created).total_seconds(), 4 * 3600, delta=5
+		)
 		self.assertEqual(ticket.contact_phone, "9876543210")
 		self.assertEqual(ticket.raised_by, "Administrator")
 
@@ -129,7 +139,9 @@ class TestSupportTicket(IntegrationTestCase):
 		self.assertGreater(len(self.recorder.events(ticket.ops_alert)), events_before)
 
 		summary = support.check_ticket_slas(now=add_to_date(created, minutes=70))
-		self.assertEqual(frappe.db.get_value("Ops Alert", ticket.ops_alert, "occurrence_count"), alert.occurrence_count)
+		self.assertEqual(
+			frappe.db.get_value("Ops Alert", ticket.ops_alert, "occurrence_count"), alert.occurrence_count
+		)
 
 		support.check_ticket_slas(now=add_to_date(created, minutes=241))
 		ticket.reload()
@@ -149,7 +161,11 @@ class TestSupportTicket(IntegrationTestCase):
 
 		due_before = get_datetime(ticket.resolution_due_by)
 		frappe.db.set_value(
-			"Support Ticket", ticket.name, "waiting_since", add_to_date(now_datetime(), hours=-2), update_modified=False
+			"Support Ticket",
+			ticket.name,
+			"waiting_since",
+			add_to_date(now_datetime(), hours=-2),
+			update_modified=False,
 		)
 		ticket.reload()
 		ticket.status = "In Progress"
@@ -244,7 +260,9 @@ class TestSupportTicket(IntegrationTestCase):
 		good = make_ticket()
 		bad = make_ticket()
 		frappe.db.set_value("Support Ticket", bad.name, "response_sla_breached", 1)
-		result = support.sla_compliance(add_to_date(start, minutes=-1), add_to_date(now_datetime(), minutes=1))
+		result = support.sla_compliance(
+			add_to_date(start, minutes=-1), add_to_date(now_datetime(), minutes=1)
+		)
 		self.assertGreaterEqual(result["raised"], 2)
 		self.assertLess(result["compliance_percent"], 100)
 		self.assertTrue(good.name)

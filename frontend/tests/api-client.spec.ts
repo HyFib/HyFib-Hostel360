@@ -50,7 +50,11 @@ beforeEach(() => {
 
 function lastRequest(index = 0) {
 	const [url, init] = fetchMock.mock.calls[index];
-	return { url: String(url), init: init as RequestInit, headers: (init as RequestInit).headers as Record<string, string> };
+	return {
+		url: String(url),
+		init: init as RequestInit,
+		headers: (init as RequestInit).headers as Record<string, string>,
+	};
 }
 
 describe("CSRF token", () => {
@@ -110,7 +114,10 @@ describe("CSRF token", () => {
 describe("error mapping", () => {
 	it("turns a 417 ValidationError into the server's message without markup", async () => {
 		fetchMock.mockResolvedValueOnce(
-			json({ exc_type: "ValidationError", _server_messages: serverMessages("Leave overlaps with <b>LV-2026-00012</b>.") }, 417),
+			json(
+				{ exc_type: "ValidationError", _server_messages: serverMessages("Leave overlaps with <b>LV-2026-00012</b>.") },
+				417,
+			),
 		);
 		const error = await failure(call("hostel360.api.portal.apply_leave"));
 
@@ -122,7 +129,13 @@ describe("error mapping", () => {
 
 	it("falls back to the exception text when there are no queued messages", async () => {
 		fetchMock.mockResolvedValueOnce(
-			json({ exc_type: "ValidationError", exception: "frappe.exceptions.ValidationError: Reduction must be at least 3 days" }, 417),
+			json(
+				{
+					exc_type: "ValidationError",
+					exception: "frappe.exceptions.ValidationError: Reduction must be at least 3 days",
+				},
+				417,
+			),
 		);
 		const error = await failure(call("hostel360.api.portal.apply_mess_reduction"));
 		expect(error.message).toBe("Reduction must be at least 3 days");
@@ -150,9 +163,18 @@ describe("error mapping", () => {
 	it("replaces Frappe's generic rate-limit text but keeps a specific one", async () => {
 		fetchMock
 			.mockResolvedValueOnce(
-				json({ _server_messages: serverMessages("You hit the rate limit because of too many requests. Please try after sometime.") }, 429),
+				json(
+					{
+						_server_messages: serverMessages(
+							"You hit the rate limit because of too many requests. Please try after sometime.",
+						),
+					},
+					429,
+				),
 			)
-			.mockResolvedValueOnce(json({ _server_messages: serverMessages("Please wait 42 seconds before requesting another code.") }, 429));
+			.mockResolvedValueOnce(
+				json({ _server_messages: serverMessages("Please wait 42 seconds before requesting another code.") }, 429),
+			);
 
 		const generic = await failure(call("hostel360.api.auth.send_otp"));
 		const specific = await failure(call("hostel360.api.auth.send_otp"));
@@ -162,7 +184,13 @@ describe("error mapping", () => {
 
 	it("keeps the sign-in message of a 401 AuthenticationError", async () => {
 		fetchMock.mockResolvedValueOnce(
-			json({ exc_type: "AuthenticationError", _server_messages: serverMessages("The code is incorrect. You have 2 more attempts left.") }, 401),
+			json(
+				{
+					exc_type: "AuthenticationError",
+					_server_messages: serverMessages("The code is incorrect. You have 2 more attempts left."),
+				},
+				401,
+			),
 		);
 		const error = await failure(call("hostel360.api.auth.verify_otp"));
 		expect(error.kind).toBe("auth");
@@ -170,7 +198,9 @@ describe("error mapping", () => {
 	});
 
 	it("never shows server internals for a 500", async () => {
-		fetchMock.mockResolvedValueOnce(json({ exception: "pymysql.err.OperationalError: (2013, 'Lost connection')" }, 500));
+		fetchMock.mockResolvedValueOnce(
+			json({ exception: "pymysql.err.OperationalError: (2013, 'Lost connection')" }, 500),
+		);
 		const error = await failure(call("hostel360.api.portal.get_dashboard"));
 		expect(error.kind).toBe("server");
 		expect(error.message).not.toContain("pymysql");
@@ -203,7 +233,10 @@ describe("file downloads", () => {
 		fetchMock.mockResolvedValueOnce(
 			new Response("%PDF-1.7", {
 				status: 200,
-				headers: { "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="RCPT-2026-00042.pdf"' },
+				headers: {
+					"Content-Type": "application/pdf",
+					"Content-Disposition": 'attachment; filename="RCPT-2026-00042.pdf"',
+				},
 			}),
 		);
 		const file = await callFile("hostel360.api.portal.download_receipt", { payment: "RCPT-2026-00042" }, "receipt.pdf");
@@ -244,7 +277,9 @@ describe("session refusals", () => {
 		configureApi({ onSessionEnded });
 		fetchMock
 			.mockResolvedValueOnce(json({ session_expired: 1, exc_type: "SessionExpired" }, 401))
-			.mockResolvedValueOnce(json({ exc_type: "AuthenticationError", _server_messages: serverMessages("The code is incorrect.") }, 401));
+			.mockResolvedValueOnce(
+				json({ exc_type: "AuthenticationError", _server_messages: serverMessages("The code is incorrect.") }, 401),
+			);
 
 		const expired = await failure(call("hostel360.api.portal.apply_leave"));
 		expect(expired.message).toBe("Your session has ended. Please sign in again.");
@@ -276,7 +311,13 @@ describe("session refusals", () => {
 		const onForbidden = vi.fn();
 		configureApi({ onForbidden });
 		fetchMock.mockResolvedValueOnce(
-			json({ exc_type: "PortalValidationPending", _server_messages: serverMessages("Bala's registration is waiting for validation.") }, 403),
+			json(
+				{
+					exc_type: "PortalValidationPending",
+					_server_messages: serverMessages("Bala's registration is waiting for validation."),
+				},
+				403,
+			),
 		);
 		const error = await failure(call("hostel360.api.portal.get_dashboard"));
 		expect(error.message).toBe("Bala's registration is waiting for validation.");
@@ -288,7 +329,13 @@ describe("session refusals", () => {
 		const onForbidden = vi.fn();
 		configureApi({ onConsentRequired, onForbidden });
 		fetchMock.mockResolvedValueOnce(
-			json({ exc_type: "PortalConsentRequired", _server_messages: serverMessages("Please read and accept the privacy notice to continue.") }, 403),
+			json(
+				{
+					exc_type: "PortalConsentRequired",
+					_server_messages: serverMessages("Please read and accept the privacy notice to continue."),
+				},
+				403,
+			),
 		);
 		const error = await failure(call("hostel360.api.portal.get_fees"));
 		expect(onConsentRequired).toHaveBeenCalledWith(error);
@@ -300,7 +347,13 @@ describe("session refusals", () => {
 		const onForbidden = vi.fn();
 		configureApi({ onAccessClosed, onForbidden });
 		fetchMock.mockResolvedValueOnce(
-			json({ exc_type: "PortalAccessClosed", _server_messages: serverMessages("Portal access for this hostel record has been closed.") }, 403),
+			json(
+				{
+					exc_type: "PortalAccessClosed",
+					_server_messages: serverMessages("Portal access for this hostel record has been closed."),
+				},
+				403,
+			),
 		);
 		const error = await failure(call("hostel360.api.portal.get_session"));
 		expect(onAccessClosed).toHaveBeenCalledWith(error);

@@ -73,26 +73,52 @@ function wardName(student?: string | null): string {
 	<div>
 		<PageHeader :title="t('notifications.title')">
 			<template #actions>
-				<button v-if="unread.length" type="button" class="btn-ghost min-h-10 px-3 text-sm" :disabled="marking" @click="markAll">
+				<button
+					v-if="unread.length"
+					type="button"
+					class="btn-ghost min-h-10 px-3 text-sm"
+					:disabled="marking"
+					@click="markAll"
+				>
 					<CheckCheck :size="18" aria-hidden="true" />{{ t("notifications.markAllRead") }}
 				</button>
 			</template>
 		</PageHeader>
 
 		<SkeletonList v-if="notifications.loading.value && !notifications.data.value" :rows="4" />
-		<ErrorState v-else-if="notifications.error.value" :error="notifications.error.value" @retry="notifications.reload" />
-		<EmptyState v-else-if="!list.length" :icon="BellOff" :title="t('notifications.empty')" :body="t('notifications.emptyHint')" />
+		<ErrorState
+			v-else-if="notifications.error.value"
+			:error="notifications.error.value"
+			@retry="notifications.reload"
+		/>
+		<EmptyState
+			v-else-if="!list.length"
+			:icon="BellOff"
+			:title="t('notifications.empty')"
+			:body="t('notifications.emptyHint')"
+		/>
 
 		<ul v-else class="card list-divided p-0">
 			<li v-for="item in list" :key="item.name">
-				<button type="button" class="flex w-full items-start gap-3 p-4 text-left hover:bg-surface-2" @click="openItem(item)">
-					<span class="mt-1.5 size-2.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-brand'" aria-hidden="true" />
+				<button
+					type="button"
+					class="flex w-full items-start gap-3 p-4 text-left hover:bg-surface-2"
+					@click="openItem(item)"
+				>
+					<span
+						class="mt-1.5 size-2.5 shrink-0 rounded-full"
+						:class="item.read ? 'bg-transparent' : 'bg-brand'"
+						aria-hidden="true"
+					/>
 					<span class="min-w-0 flex-1">
-						<span class="block text-[0.95rem]" :class="item.read ? 'text-ink' : 'font-semibold text-ink'">{{ item.subject }}</span>
+						<span class="block text-[0.95rem]" :class="item.read ? 'text-ink' : 'font-semibold text-ink'">{{
+							item.subject
+						}}</span>
 						<span v-if="item.message" class="mt-0.5 block text-sm text-muted line-clamp-3">{{ item.message }}</span>
 						<span class="mt-0.5 block text-xs text-muted">
 							<template v-if="wardName(item.student)">{{ wardName(item.student) }} · </template>
-							{{ formatDateTime(item.created) }}<template v-if="!item.read"> · {{ t("notifications.unread") }}</template>
+							{{ formatDateTime(item.created)
+							}}<template v-if="!item.read"> · {{ t("notifications.unread") }}</template>
 						</span>
 					</span>
 				</button>

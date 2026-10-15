@@ -58,7 +58,12 @@ async function decide(leave: Leave, action: "approve" | "reject") {
 
 		<SkeletonList v-if="approvals.loading.value && !approvals.data.value" />
 		<ErrorState v-else-if="approvals.error.value" :error="approvals.error.value" @retry="approvals.reload" />
-		<EmptyState v-else-if="!list.length" :icon="ClipboardCheck" :title="t('approvals.empty')" :body="t('approvals.emptyHint')" />
+		<EmptyState
+			v-else-if="!list.length"
+			:icon="ClipboardCheck"
+			:title="t('approvals.empty')"
+			:body="t('approvals.emptyHint')"
+		/>
 
 		<ul v-else class="space-y-4">
 			<li v-for="leave in list" :key="leave.name" class="card">
@@ -74,7 +79,9 @@ async function decide(leave: Leave, action: "approve" | "reject") {
 					</div>
 					<div class="flex flex-wrap gap-x-2">
 						<dt class="text-muted">{{ t("leave.duration") }}:</dt>
-						<dd class="font-medium text-ink">{{ tc("common.days", leave.number_of_days || inclusiveDays(leave.from_datetime, leave.to_datetime)) }}</dd>
+						<dd class="font-medium text-ink">
+							{{ tc("common.days", leave.number_of_days || inclusiveDays(leave.from_datetime, leave.to_datetime)) }}
+						</dd>
 					</div>
 					<div class="flex flex-wrap gap-x-2">
 						<dt class="text-muted">{{ t("leave.destination") }}:</dt>
@@ -99,16 +106,27 @@ async function decide(leave: Leave, action: "approve" | "reject") {
 						rows="2"
 						maxlength="300"
 						:aria-invalid="remarkErrors[leave.name] ? 'true' : undefined"
-						:aria-describedby="remarkErrors[leave.name] ? `remarks-${leave.name}-error remarks-${leave.name}-hint` : `remarks-${leave.name}-hint`"
+						:aria-describedby="
+							remarkErrors[leave.name]
+								? `remarks-${leave.name}-error remarks-${leave.name}-hint`
+								: `remarks-${leave.name}-hint`
+						"
 					/>
-					<p v-if="remarkErrors[leave.name]" :id="`remarks-${leave.name}-error`" class="field-error" role="alert">{{ remarkErrors[leave.name] }}</p>
+					<p v-if="remarkErrors[leave.name]" :id="`remarks-${leave.name}-error`" class="field-error" role="alert">
+						{{ remarkErrors[leave.name] }}
+					</p>
 					<p :id="`remarks-${leave.name}-hint`" class="field-hint">{{ t("approvals.remarksHint") }}</p>
 				</div>
 				<div class="mt-4 grid grid-cols-2 gap-2">
 					<button type="button" class="btn-danger" :disabled="deciding === leave.name" @click="decide(leave, 'reject')">
 						{{ t("approvals.reject") }}
 					</button>
-					<button type="button" class="btn-primary" :disabled="deciding === leave.name" @click="decide(leave, 'approve')">
+					<button
+						type="button"
+						class="btn-primary"
+						:disabled="deciding === leave.name"
+						@click="decide(leave, 'approve')"
+					>
 						{{ t("approvals.approve") }}
 					</button>
 				</div>

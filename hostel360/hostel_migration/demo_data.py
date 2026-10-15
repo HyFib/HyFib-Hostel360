@@ -29,7 +29,7 @@ from hostel360.hostel_migration.engine import MAP_DOCTYPE
 DEMO_DOMAIN = "demo.hostel360.invalid"
 # Migration Record Map namespace for records made here.
 DEMO_SOURCE_SYSTEM = "hostel360-demo"
-CAMPUS_ADDRESS = "ACGCET Campus, Karaikudi – 630 003, Sivagangai District, Tamil Nadu"
+CAMPUS_ADDRESS = "ACGCET Campus, Karaikudi – 630 003, Sivagangai District, Tamil Nadu"  # noqa: RUF001 - en dash as printed
 
 DEPARTMENTS = (
 	("Civil Engineering", "CE"),
@@ -38,7 +38,8 @@ DEPARTMENTS = (
 	("Electronics and Communication Engineering", "EC"),
 	("Computer Science and Engineering", "CS"),
 )
-PROGRAMS = tuple((f"B.E. {name}", name, "UG", 4) for name, _code in DEPARTMENTS) + (
+PROGRAMS = (
+	*((f"B.E. {name}", name, "UG", 4) for name, _code in DEPARTMENTS),
 	("M.E. Structural Engineering", "Civil Engineering", "PG", 2),
 	("M.E. Computer Science and Engineering", "Computer Science and Engineering", "PG", 2),
 )
@@ -54,28 +55,132 @@ HOSTEL_FACILITIES = ("Wi-Fi", "RO Drinking Water", "Hot Water", "Power Backup")
 ROOM_FACILITIES = ("Cot", "Mattress", "Study Table", "Chair", "Cupboard", "Ceiling Fan", "Lighting")
 
 MALE_NAMES = (
-	"Arun", "Karthik", "Vignesh", "Surya", "Prakash", "Dinesh", "Saravanan", "Manikandan", "Ramesh",
-	"Gokul", "Harish", "Balaji", "Senthil", "Muthu", "Aravind", "Ajith", "Vijay", "Naveen", "Santhosh",
-	"Sathish", "Bharath", "Kishore", "Lokesh", "Madhan", "Pradeep", "Ragul", "Sakthi", "Tamilselvan",
-	"Vasanth", "Yuvaraj", "Ezhil", "Ilango", "Jeeva", "Kathir", "Nithish", "Pandi", "Selvam", "Hariharan",
+	"Arun",
+	"Karthik",
+	"Vignesh",
+	"Surya",
+	"Prakash",
+	"Dinesh",
+	"Saravanan",
+	"Manikandan",
+	"Ramesh",
+	"Gokul",
+	"Harish",
+	"Balaji",
+	"Senthil",
+	"Muthu",
+	"Aravind",
+	"Ajith",
+	"Vijay",
+	"Naveen",
+	"Santhosh",
+	"Sathish",
+	"Bharath",
+	"Kishore",
+	"Lokesh",
+	"Madhan",
+	"Pradeep",
+	"Ragul",
+	"Sakthi",
+	"Tamilselvan",
+	"Vasanth",
+	"Yuvaraj",
+	"Ezhil",
+	"Ilango",
+	"Jeeva",
+	"Kathir",
+	"Nithish",
+	"Pandi",
+	"Selvam",
+	"Hariharan",
 )
 FEMALE_NAMES = (
-	"Priya", "Divya", "Kavya", "Lakshmi", "Meena", "Anitha", "Deepa", "Revathi", "Sangeetha", "Keerthana",
-	"Nandhini", "Swathi", "Abinaya", "Gayathri", "Harini", "Janani", "Kaviya", "Monisha", "Pavithra",
-	"Ramya", "Sowmiya", "Thenmozhi", "Vaishnavi", "Yamini", "Aishwarya", "Bhavani", "Dharani", "Ilakkiya",
+	"Priya",
+	"Divya",
+	"Kavya",
+	"Lakshmi",
+	"Meena",
+	"Anitha",
+	"Deepa",
+	"Revathi",
+	"Sangeetha",
+	"Keerthana",
+	"Nandhini",
+	"Swathi",
+	"Abinaya",
+	"Gayathri",
+	"Harini",
+	"Janani",
+	"Kaviya",
+	"Monisha",
+	"Pavithra",
+	"Ramya",
+	"Sowmiya",
+	"Thenmozhi",
+	"Vaishnavi",
+	"Yamini",
+	"Aishwarya",
+	"Bhavani",
+	"Dharani",
+	"Ilakkiya",
 )
 FATHER_NAMES = (
-	"Murugan", "Kumar", "Selvaraj", "Pandian", "Subramanian", "Krishnan", "Natarajan", "Ramasamy",
-	"Velu", "Ganesan", "Shanmugam", "Rajendran", "Palanisamy", "Arumugam", "Chinnasamy", "Kannan",
-	"Sundaram", "Mohan", "Periyasamy", "Raman", "Thangaraj", "Veerappan", "Karuppiah", "Sekar",
+	"Murugan",
+	"Kumar",
+	"Selvaraj",
+	"Pandian",
+	"Subramanian",
+	"Krishnan",
+	"Natarajan",
+	"Ramasamy",
+	"Velu",
+	"Ganesan",
+	"Shanmugam",
+	"Rajendran",
+	"Palanisamy",
+	"Arumugam",
+	"Chinnasamy",
+	"Kannan",
+	"Sundaram",
+	"Mohan",
+	"Periyasamy",
+	"Raman",
+	"Thangaraj",
+	"Veerappan",
+	"Karuppiah",
+	"Sekar",
 )
 MOTHER_NAMES = (
-	"Selvi", "Lakshmi", "Valli", "Meenakshi", "Kamala", "Saraswathi", "Vijaya", "Chitra", "Malathi",
-	"Rani", "Jothi", "Padma", "Shanthi", "Bhuvana", "Kalaivani", "Amudha",
+	"Selvi",
+	"Lakshmi",
+	"Valli",
+	"Meenakshi",
+	"Kamala",
+	"Saraswathi",
+	"Vijaya",
+	"Chitra",
+	"Malathi",
+	"Rani",
+	"Jothi",
+	"Padma",
+	"Shanthi",
+	"Bhuvana",
+	"Kalaivani",
+	"Amudha",
 )
 OCCUPATIONS = (
-	"Farmer", "Teacher", "Government Employee", "Business", "Driver", "Shop Owner", "Electrician",
-	"Bank Employee", "Contractor", "Private Employee", "Weaver", "Fisherman",
+	"Farmer",
+	"Teacher",
+	"Government Employee",
+	"Business",
+	"Driver",
+	"Shop Owner",
+	"Electrician",
+	"Bank Employee",
+	"Contractor",
+	"Private Employee",
+	"Weaver",
+	"Fisherman",
 )
 PLACES = (
 	# city, district, pincode
@@ -103,8 +208,16 @@ PLACES = (
 	("Chennai", "Chennai", "600001"),
 )
 STREETS = (
-	"Gandhi Street", "Nehru Nagar", "Anna Salai", "Kamarajar Street", "Bharathi Nagar", "Main Road",
-	"Periyar Nagar", "Vivekananda Street", "Thiruvalluvar Street", "Mariamman Kovil Street",
+	"Gandhi Street",
+	"Nehru Nagar",
+	"Anna Salai",
+	"Kamarajar Street",
+	"Bharathi Nagar",
+	"Main Road",
+	"Periyar Nagar",
+	"Vivekananda Street",
+	"Thiruvalluvar Street",
+	"Mariamman Kovil Street",
 )
 BLOOD_GROUPS = ("O+", "O+", "B+", "B+", "A+", "A+", "AB+", "O-", "B-", "A-")
 
@@ -183,12 +296,54 @@ MENU = {
 }
 
 GRIEVANCES = (
-	("Plumbing", "Tap leaking in second floor bathroom", "The tap near the wash basin has been leaking for three days and water collects on the floor.", "Medium", "Resolved", "Washer replaced by the plumber."),
-	("Electrical", "Ceiling fan not working", "The fan in our room stopped working last night. The regulator is also loose.", "High", "In Progress", None),
-	("Internet", "Wi-Fi very slow in B block", "Wi-Fi in B block is too slow to download lecture notes in the evening.", "Medium", "Open", None),
-	("Mess and Food", "Sambar too watery at dinner", "Dinner sambar has been very thin this week. Please check the quantity of dal used.", "Low", "Resolved", "Discussed with the mess committee; dal quantity corrected."),
-	("Water", "No drinking water on ground floor", "The RO water point on the ground floor has not been working since Monday.", "High", "Open", None),
-	("Cleanliness", "Corridor not cleaned", "The first floor corridor was not cleaned on Saturday and Sunday.", "Low", "Closed", "Housekeeping roster revised."),
+	(
+		"Plumbing",
+		"Tap leaking in second floor bathroom",
+		"The tap near the wash basin has been leaking for three days and water collects on the floor.",
+		"Medium",
+		"Resolved",
+		"Washer replaced by the plumber.",
+	),
+	(
+		"Electrical",
+		"Ceiling fan not working",
+		"The fan in our room stopped working last night. The regulator is also loose.",
+		"High",
+		"In Progress",
+		None,
+	),
+	(
+		"Internet",
+		"Wi-Fi very slow in B block",
+		"Wi-Fi in B block is too slow to download lecture notes in the evening.",
+		"Medium",
+		"Open",
+		None,
+	),
+	(
+		"Mess and Food",
+		"Sambar too watery at dinner",
+		"Dinner sambar has been very thin this week. Please check the quantity of dal used.",
+		"Low",
+		"Resolved",
+		"Discussed with the mess committee; dal quantity corrected.",
+	),
+	(
+		"Water",
+		"No drinking water on ground floor",
+		"The RO water point on the ground floor has not been working since Monday.",
+		"High",
+		"Open",
+		None,
+	),
+	(
+		"Cleanliness",
+		"Corridor not cleaned",
+		"The first floor corridor was not cleaned on Saturday and Sunday.",
+		"Low",
+		"Closed",
+		"Housekeeping roster revised.",
+	),
 )
 LEAVE_REASONS = (
 	("Pongal holidays with family", "Home"),
@@ -265,7 +420,9 @@ class DemoDataBuilder:
 		# Only the builder's own state decides the number, so a rerun draws exactly the
 		# same sequence; a clash with an existing record fails that one record visibly.
 		while True:
-			number = str(self.rng.choice((6, 7, 8, 9))) + "".join(str(self.rng.randrange(10)) for _i in range(9))
+			number = str(self.rng.choice((6, 7, 8, 9))) + "".join(
+				str(self.rng.randrange(10)) for _i in range(9)
+			)
 			if number not in self.used_mobiles:
 				self.used_mobiles.add(number)
 				return number
@@ -316,15 +473,18 @@ class DemoDataBuilder:
 		from hostel360.hostel_setup.setup import ensure_current_academic_year
 
 		self.academic_year = (
-			frappe.db.get_single_value("Hostel Settings", "current_academic_year") or ensure_current_academic_year()
+			frappe.db.get_single_value("Hostel Settings", "current_academic_year")
+			or ensure_current_academic_year()
 		)
-		self.year_start = getdate(frappe.db.get_value("Hostel Academic Year", self.academic_year, "start_date"))
+		self.year_start = getdate(
+			frappe.db.get_value("Hostel Academic Year", self.academic_year, "start_date")
+		)
 
 		for name, code in DEPARTMENTS:
 			if not frappe.db.exists("Academic Department", name):
-				frappe.get_doc({"doctype": "Academic Department", "department_name": name, "department_code": code}).insert(
-					ignore_permissions=True
-				)
+				frappe.get_doc(
+					{"doctype": "Academic Department", "department_name": name, "department_code": code}
+				).insert(ignore_permissions=True)
 				self.bump("Academic Department")
 		for name, department, level, years in PROGRAMS:
 			if not frappe.db.exists("Academic Program", name):
@@ -452,7 +612,7 @@ class DemoDataBuilder:
 				"relation": relation,
 				"mobile_number": mobile,
 				"occupation": occupation,
-				"address": f"{person.address}, {person.city}, {person.district} District – {person.pincode}",
+				"address": f"{person.address}, {person.city}, {person.district} District – {person.pincode}",  # noqa: RUF001
 				"validation_status": "Validated",
 			}
 		).insert(ignore_permissions=True)
@@ -462,7 +622,9 @@ class DemoDataBuilder:
 	def create_student(self, person) -> None:
 		guardians = [
 			{
-				"guardian": self.create_guardian(person.father, "Father", person.father_mobile, person.occupation, person),
+				"guardian": self.create_guardian(
+					person.father, "Father", person.father_mobile, person.occupation, person
+				),
 				"relation": "Father",
 				"is_primary": 1,
 				"can_approve_leave": 1,
@@ -471,7 +633,9 @@ class DemoDataBuilder:
 		if person.mother_mobile:
 			guardians.append(
 				{
-					"guardian": self.create_guardian(person.mother, "Mother", person.mother_mobile, "Homemaker", person),
+					"guardian": self.create_guardian(
+						person.mother, "Mother", person.mother_mobile, "Homemaker", person
+					),
 					"relation": "Mother",
 					"is_primary": 0,
 					"can_approve_leave": 1,
@@ -602,7 +766,8 @@ class DemoDataBuilder:
 				reference="".join(str(self.rng.randrange(10)) for _i in range(12)),
 			)
 			if frappe.db.exists(
-				"Hostel Fee Invoice", {"student": student.name, "fee_structure": structure, "docstatus": ["<", 2]}
+				"Hostel Fee Invoice",
+				{"student": student.name, "fee_structure": structure, "docstatus": ["<", 2]},
 			):
 				continue
 			self.safely(f"Fees {student.name}", self.bill_student, student, structure, items, draw)
@@ -703,7 +868,9 @@ class DemoDataBuilder:
 		by_supplier: dict[int, list] = {}
 		for item, qty, rate, supplier in STOCK_RECEIPT:
 			if frappe.db.exists("Mess Item", item):
-				by_supplier.setdefault(supplier, []).append({"item": item, "qty": max(round(qty * share), 1), "rate": rate})
+				by_supplier.setdefault(supplier, []).append(
+					{"item": item, "qty": max(round(qty * share), 1), "rate": rate}
+				)
 		names = []
 		for supplier, items in sorted(by_supplier.items()):
 			doc = frappe.get_doc(
@@ -768,9 +935,22 @@ class DemoDataBuilder:
 		for day in range(7):
 			date = monday + datetime.timedelta(days=day)
 			for meal, dishes in MENU.items():
-				rows.append({"menu_date": date, "meal": meal, "dishes": dishes[day], "is_special": int(day == 6 and meal in ("Lunch", "Dinner"))})
+				rows.append(
+					{
+						"menu_date": date,
+						"meal": meal,
+						"dishes": dishes[day],
+						"is_special": int(day == 6 and meal in ("Lunch", "Dinner")),
+					}
+				)
 		menu = frappe.get_doc(
-			{"doctype": "Mess Menu", "mess": mess, "week_start_date": monday, "items": rows, "notes": _("Demo menu")}
+			{
+				"doctype": "Mess Menu",
+				"mess": mess,
+				"week_start_date": monday,
+				"items": rows,
+				"notes": _("Demo menu"),
+			}
 		)
 		menu.insert(ignore_permissions=True)
 		menu.publish()
@@ -827,7 +1007,9 @@ class DemoDataBuilder:
 			if kind == "Returned":
 				values.update(checked_out_on=start, returned_on=end - datetime.timedelta(hours=1))
 			if kind in ("Returned", "Approved"):
-				values.update(warden_user="Administrator", warden_action_on=start - datetime.timedelta(days=1))
+				values.update(
+					warden_user="Administrator", warden_action_on=start - datetime.timedelta(days=1)
+				)
 
 			def leave(values=values, source_id=source_id):
 				doc = frappe.get_doc(values).insert(ignore_permissions=True)
@@ -878,7 +1060,9 @@ class DemoDataBuilder:
 						"doctype": "Bonafide Certificate Request",
 						"student": student.name,
 						"purpose": purpose,
-						"purpose_details": _("Education loan application") if purpose == "Bank Loan" else None,
+						"purpose_details": _("Education loan application")
+						if purpose == "Bank Loan"
+						else None,
 						"status": "Pending",
 					}
 				).insert(ignore_permissions=True)

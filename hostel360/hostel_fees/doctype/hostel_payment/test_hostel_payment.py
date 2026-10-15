@@ -211,7 +211,9 @@ class TestHostelPayment(FeeTestCase):
 			with self.assertRaises(frappe.PermissionError):
 				draft.insert()
 
-			result = record_payment(self.student, "Cash", [{"invoice": current.name, "allocated_amount": 300}])
+			result = record_payment(
+				self.student, "Cash", [{"invoice": current.name, "allocated_amount": 300}]
+			)
 
 		self.assertEqual(frappe.db.get_value(PAYMENT, result["payment"], "hostel"), new_hostel)
 		self.assertEqual(frappe.db.get_value(INVOICE, current.name, "status"), "Paid")

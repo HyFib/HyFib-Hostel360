@@ -193,7 +193,9 @@ class EntitySpec:
 			raise RowError(f"The key column {', '.join(missing)} is empty.")
 		source_id = "|".join(parts)
 		if len(source_id) > MAX_SOURCE_ID_LENGTH:
-			raise RowError(f"The legacy ID '{source_id[:40]}...' is longer than {MAX_SOURCE_ID_LENGTH} characters.")
+			raise RowError(
+				f"The legacy ID '{source_id[:40]}...' is longer than {MAX_SOURCE_ID_LENGTH} characters."
+			)
 		return source_id
 
 	def is_included(self, row: dict) -> bool:
@@ -241,8 +243,12 @@ class EntitySpec:
 				) and any(spec.source_columns for spec in child.fields):
 					continue
 				child_values: dict[str, Any] = {}
-				for spec in [s for s in child.fields if not s.template] + [s for s in child.fields if s.template]:
-					child_values[spec.target] = self.resolve_field(spec, row, {**values, **child_values}, resolve_lookup)
+				for spec in [s for s in child.fields if not s.template] + [
+					s for s in child.fields if s.template
+				]:
+					child_values[spec.target] = self.resolve_field(
+						spec, row, {**values, **child_values}, resolve_lookup
+					)
 				table_rows.append({spec.target: child_values[spec.target] for spec in child.fields})
 			children[table] = table_rows
 
@@ -259,7 +265,9 @@ class EntitySpec:
 			if spec.template:
 				raw = render_template(spec.template, resolved, row)
 			elif spec.columns:
-				parts = [to_text(clean_null(get_cell(row, c), self.null_values)).strip() for c in spec.columns]
+				parts = [
+					to_text(clean_null(get_cell(row, c), self.null_values)).strip() for c in spec.columns
+				]
 				raw = spec.separator.join(part for part in parts if part)
 			else:
 				raw = get_cell(row, spec.column)
@@ -415,7 +423,9 @@ def parse_field(target: str, spec, where: str) -> FieldSpec:
 	if lookup is not None:
 		if isinstance(lookup, str):
 			lookup = {"entity": lookup}
-		if not isinstance(lookup, dict) or not (lookup.get("entity") or (lookup.get("doctype") and lookup.get("field"))):
+		if not isinstance(lookup, dict) or not (
+			lookup.get("entity") or (lookup.get("doctype") and lookup.get("field"))
+		):
 			raise MappingError(
 				f"{where}.{target}: lookup must name an entity, or a doctype and the field to match on."
 			)
@@ -484,7 +494,9 @@ def parse_entity(name: str, spec: dict, defaults: dict) -> EntitySpec:
 				raise MappingError(f"{where}.children.{table}[{idx}]: a row template must be an object.")
 			row = dict(row)
 			when = row.pop("$when", None)
-			parsed_rows.append(ChildRowSpec(fields=parse_fields(row, f"{where}.children.{table}[{idx}]"), when=when))
+			parsed_rows.append(
+				ChildRowSpec(fields=parse_fields(row, f"{where}.children.{table}[{idx}]"), when=when)
+			)
 		children[table] = parsed_rows
 
 	parent = spec.get("parent")
@@ -529,7 +541,9 @@ def parse_entity(name: str, spec: dict, defaults: dict) -> EntitySpec:
 		raise MappingError(f"{where}: on_submitted_change must be 'fail' or 'skip'.")
 
 	context = {
-		"date_formats": spec.get("date_formats") or defaults.get("date_formats") or list(DEFAULT_DATE_FORMATS),
+		"date_formats": spec.get("date_formats")
+		or defaults.get("date_formats")
+		or list(DEFAULT_DATE_FORMATS),
 		"datetime_formats": spec.get("datetime_formats")
 		or defaults.get("datetime_formats")
 		or list(DEFAULT_DATETIME_FORMATS),
@@ -588,7 +602,9 @@ def load_mapping(source) -> Mapping:
 		try:
 			raw = json.loads(text)
 		except json.JSONDecodeError as e:
-			raise MappingError(f"The mapping is not valid JSON (line {e.lineno}, column {e.colno}): {e.msg}.") from e
+			raise MappingError(
+				f"The mapping is not valid JSON (line {e.lineno}, column {e.colno}): {e.msg}."
+			) from e
 	if not isinstance(raw, dict):
 		raise MappingError("The mapping must be a JSON object.")
 
@@ -663,7 +679,9 @@ def check_against_meta(mapping: Mapping) -> list[str]:
 			continue
 		meta = frappe.get_meta(entity.doctype)
 		if meta.issingle or meta.istable:
-			problems.append(f"{where}: {entity.doctype} is a single or child DocType; map its parent instead.")
+			problems.append(
+				f"{where}: {entity.doctype} is a single or child DocType; map its parent instead."
+			)
 			continue
 
 		if entity.mode == "child":
@@ -692,7 +710,9 @@ def check_against_meta(mapping: Mapping) -> list[str]:
 			if spec.attachment:
 				df = meta.get_field(spec.target)
 				if df and df.fieldtype not in ("Attach", "Attach Image"):
-					problems.append(f"{where}.{spec.target}: attachments need an Attach or Attach Image field.")
+					problems.append(
+						f"{where}.{spec.target}: attachments need an Attach or Attach Image field."
+					)
 	return problems
 
 
@@ -709,5 +729,7 @@ def _check_fields(meta, specs: list[FieldSpec], where: str) -> list[str]:
 			import frappe
 
 			if not frappe.db.exists("DocType", spec.lookup["doctype"]):
-				problems.append(f"{where}.{spec.target}: lookup DocType {spec.lookup['doctype']} does not exist.")
+				problems.append(
+					f"{where}.{spec.target}: lookup DocType {spec.lookup['doctype']} does not exist."
+				)
 	return problems

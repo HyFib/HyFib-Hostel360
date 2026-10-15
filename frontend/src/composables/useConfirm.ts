@@ -20,9 +20,14 @@ export function settleConfirm(value: boolean): void {
 
 export function confirm(request: ConfirmRequest): Promise<boolean> {
 	if (resolver) settleConfirm(false);
-	Object.assign(confirmState, { message: undefined, confirmLabel: undefined, cancelLabel: undefined, danger: false }, request, {
-		open: true,
-	});
+	Object.assign(
+		confirmState,
+		{ message: undefined, confirmLabel: undefined, cancelLabel: undefined, danger: false },
+		request,
+		{
+			open: true,
+		},
+	);
 	return new Promise<boolean>((resolve) => {
 		resolver = resolve;
 	});

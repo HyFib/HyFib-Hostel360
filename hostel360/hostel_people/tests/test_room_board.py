@@ -4,8 +4,21 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from hostel360.hostel_people.page.room_board.room_board import allot, get_board, search_vacant_beds, transfer, vacate
-from hostel360.hostel_people.testing import beds_of, make_block, make_floor, make_hostel, make_room, make_student
+from hostel360.hostel_people.page.room_board.room_board import (
+	allot,
+	get_board,
+	search_vacant_beds,
+	transfer,
+	vacate,
+)
+from hostel360.hostel_people.testing import (
+	beds_of,
+	make_block,
+	make_floor,
+	make_hostel,
+	make_room,
+	make_student,
+)
 
 
 class TestRoomBoard(IntegrationTestCase):
@@ -40,11 +53,24 @@ class TestRoomBoard(IntegrationTestCase):
 	def test_vacant_bed_search_follows_gender(self):
 		male = make_student("Male")
 		female = make_student("Female")
-		beds = [row[0] for row in search_vacant_beds("Hostel Bed", "", "name", 0, 50, {"hostel": self.hostel.name, "student": male.name})]
+		beds = [
+			row[0]
+			for row in search_vacant_beds(
+				"Hostel Bed", "", "name", 0, 50, {"hostel": self.hostel.name, "student": male.name}
+			)
+		]
 		self.assertEqual(len(beds), 5)
-		self.assertEqual(search_vacant_beds("Hostel Bed", "", "name", 0, 50, {"hostel": self.hostel.name, "student": female.name}), [])
+		self.assertEqual(
+			search_vacant_beds(
+				"Hostel Bed", "", "name", 0, 50, {"hostel": self.hostel.name, "student": female.name}
+			),
+			[],
+		)
 
 		allot(bed=beds_of(self.room_2.name)[0], student=male.name)
-		beds = [row[0] for row in search_vacant_beds("Hostel Bed", "-12-", "name", 0, 50, {"hostel": self.hostel.name})]
+		beds = [
+			row[0]
+			for row in search_vacant_beds("Hostel Bed", "-12-", "name", 0, 50, {"hostel": self.hostel.name})
+		]
 		self.assertEqual(len(beds), 2)
 		self.assertNotIn(beds_of(self.room_2.name)[0], beds)

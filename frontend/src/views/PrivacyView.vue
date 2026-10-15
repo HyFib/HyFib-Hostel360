@@ -73,7 +73,11 @@ onMounted(load);
 				:back="session.loggedIn ? undefined : { name: 'login' }"
 			/>
 
-			<div v-if="session.consentRequired" class="card mb-4 flex items-start gap-3 border-brand bg-brand-soft" role="status">
+			<div
+				v-if="session.consentRequired"
+				class="card mb-4 flex items-start gap-3 border-brand bg-brand-soft"
+				role="status"
+			>
 				<ShieldCheck :size="22" class="mt-0.5 shrink-0 text-brand-ink" aria-hidden="true" />
 				<p class="text-sm text-ink">{{ t("privacy.required") }}</p>
 			</div>
@@ -88,7 +92,12 @@ onMounted(load);
 			</div>
 
 			<!-- Administrator-written HTML, reduced to an allow-list of formatting tags by sanitizeHtml -->
-			<article v-else-if="notice" class="card prose-notice text-[0.95rem] text-ink" data-test="notice" v-html="notice" />
+			<article
+				v-else-if="notice"
+				class="card prose-notice text-[0.95rem] text-ink"
+				data-test="notice"
+				v-html="notice"
+			/>
 			<article v-else class="card prose-notice text-[0.95rem] text-ink" data-test="notice-default">
 				<p>{{ t("privacy.default.lead") }}</p>
 				<template v-for="section in sections" :key="section">
@@ -98,7 +107,11 @@ onMounted(load);
 			</article>
 
 			<div v-if="session.loggedIn && session.consentRequired" class="sticky bottom-4 mt-4">
-				<p v-if="error" class="mb-2 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+				<p
+					v-if="error"
+					class="mb-2 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+					role="alert"
+				>
 					<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 				</p>
 				<button

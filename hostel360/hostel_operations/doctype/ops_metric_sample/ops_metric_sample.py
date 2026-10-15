@@ -5,7 +5,6 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import now_datetime
 
-
 # CERT-In directions (28 April 2022) require at least 180 days of logs.
 MINIMUM_RETENTION_DAYS = 180
 

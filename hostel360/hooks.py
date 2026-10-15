@@ -189,6 +189,7 @@ scheduler_events = {
 	"hourly": [
 		"hostel360.student_services.grievance_tasks.escalate_overdue_grievances",
 		"hostel360.student_services.leave_tasks.mark_overdue_returns",
+		"hostel360.security.files.delete_stale_chunk_files",
 	],
 	"daily": [
 		"hostel360.hostel_fees.tasks.mark_overdue_invoices",

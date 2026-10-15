@@ -49,7 +49,8 @@ class TestPortalUsers(IntegrationTestCase):
 		self.assertTrue(user.endswith(f"@{PLACEHOLDER_EMAIL_DOMAIN}"))
 		self.assertEqual(frappe.db.get_value("Hostel Student", student.name, "user"), user)
 		has_password = frappe.db.sql(
-			"select count(*) from `__Auth` where doctype = 'User' and name = %s and fieldname = 'password'", user
+			"select count(*) from `__Auth` where doctype = 'User' and name = %s and fieldname = 'password'",
+			user,
 		)[0][0]
 		self.assertTrue(has_password)
 
@@ -85,7 +86,8 @@ class TestPortalUsers(IntegrationTestCase):
 		student = make_student("Male")
 		guardian = make_guardian(mobile_number=student.mobile_number)
 		self.assertNotEqual(
-			ensure_portal_user("Hostel Student", student.name), ensure_portal_user("Hostel Guardian", guardian.name)
+			ensure_portal_user("Hostel Student", student.name),
+			ensure_portal_user("Hostel Guardian", guardian.name),
 		)
 
 
@@ -134,7 +136,9 @@ class TestStudentServices(IntegrationTestCase):
 	def test_privacy_consent_requires_current_version(self):
 		student = make_student("Male")
 		version = frappe.db.get_single_value("Hostel Settings", "privacy_notice_version")
-		self.assertRaises(frappe.ValidationError, record_privacy_consent, "Hostel Student", student.name, "0.1")
+		self.assertRaises(
+			frappe.ValidationError, record_privacy_consent, "Hostel Student", student.name, "0.1"
+		)
 		record_privacy_consent("Hostel Student", student.name, version)
 		student.reload()
 		self.assertEqual(student.privacy_consent_version, version)
@@ -142,7 +146,9 @@ class TestStudentServices(IntegrationTestCase):
 
 		guardian = make_guardian()
 		record_privacy_consent("Hostel Guardian", guardian.name, version)
-		self.assertEqual(frappe.db.get_value("Hostel Guardian", guardian.name, "privacy_consent_version"), version)
+		self.assertEqual(
+			frappe.db.get_value("Hostel Guardian", guardian.name, "privacy_consent_version"), version
+		)
 		self.assertRaises(frappe.ValidationError, record_privacy_consent, "User", "Administrator", version)
 
 	def test_portal_user_cannot_read_another_student(self):

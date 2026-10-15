@@ -90,7 +90,9 @@ class TestDateTransforms(UnitTestCase):
 		self.assertEqual(run("10-01-2026 16:20", "datetime"), "2026-01-10 16:20:00")
 		self.assertEqual(run("10/01/2026 04:20 PM", "datetime"), "2026-01-10 16:20:00")
 		self.assertEqual(run("2026-01-10", "datetime"), "2026-01-10 00:00:00")
-		self.assertEqual(run(datetime.datetime(2026, 1, 10, 16, 20, 5, 999), "datetime"), "2026-01-10 16:20:05")
+		self.assertEqual(
+			run(datetime.datetime(2026, 1, 10, 16, 20, 5, 999), "datetime"), "2026-01-10 16:20:05"
+		)
 		with self.assertRaises(TransformError):
 			run("tomorrow", "datetime")
 

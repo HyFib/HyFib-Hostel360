@@ -142,7 +142,9 @@ def send_invoice_reminder(invoice, today=None) -> None:
 def _invoice_label(names: list[str]) -> str:
 	if len(names) <= MAX_INVOICES_NAMED:
 		return ", ".join(names)
-	return _("{0} and {1} more").format(", ".join(names[:MAX_INVOICES_NAMED]), len(names) - MAX_INVOICES_NAMED)
+	return _("{0} and {1} more").format(
+		", ".join(names[:MAX_INVOICES_NAMED]), len(names) - MAX_INVOICES_NAMED
+	)
 
 
 def _commit():

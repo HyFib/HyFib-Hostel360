@@ -174,6 +174,8 @@ class TestHostelFeeStructure(FeeTestCase):
 			structure.publish_dues()
 
 	def test_most_specific_structure_applies(self):
+		# A general structure already on the site would compete with the one built here.
+		self.deactivate_site_structures()
 		program = make_program()
 		student = make_student(hostel=self.hostel, year_of_study="2", program=program)
 

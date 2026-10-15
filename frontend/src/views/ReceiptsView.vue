@@ -24,16 +24,29 @@ const payments = computed(() => fees.data.value?.payments ?? []);
 
 		<SkeletonList v-if="fees.loading.value && !fees.data.value" />
 		<ErrorState v-else-if="fees.error.value" :error="fees.error.value" @retry="fees.reload" />
-		<EmptyState v-else-if="!payments.length" :icon="Receipt" :title="t('receipts.empty')" :body="t('receipts.emptyHint')" />
+		<EmptyState
+			v-else-if="!payments.length"
+			:icon="Receipt"
+			:title="t('receipts.empty')"
+			:body="t('receipts.emptyHint')"
+		/>
 
 		<ul v-else class="space-y-3">
-			<li v-for="payment in payments" :key="payment.name" class="card flex flex-wrap items-center justify-between gap-3">
+			<li
+				v-for="payment in payments"
+				:key="payment.name"
+				class="card flex flex-wrap items-center justify-between gap-3"
+			>
 				<div class="min-w-0">
 					<p class="text-lg font-bold text-ink">{{ formatINR(payment.amount, "always") }}</p>
-					<p class="text-sm text-muted">{{ formatDate(payment.payment_date) }} · {{ tv("paymentModes", payment.mode_of_payment) }}</p>
+					<p class="text-sm text-muted">
+						{{ formatDate(payment.payment_date) }} · {{ tv("paymentModes", payment.mode_of_payment) }}
+					</p>
 					<p class="text-xs text-muted">
 						{{ t("receipts.number", { name: payment.name }) }}
-						<template v-if="payment.reference_no"> · {{ t("receipts.reference", { reference: payment.reference_no }) }}</template>
+						<template v-if="payment.reference_no">
+							· {{ t("receipts.reference", { reference: payment.reference_no }) }}</template
+						>
 					</p>
 				</div>
 				<button

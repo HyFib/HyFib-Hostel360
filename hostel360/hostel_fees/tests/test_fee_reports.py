@@ -1,9 +1,12 @@
 """Fee reports and printable documents."""
 
+from unittest.mock import patch
+
 import frappe
+from frappe.translate import print_language
 from frappe.utils import add_days, nowdate
 
-from hostel360.hostel_fees.constants import PAYMENT
+from hostel360.hostel_fees.constants import PAYMENT, STRUCTURE
 from hostel360.hostel_fees.report.daily_collection_summary.daily_collection_summary import (
 	execute as daily_collection_summary,
 )
@@ -14,7 +17,11 @@ from hostel360.hostel_fees.report.fee_dues.fee_dues import execute as fee_dues
 from hostel360.hostel_fees.report.gateway_reconciliation.gateway_reconciliation import (
 	execute as gateway_reconciliation,
 )
-from hostel360.hostel_fees.services import get_fee_structure_pdf, get_receipt_pdf
+from hostel360.hostel_fees.services import (
+	get_applicable_fee_structure,
+	get_fee_structure_pdf,
+	get_receipt_pdf,
+)
 from hostel360.hostel_fees.tests.fixtures import (
 	FeeTestCase,
 	make_academic_year,
@@ -91,7 +98,9 @@ class TestFeeReports(FeeTestCase):
 		self.assertEqual(by_invoice[recent.name].range_0_30, 300)
 		self.assertEqual(by_invoice[future.name].not_due, 200)
 		# Due today is not overdue yet, as for invoice status and the "Overdue Only" filter.
-		self.assertEqual((by_invoice[due_today.name].not_due, by_invoice[due_today.name].range_0_30), (150, 0))
+		self.assertEqual(
+			(by_invoice[due_today.name].not_due, by_invoice[due_today.name].range_0_30), (150, 0)
+		)
 		self.assertEqual(summary[0]["value"], 1350)
 		self.assertEqual(summary[1]["value"], 1000)
 
@@ -203,12 +212,16 @@ class TestFeeReports(FeeTestCase):
 		with self.assertRaises(frappe.DoesNotExistError):
 			get_receipt_pdf(draft.name)
 
+		# Without any active structure there is nothing to print, whatever the site already holds.
+		self.deactivate_site_structures()
+		unbilled = make_student(hostel=make_hostel())
+		self.assertIsNone(get_applicable_fee_structure(unbilled))
 		with self.assertRaises(frappe.DoesNotExistError):
-			get_fee_structure_pdf(make_student(hostel=make_hostel()))
+			get_fee_structure_pdf(unbilled)
 
 		structure = frappe.get_doc(
 			{
-				"doctype": "Hostel Fee Structure",
+				"doctype": STRUCTURE,
 				"structure_name": unique("PDF Structure "),
 				"academic_year": make_academic_year(),
 				"hostel": self.hostel,
@@ -225,3 +238,59 @@ class TestFeeReports(FeeTestCase):
 		)
 		self.assertIn("refundable", structure_html)
 		self.assertIn("One Thousand, Five Hundred", structure_html)
+
+	def test_structure_that_applies_to_everyone_is_found_for_any_student(self):
+		self.deactivate_site_structures()
+		general = frappe.get_doc(
+			{
+				"doctype": STRUCTURE,
+				"structure_name": unique("General Structure "),
+				"academic_year": make_academic_year(),
+				"due_date": add_days(nowdate(), 10),
+				"items": [{"fee_head": "Hostel Rent", "amount": 1000}],
+			}
+		).insert()
+		self.assertEqual(get_applicable_fee_structure(make_student(hostel=make_hostel())), general.name)
+
+		general.db_set("is_active", 0)
+		self.assertIsNone(get_applicable_fee_structure(make_student(hostel=make_hostel())))
+
+	def test_documents_print_in_the_print_format_language(self):
+		invoice = make_invoice(self.student, 1000)
+		receipt = make_payment(self.student, [(invoice.name, 1000)])
+		receipt.submit()
+
+		languages = []
+
+		def fake_get_print(*args, **kwargs):
+			languages.append(frappe.local.lang)
+			return b"%PDF-1.4"
+
+		# A Tamil-speaking parent downloads the receipt: it reads like the one the office prints.
+		with patch("frappe.get_print", side_effect=fake_get_print), print_language("ta"):
+			self.assertEqual(get_receipt_pdf(receipt.name), b"%PDF-1.4")
+			self.assertEqual(frappe.local.lang, "ta")
+
+			# With the format's default language cleared, each reader gets their own language.
+			frappe.db.set_value("Print Format", "Hostel Fee Receipt", "default_print_language", None)
+			self.addCleanup(
+				frappe.db.set_value, "Print Format", "Hostel Fee Receipt", "default_print_language", "en"
+			)
+			get_receipt_pdf(receipt.name)
+		self.assertEqual(languages, ["en", "ta"])
+
+	def test_print_formats_name_a_tamil_font_after_the_latin_one(self):
+		for print_format in ("Hostel Fee Receipt", "Hostel Fee Invoice", "Hostel Fee Structure"):
+			css = frappe.db.get_value("Print Format", print_format, "css")
+			stack = css.split(".h360-doc { font-family:", 1)[1].split(";", 1)[0]
+			fonts = [font.strip().strip('"') for font in stack.split(",")]
+			self.assertLess(fonts.index("Inter"), fonts.index("Noto Sans Tamil"), print_format)
+			self.assertIn("Lohit Tamil", fonts, print_format)
+			self.assertEqual(fonts[-1], "sans-serif", print_format)
+
+		html = frappe.get_print(
+			PAYMENT,
+			make_payment(self.student, [(make_invoice(self.student, 100).name, 100)]).name,
+			print_format="Hostel Fee Receipt",
+		)
+		self.assertIn("Noto Sans Tamil", html)

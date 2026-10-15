@@ -22,11 +22,12 @@ const src = computed(() => {
 		class="shrink-0 rounded-lg bg-white object-contain"
 		:style="{ width: `${size}px`, height: `${size}px` }"
 		@error="failed = true"
-	>
+	/>
 	<span
 		v-else
 		class="inline-flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#0b4f9c] to-[#0891b2] font-bold text-white"
 		:style="{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.42)}px` }"
 		aria-hidden="true"
-	>H</span>
+		>H</span
+	>
 </template>

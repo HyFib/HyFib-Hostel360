@@ -6,7 +6,12 @@ import { formatDateTime } from "./format";
 /** Progress of a leave request through parent and warden approval to return. */
 export function leaveSteps(leave: Leave): TimelineStep[] {
 	const steps: TimelineStep[] = [
-		{ key: "applied", label: t("leave.steps.applied"), state: "done", detail: leave.creation ? formatDateTime(leave.creation) : undefined },
+		{
+			key: "applied",
+			label: t("leave.steps.applied"),
+			state: "done",
+			detail: leave.creation ? formatDateTime(leave.creation) : undefined,
+		},
 	];
 
 	const parent = leave.parent_approval_status;
@@ -16,7 +21,14 @@ export function leaveSteps(leave: Leave): TimelineStep[] {
 		steps.push({
 			key: "parent",
 			label: t("leave.steps.parent"),
-			state: parent === "Approved" ? "done" : parent === "Rejected" ? "failed" : leave.status === "Pending Parent Approval" ? "current" : "upcoming",
+			state:
+				parent === "Approved"
+					? "done"
+					: parent === "Rejected"
+						? "failed"
+						: leave.status === "Pending Parent Approval"
+							? "current"
+							: "upcoming",
 			detail: leave.parent_remarks || (parent && parent !== "Pending" ? t(`status.${parent}`) : undefined),
 		});
 	}
@@ -26,7 +38,13 @@ export function leaveSteps(leave: Leave): TimelineStep[] {
 		key: "warden",
 		label: t("leave.steps.warden"),
 		state:
-			warden === "Approved" ? "done" : warden === "Rejected" ? "failed" : leave.status === "Pending Warden Approval" ? "current" : "upcoming",
+			warden === "Approved"
+				? "done"
+				: warden === "Rejected"
+					? "failed"
+					: leave.status === "Pending Warden Approval"
+						? "current"
+						: "upcoming",
 		detail: leave.warden_remarks || (warden && warden !== "Pending" ? t(`status.${warden}`) : undefined),
 	});
 
@@ -45,7 +63,13 @@ export function leaveSteps(leave: Leave): TimelineStep[] {
 	steps.push({
 		key: "returned",
 		label: leave.status === "Overdue" ? t("leave.steps.overdue") : t("leave.steps.returned"),
-		state: leave.returned_on ? "done" : leave.status === "Overdue" ? "failed" : leave.status === "Checked Out" ? "current" : "upcoming",
+		state: leave.returned_on
+			? "done"
+			: leave.status === "Overdue"
+				? "failed"
+				: leave.status === "Checked Out"
+					? "current"
+					: "upcoming",
 		detail: leave.returned_on ? formatDateTime(leave.returned_on) : undefined,
 	});
 	return steps;

@@ -120,7 +120,8 @@
    "fieldname": "gateway",
    "fieldtype": "Data",
    "label": "Gateway",
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "gateway_order_id",
@@ -262,7 +263,7 @@
  ],
  "in_create": 1,
  "links": [],
- "modified": "2026-10-15 21:00:00.000000",
+ "modified": "2026-10-16 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Fees",
  "name": "Hostel Payment Transaction",

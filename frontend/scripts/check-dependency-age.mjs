@@ -35,7 +35,8 @@ async function check(name) {
 		const time = (await response.json()).time || {};
 		for (const version of wanted.get(name)) {
 			const published = Date.parse(time[version] || "");
-			if (!published || published > cutoff) fresh.push(`${name}@${version} (${time[version]?.slice(0, 10) || "unknown"})`);
+			if (!published || published > cutoff)
+				fresh.push(`${name}@${version} (${time[version]?.slice(0, 10) || "unknown"})`);
 		}
 	} catch (error) {
 		failed.push(`${name}: ${error.message}`);

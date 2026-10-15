@@ -180,7 +180,11 @@ def dispatch(alert_name: str, event: str, levels: list[int] | None = None, commi
 
 
 def _in_web_request() -> bool:
-	return bool(getattr(frappe.local, "request", None)) and not frappe.flags.in_test and not getattr(frappe, "job", None)
+	return (
+		bool(getattr(frappe.local, "request", None))
+		and not frappe.flags.in_test
+		and not getattr(frappe, "job", None)
+	)
 
 
 def alert_queue() -> str:
@@ -247,7 +251,9 @@ def send_to_targets(targets: list[dict], message: dict, settings) -> list[dict]:
 	emails = [t for t in targets if t["channel_type"] == CHANNEL_EMAIL]
 	if emails:
 		ok, info = channels.send_email([t["to"] for t in emails], message)
-		results.extend({"channel_type": CHANNEL_EMAIL, "label": t["label"], "ok": ok, "info": info} for t in emails)
+		results.extend(
+			{"channel_type": CHANNEL_EMAIL, "label": t["label"], "ok": ok, "info": info} for t in emails
+		)
 
 	for target in targets:
 		kind = target["channel_type"]
@@ -318,7 +324,7 @@ def _display(value) -> str:
 
 
 def _duration(minutes: float) -> str:
-	minutes = int(round(minutes))
+	minutes = round(minutes)
 	if minutes < 60:
 		return f"{minutes} min"
 	hours, mins = divmod(minutes, 60)
@@ -352,7 +358,9 @@ def build_message(alert, settings, event: str, levels: list[int]) -> dict:
 		# A Security Incident's own deadline alert already states its (earlier) deadline.
 		and not str(alert.get("alert_key") or "").startswith("security.incident.")
 	):
-		reporting_due = _display(add_to_date(get_datetime(alert.get("first_seen")), hours=CERT_IN_REPORTING_HOURS))
+		reporting_due = _display(
+			add_to_date(get_datetime(alert.get("first_seen")), hours=CERT_IN_REPORTING_HOURS)
+		)
 
 	name = alert.get("name")
 	return {
@@ -413,7 +421,11 @@ def resolve_targets(settings, alert, event: str, levels: list[int]) -> list[dict
 				add({"channel_type": kind, "to": mobile, "label": mask_mobile(mobile)})
 		elif kind in WEBHOOK_CHANNELS:
 			url = row.get_password("secret_url", raise_exception=False) if row.secret_url else None
-			signing = row.get_password("signing_secret", raise_exception=False) if row.get("signing_secret") else None
+			signing = (
+				row.get_password("signing_secret", raise_exception=False)
+				if row.get("signing_secret")
+				else None
+			)
 			add(
 				{
 					"channel_type": kind,

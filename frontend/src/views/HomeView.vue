@@ -79,7 +79,11 @@ const outstanding = computed(() => toNumber(data.value?.fees?.outstanding));
 const overdue = computed(() => toNumber(data.value?.fees?.overdue));
 /** Dues to pay and online payment open for this student (the dashboard's own answer wins). */
 const canPayOnline = computed(
-	() => !feesUnavailable.value && outstanding.value > 0 && paymentEnabled.value && data.value?.fees?.payment_enabled !== false,
+	() =>
+		!feesUnavailable.value &&
+		outstanding.value > 0 &&
+		paymentEnabled.value &&
+		data.value?.fees?.payment_enabled !== false,
 );
 const menu = computed(() => data.value?.today_menu ?? null);
 const notifications = computed(() => (data.value?.notifications ?? []).slice(0, 5));
@@ -87,10 +91,34 @@ const notifications = computed(() => (data.value?.notifications ?? []).slice(0, 
 const pendingRows = computed(() => {
 	const pending = data.value?.pending ?? {};
 	const rows = [
-		{ key: "leaves", label: t("home.pendingLeaves"), count: pending.leaves ?? 0, to: { name: "leave" }, icon: CalendarDays },
-		{ key: "reductions", label: t("home.pendingReductions"), count: pending.reductions ?? 0, to: { name: "mess-reduction" }, icon: CalendarOff },
-		{ key: "grievances", label: t("home.pendingGrievances"), count: pending.grievances ?? 0, to: { name: "grievances" }, icon: MessageSquareWarning },
-		{ key: "certificates", label: t("home.pendingCertificates"), count: pending.certificates ?? 0, to: { name: "certificates" }, icon: Award },
+		{
+			key: "leaves",
+			label: t("home.pendingLeaves"),
+			count: pending.leaves ?? 0,
+			to: { name: "leave" },
+			icon: CalendarDays,
+		},
+		{
+			key: "reductions",
+			label: t("home.pendingReductions"),
+			count: pending.reductions ?? 0,
+			to: { name: "mess-reduction" },
+			icon: CalendarOff,
+		},
+		{
+			key: "grievances",
+			label: t("home.pendingGrievances"),
+			count: pending.grievances ?? 0,
+			to: { name: "grievances" },
+			icon: MessageSquareWarning,
+		},
+		{
+			key: "certificates",
+			label: t("home.pendingCertificates"),
+			count: pending.certificates ?? 0,
+			to: { name: "certificates" },
+			icon: Award,
+		},
 	];
 	if (isParent.value) {
 		rows.unshift({
@@ -112,7 +140,8 @@ const quickActions = computed(() => {
 		{ label: t("home.messReduction"), to: { name: "mess-reduction-new" }, icon: CalendarOff },
 		{ label: t("home.certificate"), to: { name: "certificates" }, icon: Award },
 	];
-	if (isParent.value) actions.unshift({ label: t("home.approvals"), to: { name: "leave-approvals" }, icon: ClipboardCheck });
+	if (isParent.value)
+		actions.unshift({ label: t("home.approvals"), to: { name: "leave-approvals" }, icon: ClipboardCheck });
 	return actions.slice(0, 4);
 });
 
@@ -150,26 +179,43 @@ function onNotificationClick(event: MouseEvent, item: PortalNotification) {
 			<p class="mt-1 text-[0.95rem] text-muted">{{ subtitle }}</p>
 		</header>
 
-		<div v-if="showVerification && !isValidated" class="card mb-4 flex items-start gap-3 border-warning bg-warning-soft" role="status">
+		<div
+			v-if="showVerification && !isValidated"
+			class="card mb-4 flex items-start gap-3 border-warning bg-warning-soft"
+			role="status"
+		>
 			<Clock :size="22" class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
 			<div>
 				<p class="font-semibold text-ink">{{ t("home.verificationTitle") }}</p>
 				<p class="mt-0.5 text-sm text-muted">{{ verificationText }}</p>
-				<RouterLink :to="{ name: 'help' }" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold">{{ t("home.contactOffice") }}</RouterLink>
+				<RouterLink :to="{ name: 'help' }" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold">{{
+					t("home.contactOffice")
+				}}</RouterLink>
 			</div>
 		</div>
 
-		<div v-if="restricted" class="card mb-4 flex items-start gap-3 border-warning bg-warning-soft" role="status" data-test="restricted-notice">
+		<div
+			v-if="restricted"
+			class="card mb-4 flex items-start gap-3 border-warning bg-warning-soft"
+			role="status"
+			data-test="restricted-notice"
+		>
 			<CirclePause :size="22" class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
 			<div>
 				<p class="font-semibold text-ink">{{ t("home.restrictedTitle") }}</p>
 				<p class="mt-0.5 text-sm text-muted">{{ restrictedText }}</p>
-				<RouterLink :to="{ name: 'help' }" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold">{{ t("home.contactOffice") }}</RouterLink>
+				<RouterLink :to="{ name: 'help' }" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold">{{
+					t("home.contactOffice")
+				}}</RouterLink>
 			</div>
 		</div>
 
 		<SkeletonList v-if="dashboard.loading.value && !data" :rows="3" card />
-		<ErrorState v-else-if="dashboard.error.value && isValidated" :error="dashboard.error.value" @retry="dashboard.reload" />
+		<ErrorState
+			v-else-if="dashboard.error.value && isValidated"
+			:error="dashboard.error.value"
+			@retry="dashboard.reload"
+		/>
 
 		<div v-else-if="data" class="grid gap-4 sm:grid-cols-2">
 			<!-- Dues -->
@@ -179,13 +225,19 @@ function onNotificationClick(event: MouseEvent, item: PortalNotification) {
 						<h2 id="home-dues" class="flex items-center gap-2 text-sm font-semibold text-muted">
 							<Wallet :size="18" aria-hidden="true" />{{ t("home.duesTitle") }}
 						</h2>
-						<p v-if="feesUnavailable" class="mt-1 text-sm text-muted" data-test="dues-unavailable">{{ t("home.duesUnavailable") }}</p>
+						<p v-if="feesUnavailable" class="mt-1 text-sm text-muted" data-test="dues-unavailable">
+							{{ t("home.duesUnavailable") }}
+						</p>
 						<template v-else>
 							<p class="mt-1 text-3xl font-bold tracking-tight text-ink">{{ formatINR(outstanding) }}</p>
 							<p v-if="outstanding <= 0" class="mt-1 text-sm text-success">{{ t("home.noDues") }}</p>
 							<p v-else class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-								<span v-if="overdue > 0" class="chip tone-danger">{{ t("home.overdue", { amount: formatINR(overdue) }) }}</span>
-								<span v-if="data.fees?.next_due_date">{{ t("home.nextDue", { date: formatDate(data.fees.next_due_date) }) }}</span>
+								<span v-if="overdue > 0" class="chip tone-danger">{{
+									t("home.overdue", { amount: formatINR(overdue) })
+								}}</span>
+								<span v-if="data.fees?.next_due_date">{{
+									t("home.nextDue", { date: formatDate(data.fees.next_due_date) })
+								}}</span>
 							</p>
 						</template>
 					</div>
@@ -194,10 +246,7 @@ function onNotificationClick(event: MouseEvent, item: PortalNotification) {
 					<RouterLink v-if="canPayOnline" :to="{ name: 'pay' }" class="btn-primary">
 						{{ t("home.pay") }}
 					</RouterLink>
-					<RouterLink
-						:to="{ name: 'fees' }"
-						:class="canPayOnline ? 'btn-secondary' : 'btn-primary'"
-					>
+					<RouterLink :to="{ name: 'fees' }" :class="canPayOnline ? 'btn-secondary' : 'btn-primary'">
 						{{ t("home.viewFees") }}
 					</RouterLink>
 				</div>
@@ -232,7 +281,9 @@ function onNotificationClick(event: MouseEvent, item: PortalNotification) {
 					<h2 id="home-menu" class="flex items-center gap-2 text-sm font-semibold text-muted">
 						<Utensils :size="18" aria-hidden="true" />{{ t("home.menuTitle") }}
 					</h2>
-					<RouterLink :to="{ name: 'menu' }" class="inline-flex min-h-11 items-center text-sm font-semibold">{{ t("home.fullMenu") }}</RouterLink>
+					<RouterLink :to="{ name: 'menu' }" class="inline-flex min-h-11 items-center text-sm font-semibold">{{
+						t("home.fullMenu")
+					}}</RouterLink>
 				</div>
 				<ul v-if="menu && menu.meals.length" class="mt-1 space-y-2">
 					<li v-for="meal in menu.meals" :key="meal.meal" class="flex gap-3">
@@ -286,7 +337,9 @@ function onNotificationClick(event: MouseEvent, item: PortalNotification) {
 					<h2 id="home-updates" class="flex items-center gap-2 text-sm font-semibold text-muted">
 						<Bell :size="18" aria-hidden="true" />{{ t("home.notificationsTitle") }}
 					</h2>
-					<RouterLink :to="{ name: 'notifications' }" class="inline-flex min-h-11 items-center text-sm font-semibold">{{ t("common.seeAll") }}</RouterLink>
+					<RouterLink :to="{ name: 'notifications' }" class="inline-flex min-h-11 items-center text-sm font-semibold">{{
+						t("common.seeAll")
+					}}</RouterLink>
 				</div>
 				<ul v-if="notifications.length" class="list-divided">
 					<li v-for="item in notifications" :key="item.name" class="py-2.5">
@@ -296,7 +349,11 @@ function onNotificationClick(event: MouseEvent, item: PortalNotification) {
 							class="flex items-start gap-2 text-ink no-underline"
 							@click="onNotificationClick($event, item)"
 						>
-							<span class="mt-2 size-2 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-brand'" aria-hidden="true" />
+							<span
+								class="mt-2 size-2 shrink-0 rounded-full"
+								:class="item.read ? 'bg-transparent' : 'bg-brand'"
+								aria-hidden="true"
+							/>
 							<span class="min-w-0">
 								<span v-if="!item.read" class="sr-only">{{ t("notifications.unread") }}: </span>
 								<span class="block text-sm" :class="item.read ? '' : 'font-semibold'">{{ item.subject }}</span>

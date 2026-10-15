@@ -33,7 +33,9 @@ async function cancel(item: MessReduction) {
 	cancelling.value = item.name;
 	// Show the change straight away; put it back if the server refuses.
 	const previous = { status: item.status, can_cancel: item.can_cancel };
-	reductions.data.value = list.value.map((row) => (row.name === item.name ? { ...row, status: "Cancelled", can_cancel: false } : row));
+	reductions.data.value = list.value.map((row) =>
+		row.name === item.name ? { ...row, status: "Cancelled", can_cancel: false } : row,
+	);
 	try {
 		await cancelMessReduction(item.name);
 		showToast(t("reduction.cancelled"));
@@ -58,7 +60,12 @@ async function cancel(item: MessReduction) {
 
 		<SkeletonList v-if="reductions.loading.value && !reductions.data.value" />
 		<ErrorState v-else-if="reductions.error.value" :error="reductions.error.value" @retry="reductions.reload" />
-		<EmptyState v-else-if="!list.length" :icon="CalendarOff" :title="t('reduction.empty')" :body="t('reduction.emptyHint', { days: reductionMinDays })">
+		<EmptyState
+			v-else-if="!list.length"
+			:icon="CalendarOff"
+			:title="t('reduction.empty')"
+			:body="t('reduction.emptyHint', { days: reductionMinDays })"
+		>
 			<RouterLink :to="{ name: 'mess-reduction-new' }" class="btn-primary">{{ t("reduction.apply") }}</RouterLink>
 		</EmptyState>
 
@@ -67,7 +74,9 @@ async function cancel(item: MessReduction) {
 				<div class="flex flex-wrap items-start justify-between gap-2">
 					<div>
 						<p class="font-semibold text-ink">{{ formatDateRange(item.from_date, item.to_date) }}</p>
-						<p class="text-sm text-muted">{{ tc("common.days", item.number_of_days) }} · {{ tv("reductionReasons", item.reason) }}</p>
+						<p class="text-sm text-muted">
+							{{ tc("common.days", item.number_of_days) }} · {{ tv("reductionReasons", item.reason) }}
+						</p>
 					</div>
 					<StatusChip :status="item.status" />
 				</div>
@@ -77,7 +86,10 @@ async function cancel(item: MessReduction) {
 				</p>
 				<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 					<p class="text-xs text-muted">
-						{{ item.name }}<template v-if="item.decided_on"> · {{ t("reduction.decidedOn", { date: formatDateTime(item.decided_on) }) }}</template>
+						{{ item.name
+						}}<template v-if="item.decided_on">
+							· {{ t("reduction.decidedOn", { date: formatDateTime(item.decided_on) }) }}</template
+						>
 					</p>
 					<button
 						v-if="item.can_cancel"

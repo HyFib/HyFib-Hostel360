@@ -6,7 +6,11 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 
 from hostel360.hostel_operations.doctype.ops_backup_record.ops_backup_record import failure_key, human_size
-from hostel360.hostel_operations.tests.helpers import DeliveryRecorder, clear_settings_cache, configure_settings
+from hostel360.hostel_operations.tests.helpers import (
+	DeliveryRecorder,
+	clear_settings_cache,
+	configure_settings,
+)
 
 
 def make_backup(status="Success", backup_type="Daily", **kwargs):

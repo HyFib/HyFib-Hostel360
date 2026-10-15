@@ -89,7 +89,11 @@ export function applySession(data: PortalSession | null): void {
 	const base = emptyState();
 	if (!data || !data.user || data.user === "Guest") {
 		// A reason the server gave for closing the session stays until the next sign-in.
-		Object.assign(state, base, { status: "ready", closedReason: state.closedReason, settings: { ...settingsFromBoot() } });
+		Object.assign(state, base, {
+			status: "ready",
+			closedReason: state.closedReason,
+			settings: { ...settingsFromBoot() },
+		});
 		return;
 	}
 	const wards = Array.isArray(data.wards) ? data.wards : [];
@@ -189,10 +193,7 @@ async function fetchSession(): Promise<void> {
 export function loadSession(force = false): Promise<void> {
 	if (force || !pending || state.status === "unreachable") {
 		const boot = readBoot();
-		pending =
-			boot.is_logged_in === false && !force
-				? Promise.resolve(applySession(null))
-				: fetchSession();
+		pending = boot.is_logged_in === false && !force ? Promise.resolve(applySession(null)) : fetchSession();
 	}
 	return pending;
 }
@@ -260,10 +261,13 @@ const effectiveValidationStatus = computed(() =>
 const studentStatus = computed(() => activeWard.value?.status ?? "");
 const isValidated = computed(() => effectiveValidationStatus.value === "Validated");
 /** Every feature is open: validated and Active (an unknown status from an older server counts as Active). */
-const hasFullAccess = computed(() => isValidated.value && (!studentStatus.value || studentStatus.value === ACTIVE_STATUS));
+const hasFullAccess = computed(
+	() => isValidated.value && (!studentStatus.value || studentStatus.value === ACTIVE_STATUS),
+);
 const firstName = computed(() => (state.displayName || "").trim().split(/\s+/)[0] || "");
 const institutionName = computed(
-	() => state.settings.institution_short_name || state.settings.institution_name || readBoot().institution_short_name || "",
+	() =>
+		state.settings.institution_short_name || state.settings.institution_name || readBoot().institution_short_name || "",
 );
 /**
  * Online payment for the student being viewed. It can differ between a parent's wards (in test

@@ -37,15 +37,25 @@ async function signInAgain() {
 		<PublicHeader />
 		<main id="main" class="mx-auto w-full max-w-md px-4 py-8">
 			<section class="card p-6 text-center" aria-labelledby="closed-title">
-				<span class="mx-auto inline-flex size-16 items-center justify-center rounded-full bg-warning-soft text-warning" aria-hidden="true">
+				<span
+					class="mx-auto inline-flex size-16 items-center justify-center rounded-full bg-warning-soft text-warning"
+					aria-hidden="true"
+				>
 					<ShieldAlert :size="30" />
 				</span>
-				<h1 id="closed-title" class="mt-4 text-xl font-bold text-ink" tabindex="-1" data-page-title>{{ t("closed.title") }}</h1>
+				<h1 id="closed-title" class="mt-4 text-xl font-bold text-ink" tabindex="-1" data-page-title>
+					{{ t("closed.title") }}
+				</h1>
 				<p class="mt-2 text-[0.95rem] text-ink" data-test="closed-reason">{{ session.closedReason }}</p>
 				<p class="mt-3 text-sm text-muted">{{ t("closed.signedOut") }}</p>
 			</section>
 
-			<section v-if="officePhone || officeEmail" class="card mt-4" aria-labelledby="closed-office" data-test="closed-office">
+			<section
+				v-if="officePhone || officeEmail"
+				class="card mt-4"
+				aria-labelledby="closed-office"
+				data-test="closed-office"
+			>
 				<h2 id="closed-office" class="section-title">{{ t("closed.officeTitle") }}</h2>
 				<p class="mt-1 text-sm text-muted">{{ t("closed.officeBody") }}</p>
 				<div class="mt-3 grid gap-2">

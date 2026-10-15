@@ -27,9 +27,13 @@ export interface UploadLimits {
 }
 
 /** Limits from get_session, or the defaults when the server has not said. */
-export function uploadRules(rules?: Readonly<{ max_bytes?: number; extensions?: readonly string[] }> | null): UploadLimits {
+export function uploadRules(
+	rules?: Readonly<{ max_bytes?: number; extensions?: readonly string[] }> | null,
+): UploadLimits {
 	const maxBytes = Number(rules?.max_bytes) > 0 ? Number(rules?.max_bytes) : MAX_UPLOAD_BYTES;
-	const extensions = (Array.isArray(rules?.extensions) && rules.extensions.length ? rules.extensions : DEFAULT_UPLOAD_EXTENSIONS)
+	const extensions = (
+		Array.isArray(rules?.extensions) && rules.extensions.length ? rules.extensions : DEFAULT_UPLOAD_EXTENSIONS
+	)
 		.map((extension) => String(extension).toLowerCase().replace(/^\./, ""))
 		.filter(Boolean);
 	return { maxBytes, extensions };
@@ -82,7 +86,9 @@ export function checkAttachment(file: File, limits: UploadLimits = uploadRules()
 	return null;
 }
 
-async function decode(file: File): Promise<{ source: CanvasImageSource; width: number; height: number; close(): void }> {
+async function decode(
+	file: File,
+): Promise<{ source: CanvasImageSource; width: number; height: number; close(): void }> {
 	if (typeof createImageBitmap === "function") {
 		const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
 		return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };

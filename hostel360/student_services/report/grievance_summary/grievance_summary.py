@@ -36,13 +36,24 @@ def get_grievances(filters, from_date, to_date):
 	return frappe.get_list(
 		"Hostel Grievance",
 		filters=conditions,
-		fields=["name", "category", "hostel", "status", "priority", "resolution_hours", "sla_breached", "student_rating"],
+		fields=[
+			"name",
+			"category",
+			"hostel",
+			"status",
+			"priority",
+			"resolution_hours",
+			"sla_breached",
+			"student_rating",
+		],
 		limit_page_length=0,
 	)
 
 
 def summarise(grievances, group_by):
-	groups = defaultdict(lambda: {"total": 0, "hours": [], "ratings": [], "breaches": 0, **{s: 0 for s in STATUSES}})
+	groups = defaultdict(
+		lambda: {"total": 0, "hours": [], "ratings": [], "breaches": 0, **{s: 0 for s in STATUSES}}
+	)
 	for row in grievances:
 		group = groups[row.get(group_by) or _("Not Set")]
 		group["total"] += 1
@@ -65,7 +76,9 @@ def summarise(grievances, group_by):
 				"pending": sum(group[s] for s in OPEN_STATUSES),
 				"avg_resolution_hours": average(group["hours"]),
 				"sla_breaches": group["breaches"],
-				"sla_breach_percent": flt(group["breaches"] * 100 / group["total"], 1) if group["total"] else 0,
+				"sla_breach_percent": flt(group["breaches"] * 100 / group["total"], 1)
+				if group["total"]
+				else 0,
 				"avg_rating": average(group["ratings"]),
 			}
 		)
@@ -83,7 +96,9 @@ def get_columns(group_by):
 		else {"fieldname": "group", "label": _("Category"), "fieldtype": "Data", "width": 170}
 	)
 	columns = [group_column, {"fieldname": "total", "label": _("Total"), "fieldtype": "Int", "width": 70}]
-	columns += [{"fieldname": frappe.scrub(s), "label": _(s), "fieldtype": "Int", "width": 90} for s in STATUSES]
+	columns += [
+		{"fieldname": frappe.scrub(s), "label": _(s), "fieldtype": "Int", "width": 90} for s in STATUSES
+	]
 	columns += [
 		{"fieldname": "pending", "label": _("Pending"), "fieldtype": "Int", "width": 80},
 		{
@@ -95,7 +110,13 @@ def get_columns(group_by):
 		},
 		{"fieldname": "sla_breaches", "label": _("SLA Breaches"), "fieldtype": "Int", "width": 110},
 		{"fieldname": "sla_breach_percent", "label": _("SLA Breach %"), "fieldtype": "Percent", "width": 110},
-		{"fieldname": "avg_rating", "label": _("Avg Rating (of 5)"), "fieldtype": "Float", "precision": 1, "width": 130},
+		{
+			"fieldname": "avg_rating",
+			"label": _("Avg Rating (of 5)"),
+			"fieldtype": "Float",
+			"precision": 1,
+			"width": 130,
+		},
 	]
 	return columns
 
@@ -123,11 +144,25 @@ def get_summary(grievances):
 	pending = sum(1 for g in grievances if g.status in OPEN_STATUSES)
 	escalated = sum(1 for g in grievances if g.status == "Escalated")
 	breaches = sum(1 for g in grievances if g.sla_breached)
-	hours = [flt(g.resolution_hours) for g in grievances if g.status in ("Resolved", "Closed") and g.resolution_hours]
+	hours = [
+		flt(g.resolution_hours)
+		for g in grievances
+		if g.status in ("Resolved", "Closed") and g.resolution_hours
+	]
 	return [
 		{"label": _("Grievances"), "value": total, "datatype": "Int", "indicator": "Blue"},
 		{"label": _("Pending"), "value": pending, "datatype": "Int", "indicator": "Orange"},
 		{"label": _("Escalated Now"), "value": escalated, "datatype": "Int", "indicator": "Red"},
-		{"label": _("SLA Breaches"), "value": breaches, "datatype": "Int", "indicator": "Red" if breaches else "Green"},
-		{"label": _("Avg Resolution (Hours)"), "value": average(hours) or 0, "datatype": "Float", "indicator": "Blue"},
+		{
+			"label": _("SLA Breaches"),
+			"value": breaches,
+			"datatype": "Int",
+			"indicator": "Red" if breaches else "Green",
+		},
+		{
+			"label": _("Avg Resolution (Hours)"),
+			"value": average(hours) or 0,
+			"datatype": "Float",
+			"indicator": "Blue",
+		},
 	]

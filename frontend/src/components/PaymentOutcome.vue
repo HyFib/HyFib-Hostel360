@@ -38,12 +38,24 @@ const isTest = computed(() => Boolean(Number(props.result.test_mode)));
 </script>
 
 <template>
-	<section class="card p-6 text-center" role="status" aria-live="polite" data-test="payment-outcome" :data-outcome="outcome">
+	<section
+		class="card p-6 text-center"
+		role="status"
+		aria-live="polite"
+		data-test="payment-outcome"
+		:data-outcome="outcome"
+	>
 		<template v-if="outcome === 'success'">
 			<CircleCheck :size="48" class="mx-auto text-success" aria-hidden="true" />
 			<h2 class="mt-3 text-xl font-bold text-ink">{{ t("pay.successTitle") }}</h2>
-			<p class="mt-1 text-muted">{{ t("pay.successBody", { receipt: result.receipt_number || result.payment || "" }) }}</p>
-			<p v-if="isTest" class="mt-3 inline-flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-left text-sm font-medium text-info" data-test="test-outcome">
+			<p class="mt-1 text-muted">
+				{{ t("pay.successBody", { receipt: result.receipt_number || result.payment || "" }) }}
+			</p>
+			<p
+				v-if="isTest"
+				class="mt-3 inline-flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-left text-sm font-medium text-info"
+				data-test="test-outcome"
+			>
 				<FlaskConical :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("pay.testReceipt") }}
 			</p>
 			<div class="mt-6 grid gap-2 sm:flex sm:justify-center">
@@ -65,8 +77,14 @@ const isTest = computed(() => Boolean(Number(props.result.test_mode)));
 			<CircleAlert :size="48" class="mx-auto text-danger" aria-hidden="true" />
 			<h2 class="mt-3 text-xl font-bold text-ink">{{ t("pay.failedTitle") }}</h2>
 			<p class="mt-1 text-muted">{{ result.message || t("pay.failedBody") }}</p>
-			<p v-if="attemptFailed" class="mt-1 text-sm text-muted" data-test="dues-still-open">{{ t("pay.duesStillOpen") }}</p>
-			<p v-if="isTest" class="mt-3 inline-flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-left text-sm font-medium text-info" data-test="test-outcome">
+			<p v-if="attemptFailed" class="mt-1 text-sm text-muted" data-test="dues-still-open">
+				{{ t("pay.duesStillOpen") }}
+			</p>
+			<p
+				v-if="isTest"
+				class="mt-3 inline-flex items-start gap-1.5 rounded-xl bg-info-soft px-3 py-2 text-left text-sm font-medium text-info"
+				data-test="test-outcome"
+			>
 				<FlaskConical :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("pay.testAttempt") }}
 			</p>
 			<div class="mt-6 grid gap-2 sm:flex sm:justify-center">
@@ -79,7 +97,9 @@ const isTest = computed(() => Boolean(Number(props.result.test_mode)));
 			<Clock :size="48" class="mx-auto text-warning" aria-hidden="true" />
 			<h2 class="mt-3 text-xl font-bold text-ink">{{ t("pay.pendingTitle") }}</h2>
 			<p class="mt-1 text-muted">{{ result.message || t("pay.verifyLater") }}</p>
-			<p v-if="result.transaction" class="mt-2 text-xs text-muted">{{ t("pay.reference", { reference: result.transaction }) }}</p>
+			<p v-if="result.transaction" class="mt-2 text-xs text-muted">
+				{{ t("pay.reference", { reference: result.transaction }) }}
+			</p>
 			<div class="mt-6 grid gap-2 sm:flex sm:justify-center">
 				<button v-if="!onPayPage" type="button" class="btn-primary" :disabled="checking" @click="emit('check')">
 					<RefreshCw :size="18" aria-hidden="true" :class="checking ? 'motion-safe:animate-spin' : ''" />

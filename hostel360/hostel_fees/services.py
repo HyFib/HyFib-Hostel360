@@ -10,6 +10,7 @@ from contextlib import contextmanager
 import frappe
 from frappe import _
 from frappe.model.naming import make_autoname
+from frappe.translate import print_language
 from frappe.utils import add_to_date, cint, get_datetime, get_url, getdate, now_datetime, nowdate
 
 from hostel360.hostel_fees import transactions
@@ -654,7 +655,18 @@ def _acting_as_system():
 
 
 def _report_bad_return_signature(gateway, transaction: str | None, order_id: str | None, source: str):
+	"""Alert on a rejected post that names one of our transactions; only log any other.
+
+	A forged confirmation, or PayU's own posts after the salt was changed, always carry a txnid of
+	ours. A post naming none could not settle anything, and alerting on it would let anyone keep
+	the security alert open and hide the posts that matter. Nothing is committed here: the caller
+	returns normally and the request commits the alert with it.
+	"""
 	from hostel360.hostel_fees import alerting
+
+	if not transaction:
+		alerting.log_rejected_post(gateway.name, source, "invalid signature")
+		return
 
 	alerting.raise_alert(
 		f"{gateway.name.lower()}-return-signature",
@@ -674,7 +686,6 @@ def _report_bad_return_signature(gateway, transaction: str | None, order_id: str
 			"ip": getattr(frappe.local, "request_ip", None),
 		},
 	)
-	persist_now()
 
 
 def _outcome(transaction: str) -> dict:
@@ -817,12 +828,20 @@ def get_applicable_fee_structure(student: str) -> str | None:
 
 def render_pdf(doc, print_format: str) -> bytes:
 	"""PDF through a standard print format. Portal callers have no print permission of their own;
-	access has already been checked against the student."""
+	access has already been checked against the student.
+
+	The document is printed in the print format's default language, as the desk print view does,
+	so a receipt reads the same whoever downloads it. Without this a Tamil-speaking portal user
+	got a page mixing the few translated labels into the English wording of the format. Clearing
+	the format's default language prints in each user's own language instead.
+	"""
+	language = frappe.db.get_value("Print Format", print_format, "default_print_language")
 	previous = frappe.flags.ignore_print_permissions
 	frappe.flags.ignore_print_permissions = True
 	try:
-		return frappe.get_print(
-			doc.doctype, doc.name, print_format=print_format, doc=doc, as_pdf=True, no_letterhead=1
-		)
+		with print_language(language):
+			return frappe.get_print(
+				doc.doctype, doc.name, print_format=print_format, doc=doc, as_pdf=True, no_letterhead=1
+			)
 	finally:
 		frappe.flags.ignore_print_permissions = previous

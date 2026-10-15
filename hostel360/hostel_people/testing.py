@@ -39,7 +39,12 @@ def make_hostel(gender: str = "Male", **values):
 
 def make_block(hostel: str, block_code: str = "A"):
 	return frappe.get_doc(
-		{"doctype": "Hostel Block", "hostel": hostel, "block_name": f"Block {block_code}", "block_code": block_code}
+		{
+			"doctype": "Hostel Block",
+			"hostel": hostel,
+			"block_name": f"Block {block_code}",
+			"block_code": block_code,
+		}
 	).insert(ignore_permissions=True)
 
 

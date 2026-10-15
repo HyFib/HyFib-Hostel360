@@ -29,7 +29,9 @@ const DECIDED_STATUSES = ["Approved", "Checked Out", "Returned", "Overdue"];
 
 /** Mess reduction was asked for but the server did not create one (too few full mess days, or refused). */
 function reductionNotApplied(leave: Leave): boolean {
-	return Boolean(Number(leave.apply_mess_reduction)) && !leave.mess_reduction && DECIDED_STATUSES.includes(leave.status);
+	return (
+		Boolean(Number(leave.apply_mess_reduction)) && !leave.mess_reduction && DECIDED_STATUSES.includes(leave.status)
+	);
 }
 
 async function cancel(leave: Leave) {
@@ -43,7 +45,9 @@ async function cancel(leave: Leave) {
 	if (!ok) return;
 	cancelling.value = leave.name;
 	const before = list.value;
-	leaves.data.value = before.map((row) => (row.name === leave.name ? { ...row, status: "Cancelled", can_cancel: false } : row));
+	leaves.data.value = before.map((row) =>
+		row.name === leave.name ? { ...row, status: "Cancelled", can_cancel: false } : row,
+	);
 	try {
 		await cancelLeave(leave.name);
 		showToast(t("leave.cancelled"));
@@ -60,7 +64,9 @@ async function cancel(leave: Leave) {
 	<div>
 		<PageHeader :title="t('leave.title')" :subtitle="t('leave.subtitle')">
 			<template #actions>
-				<RouterLink v-if="isParent" :to="{ name: 'leave-approvals' }" class="btn-secondary min-h-10 px-3 text-sm">{{ t("nav.approvals") }}</RouterLink>
+				<RouterLink v-if="isParent" :to="{ name: 'leave-approvals' }" class="btn-secondary min-h-10 px-3 text-sm">{{
+					t("nav.approvals")
+				}}</RouterLink>
 				<RouterLink :to="{ name: 'leave-new' }" class="btn-primary min-h-10 px-3 text-sm">
 					<Plus :size="18" aria-hidden="true" />{{ t("leave.apply") }}
 				</RouterLink>
@@ -92,14 +98,26 @@ async function cancel(leave: Leave) {
 						<p class="mt-1 text-sm text-muted">
 							{{ formatDateTime(leave.from_datetime) }} → {{ formatDateTime(leave.to_datetime) }}
 						</p>
-						<p class="text-xs text-muted">{{ tc("common.days", leave.number_of_days || inclusiveDays(leave.from_datetime, leave.to_datetime)) }} · {{ leave.name }}</p>
+						<p class="text-xs text-muted">
+							{{ tc("common.days", leave.number_of_days || inclusiveDays(leave.from_datetime, leave.to_datetime)) }} ·
+							{{ leave.name }}
+						</p>
 					</div>
-					<ChevronDown :size="20" class="mt-1 shrink-0 text-muted transition-transform" :class="open === leave.name ? 'rotate-180' : ''" aria-hidden="true" />
+					<ChevronDown
+						:size="20"
+						class="mt-1 shrink-0 text-muted transition-transform"
+						:class="open === leave.name ? 'rotate-180' : ''"
+						aria-hidden="true"
+					/>
 				</button>
 				<div v-if="open === leave.name" :id="`leave-${leave.name}`" class="border-t border-line p-4">
-					<p class="mb-4 text-sm text-ink"><span class="font-semibold">{{ t("leave.reason") }}:</span> {{ leave.reason }}</p>
+					<p class="mb-4 text-sm text-ink">
+						<span class="font-semibold">{{ t("leave.reason") }}:</span> {{ leave.reason }}
+					</p>
 					<StepTimeline :steps="leaveSteps(leave)" :label="t('leave.progress')" />
-					<p v-if="leave.mess_reduction" class="mt-4 text-sm text-muted">{{ t("leave.reductionLinked", { name: leave.mess_reduction }) }}</p>
+					<p v-if="leave.mess_reduction" class="mt-4 text-sm text-muted">
+						{{ t("leave.reductionLinked", { name: leave.mess_reduction }) }}
+					</p>
 					<p
 						v-else-if="reductionNotApplied(leave)"
 						class="mt-4 rounded-xl bg-warning-soft p-3 text-sm text-warning"

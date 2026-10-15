@@ -105,7 +105,9 @@ def _read_csv(path: str, encoding: str | None, delimiter: str | None) -> SourceT
 	checksum = hashlib.sha256(data).hexdigest()
 	text, used_encoding = _decode(data, encoding)
 	if "\x00" in text:
-		raise MappingError(f"{os.path.basename(path)} contains binary data; it does not look like a CSV file.")
+		raise MappingError(
+			f"{os.path.basename(path)} contains binary data; it does not look like a CSV file."
+		)
 
 	if not delimiter:
 		sample = text[:20000]

@@ -94,7 +94,9 @@ class TestHostel360Desk(IntegrationTestCase):
 		for name in WORKSPACES:
 			doc = frappe.get_doc("Workspace", name)
 			for row in doc.number_cards:
-				self.assertTrue(target_exists("Number Card", row.number_card_name), f"{name}: {row.number_card_name}")
+				self.assertTrue(
+					target_exists("Number Card", row.number_card_name), f"{name}: {row.number_card_name}"
+				)
 			for row in doc.charts:
 				self.assertTrue(target_exists("Dashboard Chart", row.chart_name), f"{name}: {row.chart_name}")
 			for row in doc.shortcuts:
@@ -106,7 +108,9 @@ class TestHostel360Desk(IntegrationTestCase):
 	def test_number_cards_evaluate(self):
 		from frappe.desk.doctype.number_card.number_card import get_result
 
-		for name in frappe.get_all("Number Card", filters={"is_standard": 1, "module": ("in", MODULES)}, pluck="name"):
+		for name in frappe.get_all(
+			"Number Card", filters={"is_standard": 1, "module": ("in", MODULES)}, pluck="name"
+		):
 			card = frappe.get_doc("Number Card", name)
 			if card.type == "Custom":
 				value = frappe.get_attr(card.method)(filters=card.filters_json)["value"]
@@ -117,7 +121,9 @@ class TestHostel360Desk(IntegrationTestCase):
 	def test_dashboard_charts_evaluate(self):
 		from frappe.desk.doctype.dashboard_chart.dashboard_chart import get as get_chart
 
-		charts = frappe.get_all("Dashboard Chart", filters={"is_standard": 1, "module": ("in", MODULES)}, pluck="name")
+		charts = frappe.get_all(
+			"Dashboard Chart", filters={"is_standard": 1, "module": ("in", MODULES)}, pluck="name"
+		)
 		self.assertGreaterEqual(len(charts), 6)
 		for name in charts:
 			chart = frappe.get_doc("Dashboard Chart", name)
@@ -186,4 +192,6 @@ class TestHostel360Desk(IntegrationTestCase):
 		frappe.set_user(make_user([SECURITY_ROLE]))
 		frappe.local.request_cache.clear()
 		visible = {page["name"] for page in get_workspaces()["pages"]}
-		self.assertFalse(visible & {"Hostel Admin", "People and Rooms", "Fees", "Mess", "HyFib Operations"}, visible)
+		self.assertFalse(
+			visible & {"Hostel Admin", "People and Rooms", "Fees", "Mess", "HyFib Operations"}, visible
+		)

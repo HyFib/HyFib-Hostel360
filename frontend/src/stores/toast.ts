@@ -33,10 +33,21 @@ export function showToast(
 	const tone = options.tone ?? "success";
 	// Errors stay a little longer: they usually need reading twice.
 	const timeout = options.timeout ?? (tone === "error" ? 7000 : 4000);
-	const toast: Toast = { id: ++sequence, message, tone, timeout, actionLabel: options.actionLabel, action: options.action };
+	const toast: Toast = {
+		id: ++sequence,
+		message,
+		tone,
+		timeout,
+		actionLabel: options.actionLabel,
+		action: options.action,
+	};
 	toasts.push(toast);
 	while (toasts.length > MAX_VISIBLE) dismissToast(toasts[0].id);
-	if (timeout > 0) timers.set(toast.id, setTimeout(() => dismissToast(toast.id), timeout));
+	if (timeout > 0)
+		timers.set(
+			toast.id,
+			setTimeout(() => dismissToast(toast.id), timeout),
+		);
 	return toast.id;
 }
 

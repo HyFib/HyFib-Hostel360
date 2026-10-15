@@ -34,9 +34,7 @@ WARDEN = "காப்பாளர்"
 COLLEAGUE = "சக பணியாளர்"
 MESS_MANAGER = "உணவக மேலாளர்"
 
-APPROVALS_PAGE = (
-	"Hostel360 இன் ஒப்புதல்கள் (Approvals) பக்கத்திலிருந்து ஒப்புதல் அளிக்கலாம் அல்லது நிராகரிக்கலாம்."
-)
+APPROVALS_PAGE = "Hostel360 இன் ஒப்புதல்கள் (Approvals) பக்கத்திலிருந்து ஒப்புதல் அளிக்கலாம் அல்லது நிராகரிக்கலாம்."
 INVOICE_TYPE = "label(invoice_type) if invoice_type else 'விடுதிக் கட்டணம்'"
 
 
@@ -232,8 +230,7 @@ TEMPLATES = {
 	ev.MESS_BILL_PUBLISHED: {
 		ev.SMS: {
 			"body": "{{ period }} உணவகக் கட்டணம்: {{ short(student_name) }} அவர்களுக்கு {{ rupees(amount) }} "
-			"({{ chargeable_days }} நாட்கள்), கெடு {{ fdate(due_date) }}. செலுத்த: {{ portal_url }}"
-			+ SIGN_OFF,
+			"({{ chargeable_days }} நாட்கள்), கெடு {{ fdate(due_date) }}. செலுத்த: {{ portal_url }}" + SIGN_OFF,
 			"template_parameters": "period\nshort(student_name)\nrupees(amount)\nchargeable_days\nfdate(due_date)",
 		},
 		ev.WHATSAPP: {
@@ -247,8 +244,7 @@ TEMPLATES = {
 		ev.EMAIL: {
 			"subject": "{{ period }} உணவகக் கட்டணம்: {{ format_inr(amount) }}",
 			"body": _email(
-				"{{ student_name }} அவர்களுக்கு {{ period }} மாதத்திற்கான உணவகக் கட்டணம் "
-				"வெளியிடப்பட்டுள்ளது.",
+				"{{ student_name }} அவர்களுக்கு {{ period }} மாதத்திற்கான உணவகக் கட்டணம் வெளியிடப்பட்டுள்ளது.",
 				_rows(
 					("கட்டண நாட்கள்", "{{ chargeable_days }}"),
 					("ஒரு நாள் கட்டணம்", "{{ format_inr(daily_rate) }}"),
@@ -309,8 +305,7 @@ TEMPLATES = {
 		ev.EMAIL: {
 			"subject": "உணவகக் கட்டணக் கழிவு விண்ணப்பம் {{ application }} சமர்ப்பிக்கப்பட்டது",
 			"body": _email(
-				"{{ student_name }} அவர்களின் உணவகக் கட்டணக் கழிவு விண்ணப்பம் உங்கள் ஒப்புதலுக்காகக் "
-				"காத்திருக்கிறது.",
+				"{{ student_name }} அவர்களின் உணவகக் கட்டணக் கழிவு விண்ணப்பம் உங்கள் ஒப்புதலுக்காகக் காத்திருக்கிறது.",
 				_rows(
 					("விண்ணப்பம்", "{{ application }}"),
 					("தொடக்கத் தேதி", "{{ fdate(from_date) }}"),
@@ -381,8 +376,7 @@ TEMPLATES = {
 		ev.EMAIL: {
 			"subject": "விடுப்புக் கோரிக்கை {{ leave }} சமர்ப்பிக்கப்பட்டது",
 			"body": _email(
-				"{{ student_name }} அவர்களுக்கு வீட்டுக்குச் செல்லும் விடுப்புக் கோரிக்கை "
-				"சமர்ப்பிக்கப்பட்டுள்ளது.",
+				"{{ student_name }} அவர்களுக்கு வீட்டுக்குச் செல்லும் விடுப்புக் கோரிக்கை சமர்ப்பிக்கப்பட்டுள்ளது.",
 				_rows(
 					("கோரிக்கை", "{{ leave }}"),
 					("செல்லும் இடம்", "{{ destination }}"),
@@ -419,8 +413,7 @@ TEMPLATES = {
 		ev.EMAIL: {
 			"subject": "{{ student_name }} அவர்களின் விடுப்புக் கோரிக்கையைப் பரிசீலிக்கவும்",
 			"body": _email(
-				"{{ student_name }} வீட்டுக்குச் செல்ல விடுப்பு கோரியுள்ளார். காப்பாளர் பரிசீலிக்கும் முன் "
-				"உங்கள் ஒப்புதல் தேவை.",
+				"{{ student_name }} வீட்டுக்குச் செல்ல விடுப்பு கோரியுள்ளார். காப்பாளர் பரிசீலிக்கும் முன் உங்கள் ஒப்புதல் தேவை.",
 				_rows(
 					("செல்லும் இடம்", "{{ destination }}"),
 					("புறப்படும் நேரம்", "{{ fdatetime(from_datetime) }}"),
@@ -512,8 +505,7 @@ TEMPLATES = {
 	ev.LEAVE_OVERDUE: {
 		ev.SMS: {
 			"body": "{{ fdatetime(to_datetime) }} க்குள் திரும்ப வேண்டிய {{ short(student_name) }} "
-			"({{ hostel }}) இன்னும் விடுதிக்குத் திரும்பவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்."
-			+ SIGN_OFF,
+			"({{ hostel }}) இன்னும் விடுதிக்குத் திரும்பவில்லை. விடுதி அலுவலகத்தைத் தொடர்பு கொள்ளவும்." + SIGN_OFF,
 			"template_parameters": "fdatetime(to_datetime)\nshort(student_name)\nhostel",
 		},
 		ev.WHATSAPP: {
@@ -527,8 +519,7 @@ TEMPLATES = {
 			"body": _email(
 				"{{ destination }} சென்ற விடுப்பு {{ leave }} முடிந்து {{ fdatetime(to_datetime) }} க்குள் "
 				"திரும்ப வேண்டிய {{ student_name }} இன்னும் {{ hostel }} விடுதிக்குத் திரும்பவில்லை.",
-				"நியாயமான காரணத்தால் தாமதம் ஏற்பட்டால், காப்பாளருக்குத் தெரியும்படி விடுதி அலுவலகத்திற்குத் "
-				"தெரிவிக்கவும்.",
+				"நியாயமான காரணத்தால் தாமதம் ஏற்பட்டால், காப்பாளருக்குத் தெரியும்படி விடுதி அலுவலகத்திற்குத் தெரிவிக்கவும்.",
 			),
 		},
 		ev.IN_APP: {
@@ -639,8 +630,7 @@ TEMPLATES = {
 	ev.GRIEVANCE_ASSIGNED: {
 		ev.SMS: {
 			"body": "புகார் {{ grievance }} ({{ label(category) }}, {{ label(priority) }}) உங்களுக்கு "
-			"ஒதுக்கப்பட்டது: {{ short(subject, 25) }}. {{ fdatetime(sla_due_by) }} க்குள் பதிலளிக்கவும்."
-			+ SIGN_OFF,
+			"ஒதுக்கப்பட்டது: {{ short(subject, 25) }}. {{ fdatetime(sla_due_by) }} க்குள் பதிலளிக்கவும்." + SIGN_OFF,
 			"template_parameters": "grievance\nlabel(category)\nlabel(priority)\nshort(subject, 25)\n"
 			"fdatetime(sla_due_by)",
 		},
@@ -761,8 +751,7 @@ TEMPLATES = {
 		},
 		ev.IN_APP: {
 			"subject": "புகார் தீர்க்கப்பட்டது: {{ subject }}",
-			"body": "{{ resolution or message }} தீர்வை மதிப்பிடவும்; பிரச்சினை தொடர்ந்தால் புகாரை மீண்டும் "
-			"திறக்கவும்.",
+			"body": "{{ resolution or message }} தீர்வை மதிப்பிடவும்; பிரச்சினை தொடர்ந்தால் புகாரை மீண்டும் திறக்கவும்.",
 		},
 	},
 	ev.BONAFIDE_REQUESTED: {
@@ -848,8 +837,7 @@ TEMPLATES = {
 					),
 				),
 				"{%% if %s %%}%s{%% endif %%}" % (TICKET_UPDATE, _quote(TICKET_UPDATE)),
-				"Hostel360 இல் சீட்டில் பதிலளிக்கவும் அல்லது HyFib ஆதரவை {{ support_phone }} என்ற எண்ணில் "
-				"அழைக்கவும்.",
+				"Hostel360 இல் சீட்டில் பதிலளிக்கவும் அல்லது HyFib ஆதரவை {{ support_phone }} என்ற எண்ணில் அழைக்கவும்.",
 				action="சீட்டைத் திற",
 				greeting=COLLEAGUE,
 				staff=True,

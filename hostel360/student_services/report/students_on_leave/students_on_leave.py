@@ -79,17 +79,41 @@ def away_state(leave, as_of) -> str | None:
 
 def get_columns():
 	return [
-		{"fieldname": "student", "label": _("Student"), "fieldtype": "Link", "options": "Hostel Student", "width": 120},
+		{
+			"fieldname": "student",
+			"label": _("Student"),
+			"fieldtype": "Link",
+			"options": "Hostel Student",
+			"width": 120,
+		},
 		{"fieldname": "student_name", "label": _("Student Name"), "fieldtype": "Data", "width": 180},
 		{"fieldname": "hostel", "label": _("Hostel"), "fieldtype": "Link", "options": "Hostel", "width": 90},
-		{"fieldname": "room", "label": _("Room"), "fieldtype": "Link", "options": "Hostel Room", "width": 100},
-		{"fieldname": "name", "label": _("Leave"), "fieldtype": "Link", "options": "Home Visit Leave", "width": 150},
+		{
+			"fieldname": "room",
+			"label": _("Room"),
+			"fieldtype": "Link",
+			"options": "Hostel Room",
+			"width": 100,
+		},
+		{
+			"fieldname": "name",
+			"label": _("Leave"),
+			"fieldtype": "Link",
+			"options": "Home Visit Leave",
+			"width": 150,
+		},
 		{"fieldname": "left_on", "label": _("Left On"), "fieldtype": "Datetime", "width": 150},
 		{"fieldname": "to_datetime", "label": _("Expected Back"), "fieldtype": "Datetime", "width": 150},
 		{"fieldname": "destination", "label": _("Destination"), "fieldtype": "Data", "width": 130},
 		{"fieldname": "contact_during_leave", "label": _("Contact"), "fieldtype": "Data", "width": 120},
 		{"fieldname": "movement", "label": _("Movement"), "fieldtype": "Data", "width": 120},
-		{"fieldname": "overdue_hours", "label": _("Overdue (Hours)"), "fieldtype": "Float", "precision": 1, "width": 110},
+		{
+			"fieldname": "overdue_hours",
+			"label": _("Overdue (Hours)"),
+			"fieldtype": "Float",
+			"precision": 1,
+			"width": 110,
+		},
 	]
 
 
@@ -98,6 +122,16 @@ def get_summary(rows):
 	not_checked_out = sum(1 for row in rows if not row.get("checked_out_on"))
 	return [
 		{"label": _("Students Away"), "value": len(rows), "datatype": "Int", "indicator": "Blue"},
-		{"label": _("Overdue"), "value": overdue, "datatype": "Int", "indicator": "Red" if overdue else "Green"},
-		{"label": _("No Check-out Record"), "value": not_checked_out, "datatype": "Int", "indicator": "Orange"},
+		{
+			"label": _("Overdue"),
+			"value": overdue,
+			"datatype": "Int",
+			"indicator": "Red" if overdue else "Green",
+		},
+		{
+			"label": _("No Check-out Record"),
+			"value": not_checked_out,
+			"datatype": "Int",
+			"indicator": "Orange",
+		},
 	]

@@ -7,8 +7,8 @@ from frappe.utils import now_datetime
 
 from hostel360.hostel_operations import channels
 
-TEST_INGEST_SECRET = "a3f1c0de9b8e4d7f6a5b4c3d2e1f00112233445566778899aabbccddeeff0011"
-TEST_OCI_TOKEN = "oci-test-token-6f2d9c1b7a"
+TEST_INGEST_SECRET = "a3f1c0de9b8e4d7f6a5b4c3d2e1f00112233445566778899aabbccddeeff0011"  # noqa: S105
+TEST_OCI_TOKEN = "oci-test-token-6f2d9c1b7a"  # noqa: S105
 
 LEVEL_ONE_EMAIL = "l1.helpdesk@example.com"
 LEVEL_TWO_EMAIL = "l2.lead@example.com"
@@ -211,7 +211,8 @@ class IndependentAlerts:
 		names = [
 			row[0]
 			for row in committed_rows(
-				"select name from `tabOps Alert` where alert_key in %(keys)s", {"keys": tuple(self.keys or [""])}
+				"select name from `tabOps Alert` where alert_key in %(keys)s",
+				{"keys": tuple(self.keys or [""])},
 			)
 			if row[0] not in self.existing
 		]
@@ -246,7 +247,10 @@ def delete_committed_alerts(names: list[str]) -> None:
 	db = transaction.open_connection()
 	try:
 		values = {"names": tuple(names)}
-		db.sql("delete from `tabComment` where reference_doctype='Ops Alert' and reference_name in %(names)s", values)
+		db.sql(
+			"delete from `tabComment` where reference_doctype='Ops Alert' and reference_name in %(names)s",
+			values,
+		)
 		db.sql("delete from `tabVersion` where ref_doctype='Ops Alert' and docname in %(names)s", values)
 		db.sql("delete from `tabOps Alert` where name in %(names)s", values)
 		db.commit()

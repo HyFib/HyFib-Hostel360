@@ -23,7 +23,9 @@ const routeName = computed(() => (typeof route.name === "string" ? route.name : 
 // portal is closed, so navigation would only bounce back; it is hidden to keep the first run calm.
 const firstRun = computed(() => session.consentRequired || (session.kind === "student" && !session.profileConfirmed));
 const moreActive = computed(
-	() => routeName.value === "more" || !primary.value.some((item) => item.name !== "more" && isActive(item, routeName.value)),
+	() =>
+		routeName.value === "more" ||
+		!primary.value.some((item) => item.name !== "more" && isActive(item, routeName.value)),
 );
 
 onMounted(() => {
@@ -39,14 +41,24 @@ watch(routeName, () => {
 		<a
 			href="#main"
 			class="sr-only z-50 rounded-lg bg-brand px-4 py-2 font-semibold text-on-brand focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
-		>{{ t("common.skipToContent") }}</a>
+			>{{ t("common.skipToContent") }}</a
+		>
 
-		<header class="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85">
+		<header
+			class="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85"
+		>
 			<div class="mx-auto flex h-16 max-w-3xl items-center gap-3 px-4">
-				<RouterLink :to="{ name: 'home' }" class="flex min-w-0 items-center gap-2.5 no-underline" :class="firstRun ? '' : 'lg:hidden'" :aria-label="t('nav.home')">
+				<RouterLink
+					:to="{ name: 'home' }"
+					class="flex min-w-0 items-center gap-2.5 no-underline"
+					:class="firstRun ? '' : 'lg:hidden'"
+					:aria-label="t('nav.home')"
+				>
 					<InstitutionMark :logo="session.settings.logo" :name="institutionName" />
 					<span class="min-w-0">
-						<span class="block truncate text-[0.95rem] font-bold leading-tight text-ink">{{ institutionName || t("app.name") }}</span>
+						<span class="block truncate text-[0.95rem] font-bold leading-tight text-ink">{{
+							institutionName || t("app.name")
+						}}</span>
 						<span class="block truncate text-xs text-muted">{{ t("app.portal") }}</span>
 					</span>
 				</RouterLink>
@@ -62,7 +74,8 @@ watch(routeName, () => {
 							v-if="unreadCount"
 							class="absolute top-1.5 right-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[0.7rem] font-bold leading-5 text-white"
 							aria-hidden="true"
-						>{{ unreadCount > 9 ? "9+" : unreadCount }}</span>
+							>{{ unreadCount > 9 ? "9+" : unreadCount }}</span
+						>
 					</RouterLink>
 				</div>
 			</div>

@@ -10,14 +10,17 @@ import json
 
 import frappe
 from frappe import _
+from frappe.utils import add_to_date, cint, now_datetime
 
 from hostel360.student_services.doctype.hostel_feedback.hostel_feedback import ANONYMOUS_OWNER
 from hostel360.student_services.doctype.hostel_grievance.hostel_grievance import (
 	CLOSED_MESSAGE,
 	ESCALATED_MESSAGE,
+	OPEN_STATUSES,
 	REFERRED_MESSAGE,
 	REGISTERED_MESSAGE,
 )
+from hostel360.student_services.utils import get_setting
 
 # Records that carry the student's hostel for hostel-scoped access.
 HOSTEL_SCOPED_DOCTYPES = (
@@ -32,6 +35,7 @@ def install_defaults():
 	forget_anonymous_submitters()
 	fill_missing_hostels()
 	tag_system_timeline_entries()
+	set_missing_grievance_deadlines()
 
 
 def forget_anonymous_submitters():
@@ -115,3 +119,23 @@ def tag_system_timeline_entries():
 				{"message_template": ESCALATED_MESSAGE, "message_args": json.dumps([level])},
 				update_modified=False,
 			)
+
+
+def set_missing_grievance_deadlines():
+	"""Grievances loaded by a migration once kept no action deadline, and the hourly
+	escalation counted every one of them as overdue. Each open one gets a full SLA period
+	from now, the same as a grievance loaded today."""
+	now = now_datetime()
+	for urgent in (True, False):
+		key = "grievance_urgent_escalation_hours" if urgent else "grievance_escalation_hours"
+		hours = max(cint(get_setting(key)), 1)
+		frappe.db.sql(
+			"""
+			update `tabHostel Grievance`
+			set sla_due_by = %(due)s
+			where sla_due_by is null
+				and status in %(open)s
+				and (ifnull(priority, '') = 'Urgent') = %(urgent)s
+			""",
+			{"due": add_to_date(now, hours=hours), "open": OPEN_STATUSES, "urgent": cint(urgent)},
+		)

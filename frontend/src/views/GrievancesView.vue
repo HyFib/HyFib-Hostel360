@@ -29,7 +29,12 @@ const list = computed(() => grievances.data.value ?? []);
 
 		<SkeletonList v-if="grievances.loading.value && !grievances.data.value" />
 		<ErrorState v-else-if="grievances.error.value" :error="grievances.error.value" @retry="grievances.reload" />
-		<EmptyState v-else-if="!list.length" :icon="MessageSquareWarning" :title="t('grievances.empty')" :body="t('grievances.emptyHint')">
+		<EmptyState
+			v-else-if="!list.length"
+			:icon="MessageSquareWarning"
+			:title="t('grievances.empty')"
+			:body="t('grievances.emptyHint')"
+		>
 			<RouterLink :to="{ name: 'grievance-new' }" class="btn-primary">{{ t("grievances.raise") }}</RouterLink>
 		</EmptyState>
 

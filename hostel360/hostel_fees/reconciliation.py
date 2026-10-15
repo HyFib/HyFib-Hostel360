@@ -247,9 +247,7 @@ def daily_reconciliation() -> dict:
 		{"transaction": name, "issue": "Payment captured on a closed transaction was refused"}
 		for name in run.refused
 	]
-	issues += [
-		{"transaction": name, "issue": "Gateway cannot read the order"} for name in run.unreadable
-	]
+	issues += [{"transaction": name, "issue": "Gateway cannot read the order"} for name in run.unreadable]
 
 	if issues:
 		alerting.raise_alert(
@@ -375,7 +373,9 @@ def _verify_with_gateway(gateways: SettlementGateways) -> tuple[list[dict], int]
 			complete_transaction(row.name, other, "reconciliation")
 		if extra:
 			problems.append(
-				"Other payments captured on the same order: {0}".format(", ".join(p.payment_id for p in extra))
+				"Other payments captured on the same order: {0}".format(
+					", ".join(p.payment_id for p in extra)
+				)
 			)
 
 		if problems:

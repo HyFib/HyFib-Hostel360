@@ -49,7 +49,9 @@ class TestSecurityIncident(IntegrationTestCase):
 
 	def test_deadline_is_six_hours_after_detection(self):
 		doc = self.make(hours_ago=1)
-		self.assertEqual(get_datetime(doc.cert_in_deadline), add_to_date(get_datetime(doc.detected_on), hours=6))
+		self.assertEqual(
+			get_datetime(doc.cert_in_deadline), add_to_date(get_datetime(doc.detected_on), hours=6)
+		)
 		self.assertEqual(doc.status, "Open")
 		self.assertFalse(doc.reporting_sla_breached)
 
@@ -128,7 +130,9 @@ class TestSecurityIncident(IntegrationTestCase):
 			self.assertFalse(frappe.db.exists("Ops Alert", {"open_key": key}), "three hours in: nothing yet")
 
 			health._run_and_apply(now=add_to_date(now_datetime(), hours=1, minutes=30))
-			alert = frappe.db.get_value("Ops Alert", {"open_key": key}, ["name", "severity", "category"], as_dict=True)
+			alert = frappe.db.get_value(
+				"Ops Alert", {"open_key": key}, ["name", "severity", "category"], as_dict=True
+			)
 			self.assertEqual((alert.severity, alert.category), ("Warning", "Security"))
 
 			health._run_and_apply(now=add_to_date(now_datetime(), hours=3, minutes=30))
@@ -145,18 +149,29 @@ class TestSecurityIncident(IntegrationTestCase):
 
 	def test_declare_from_alert(self):
 		name = alerts.raise_alert(
-			unique_key("malware-detected"), "Malware detected in an uploaded file", "Critical", "Security", source="Security"
+			unique_key("malware-detected"),
+			"Malware detected in an uploaded file",
+			"Critical",
+			"Security",
+			source="Security",
 		)
 		incident = declare_from_alert(name)
 		doc = frappe.get_doc("Security Incident", incident)
 		self.assertEqual(doc.ops_alert, name)
 		self.assertEqual(doc.category, MALWARE)
 		self.assertEqual(doc.severity, "Critical")
-		self.assertEqual(get_datetime(doc.detected_on), get_datetime(frappe.db.get_value("Ops Alert", name, "first_seen")))
+		self.assertEqual(
+			get_datetime(doc.detected_on), get_datetime(frappe.db.get_value("Ops Alert", name, "first_seen"))
+		)
 		self.assertEqual(declare_from_alert(name), incident, "one incident per alert")
 		self.assertTrue(
 			frappe.db.exists(
-				"Comment", {"reference_doctype": "Ops Alert", "reference_name": name, "content": ("like", f"%{incident}%")}
+				"Comment",
+				{
+					"reference_doctype": "Ops Alert",
+					"reference_name": name,
+					"content": ("like", f"%{incident}%"),
+				},
 			)
 		)
 
@@ -165,7 +180,13 @@ class TestSecurityIncident(IntegrationTestCase):
 		email = "incident-plain@example.com"
 		if not frappe.db.exists("User", email):
 			frappe.get_doc(
-				{"doctype": "User", "email": email, "first_name": "Plain", "send_welcome_email": 0, "user_type": "System User"}
+				{
+					"doctype": "User",
+					"email": email,
+					"first_name": "Plain",
+					"send_welcome_email": 0,
+					"user_type": "System User",
+				}
 			).insert(ignore_permissions=True)
 		with self.set_user(email):
 			self.assertRaises(frappe.PermissionError, declare_from_alert, name)

@@ -625,9 +625,7 @@ def complete_context(
 	try:
 		meta = frappe.get_meta(reference_doctype)
 		fields = [field for field in missing if meta.has_field(field)]
-		row = (
-			frappe.db.get_value(reference_doctype, reference_name, fields, as_dict=True) if fields else None
-		)
+		row = frappe.db.get_value(reference_doctype, reference_name, fields, as_dict=True) if fields else None
 	except Exception:
 		frappe.log_error(
 			title=f"Hostel360: could not read {reference_doctype} for {event}",
@@ -809,9 +807,7 @@ def _templates_for(event: str, channels: list[str] | None, settings) -> dict:
 		if _channel_enabled(settings, row.channel):
 			row.language = row.language or ev.DEFAULT_LANGUAGE
 			by_channel.setdefault(row.channel, {})[row.language] = row
-	return {
-		channel: options for channel, options in by_channel.items() if ev.DEFAULT_LANGUAGE in options
-	}
+	return {channel: options for channel, options in by_channel.items() if ev.DEFAULT_LANGUAGE in options}
 
 
 def translation_usable(channel: str, base, translated) -> bool:

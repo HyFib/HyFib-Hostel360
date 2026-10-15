@@ -44,10 +44,27 @@ def execute(filters=None):
 def get_columns():
 	return [
 		{"fieldname": "date", "label": _("Date"), "fieldtype": "Date", "width": 110},
-		{"fieldname": "uptime_percent", "label": _("Uptime (%)"), "fieldtype": "Percent", "precision": 3, "width": 110},
+		{
+			"fieldname": "uptime_percent",
+			"label": _("Uptime (%)"),
+			"fieldtype": "Percent",
+			"precision": 3,
+			"width": 110,
+		},
 		{"fieldname": "downtime_minutes", "label": _("Downtime (Minutes)"), "fieldtype": "Int", "width": 140},
-		{"fieldname": "unmonitored_minutes", "label": _("Unmonitored (Minutes)"), "fieldtype": "Int", "width": 150},
-		{"fieldname": "coverage_percent", "label": _("Coverage (%)"), "fieldtype": "Percent", "precision": 2, "width": 110},
+		{
+			"fieldname": "unmonitored_minutes",
+			"label": _("Unmonitored (Minutes)"),
+			"fieldtype": "Int",
+			"width": 150,
+		},
+		{
+			"fieldname": "coverage_percent",
+			"label": _("Coverage (%)"),
+			"fieldtype": "Percent",
+			"precision": 2,
+			"width": 110,
+		},
 		{"fieldname": "critical_alerts", "label": _("Critical Alerts"), "fieldtype": "Int", "width": 120},
 		{"fieldname": "outages", "label": _("Outages"), "fieldtype": "Int", "width": 90},
 		{"fieldname": "samples", "label": _("Samples"), "fieldtype": "Int", "width": 90},
@@ -85,7 +102,10 @@ def get_chart(data):
 			"datasets": [
 				{
 					"name": _("Uptime (%)"),
-					"values": [flt(row["uptime_percent"], 3) if row["uptime_percent"] is not None else 0 for row in data],
+					"values": [
+						flt(row["uptime_percent"], 3) if row["uptime_percent"] is not None else 0
+						for row in data
+					],
 				},
 				{"name": _("Target"), "values": [UPTIME_TARGET] * len(data)},
 			],
@@ -108,7 +128,12 @@ def get_summary(data, overall):
 			"datatype": "Float" if uptime is not None else "Data",
 			"indicator": "Green" if met else "Red",
 		},
-		{"value": UPTIME_TARGET, "label": _("Contracted Target (%)"), "datatype": "Float", "indicator": "Blue"},
+		{
+			"value": UPTIME_TARGET,
+			"label": _("Contracted Target (%)"),
+			"datatype": "Float",
+			"indicator": "Blue",
+		},
 		{
 			"value": overall["downtime_minutes"],
 			"label": _("Downtime (Minutes)"),

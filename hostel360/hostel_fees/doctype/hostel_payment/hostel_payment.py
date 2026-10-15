@@ -205,9 +205,9 @@ class HostelPayment(Document):
 			if row.invoice not in hostels or frappe.has_permission(INVOICE, "write", doc=row.invoice):
 				continue
 			frappe.throw(
-				_("Row {0}: invoice {1} belongs to hostel {2}, which is not one of your assigned hostels.").format(
-					row.idx, row.invoice, hostels[row.invoice] or _("(none)")
-				),
+				_(
+					"Row {0}: invoice {1} belongs to hostel {2}, which is not one of your assigned hostels."
+				).format(row.idx, row.invoice, hostels[row.invoice] or _("(none)")),
 				frappe.PermissionError,
 				title=_("Not permitted"),
 			)

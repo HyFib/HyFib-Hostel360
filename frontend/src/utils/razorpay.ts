@@ -51,9 +51,7 @@ export function loadRazorpay(): Promise<RazorpayConstructor> {
 	return loading;
 }
 
-export type CheckoutOutcome =
-	| { type: "success"; response: CheckoutResponse }
-	| { type: "dismissed"; failure?: string };
+export type CheckoutOutcome = { type: "success"; response: CheckoutResponse } | { type: "dismissed"; failure?: string };
 
 /** Open the checkout window; resolves once the payer completes or closes it. */
 export async function openCheckout(checkout: CheckoutOptions, themeColor: string): Promise<CheckoutOutcome> {

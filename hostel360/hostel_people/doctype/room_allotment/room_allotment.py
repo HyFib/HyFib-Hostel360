@@ -75,11 +75,14 @@ class RoomAllotment(Document):
 
 	def validate_student(self):
 		student = frappe.db.get_value(
-			"Hostel Student", self.student, ["status", "validation_status", "full_name"], as_dict=True
+			"Hostel Student",
+			self.student,
+			["status", "validation_status", "full_name", "current_hostel", "current_allotment"],
+			as_dict=True,
 		)
 		if not student:
 			frappe.throw(_("Student {0} does not exist.").format(frappe.bold(self.student)))
-		if self.check_user_access():
+		if self.check_user_access() and not self.admits_returning_student(student):
 			# Link fields are not permission-checked on save, and the student's name is sent
 			# back with the saved allotment, so a hostel-scoped user must be able to see the
 			# student they allot.
@@ -93,10 +96,26 @@ class RoomAllotment(Document):
 			)
 		if student.validation_status == "Rejected":
 			frappe.throw(
-				_("The registration of {0} was rejected. Correct and validate it before allotting a bed.").format(
-					student.full_name
-				)
+				_(
+					"The registration of {0} was rejected. Correct and validate it before allotting a bed."
+				).format(student.full_name)
 			)
+
+	def admits_returning_student(self, student) -> bool:
+		"""May any hostel's staff give this student a bed, even without seeing the record?
+
+		A student who has left a hostel stays with that hostel's staff (``last_hostel``), but
+		coming back next term, often to another hostel, is routine. While the student lives
+		in no hostel, staff who may submit an allotment for this bed (the bed's hostel and
+		block decide that) may give them the bed. Transfers and students who hold a bed now
+		are not affected.
+		"""
+		return bool(
+			self.allotment_type == "New"
+			and not student.current_hostel
+			and not student.current_allotment
+			and frappe.has_permission(self.doctype, "submit", doc=self)
+		)
 
 	def validate_gender(self):
 		hostel_gender = frappe.get_cached_value("Hostel", self.hostel, "gender")
@@ -128,7 +147,9 @@ class RoomAllotment(Document):
 			as_dict=True,
 		)
 		if previous.student != self.student:
-			frappe.throw(_("Previous allotment {0} belongs to another student.").format(self.previous_allotment))
+			frappe.throw(
+				_("Previous allotment {0} belongs to another student.").format(self.previous_allotment)
+			)
 		if self.check_user_access():
 			# Submitting a transfer closes the previous allotment, so it is an action on that
 			# allotment too. Without this a user scoped to one hostel could move a student out
@@ -137,7 +158,9 @@ class RoomAllotment(Document):
 		if self.is_historical():
 			return
 		if previous.docstatus != 1 or previous.status != "Active":
-			frappe.throw(_("Previous allotment {0} is not active.").format(frappe.bold(self.previous_allotment)))
+			frappe.throw(
+				_("Previous allotment {0} is not active.").format(frappe.bold(self.previous_allotment))
+			)
 		if previous.bed == self.bed:
 			frappe.throw(_("Choose a different bed to transfer to."))
 		if getdate(self.from_date) < getdate(previous.from_date):
@@ -152,7 +175,9 @@ class RoomAllotment(Document):
 			"Hostel Bed", self.bed, ["status", "is_active", "current_allotment", "room"], as_dict=True
 		)
 		if not bed.is_active:
-			frappe.throw(_("Bed {0} is no longer in use.").format(frappe.bold(self.bed)), BedNotAvailableError)
+			frappe.throw(
+				_("Bed {0} is no longer in use.").format(frappe.bold(self.bed)), BedNotAvailableError
+			)
 		if bed.current_allotment and bed.current_allotment != self.name:
 			frappe.throw(
 				_("Bed {0} is already occupied (allotment {1}).").format(
@@ -163,7 +188,9 @@ class RoomAllotment(Document):
 			)
 		if bed.status != "Vacant":
 			frappe.throw(
-				_("Bed {0} is {1}. Only a vacant bed can be allotted.").format(frappe.bold(self.bed), _(bed.status)),
+				_("Bed {0} is {1}. Only a vacant bed can be allotted.").format(
+					frappe.bold(self.bed), _(bed.status)
+				),
 				BedNotAvailableError,
 				title=_("Bed Not Available"),
 			)
@@ -258,7 +285,9 @@ class RoomAllotment(Document):
 	def before_cancel(self):
 		if self.status != "Active":
 			frappe.throw(
-				_("Only an active allotment can be cancelled. Vacated and transferred allotments are kept as history.")
+				_(
+					"Only an active allotment can be cancelled. Vacated and transferred allotments are kept as history."
+				)
 			)
 		if self.allotment_type == "Transfer":
 			frappe.throw(
@@ -307,7 +336,9 @@ class RoomAllotment(Document):
 		claim_unscoped_records(self.student, self.hostel)
 
 	def release_bed(self):
-		bed = frappe.db.get_value("Hostel Bed", self.bed, ["current_allotment"], as_dict=True, for_update=True)
+		bed = frappe.db.get_value(
+			"Hostel Bed", self.bed, ["current_allotment"], as_dict=True, for_update=True
+		)
 		if bed and bed.current_allotment == self.name:
 			frappe.db.set_value(
 				"Hostel Bed",
@@ -327,7 +358,12 @@ class RoomAllotment(Document):
 			frappe.db.set_value(
 				"Hostel Student",
 				self.student,
-				{"current_hostel": None, "current_room": None, "current_bed": None, "current_allotment": None},
+				{
+					"current_hostel": None,
+					"current_room": None,
+					"current_bed": None,
+					"current_allotment": None,
+				},
 			)
 
 	def close_previous_allotment(self):
@@ -413,7 +449,9 @@ class RoomAllotment(Document):
 		vacated_on = getdate(vacated_on)
 		if vacated_on < getdate(self.from_date):
 			frappe.throw(
-				_("Vacated On cannot be before the allotment started on {0}.").format(formatdate(self.from_date))
+				_("Vacated On cannot be before the allotment started on {0}.").format(
+					formatdate(self.from_date)
+				)
 			)
 		if vacated_on > getdate(nowdate()) and not in_migration():
 			frappe.throw(_("Vacated On cannot be in the future."))

@@ -41,7 +41,9 @@ class TestHostelStudent(IntegrationTestCase):
 
 	def test_names_and_register_number(self):
 		code = unique_code("rg", 5)
-		student = make_student("Male", register_number=f" {code.lower()} ", first_name="  Arun ", last_name=" Kumar  ")
+		student = make_student(
+			"Male", register_number=f" {code.lower()} ", first_name="  Arun ", last_name=" Kumar  "
+		)
 		self.assertEqual(student.name, code)
 		self.assertEqual(student.full_name, "Arun Kumar")
 		self.assertTrue(student.academic_year)
@@ -76,7 +78,9 @@ class TestHostelStudent(IntegrationTestCase):
 		self.assertEqual(student.validation_status, "Validated")
 		self.assertEqual(student.validated_by, frappe.session.user)
 		self.assertTrue(student.validated_on)
-		self.assertEqual(frappe.db.get_value("Hostel Guardian", guardian.name, "validation_status"), "Validated")
+		self.assertEqual(
+			frappe.db.get_value("Hostel Guardian", guardian.name, "validation_status"), "Validated"
+		)
 
 		# A guardian added later to a validated student is validated too.
 		late = make_guardian(relation="Mother")
@@ -145,7 +149,14 @@ class TestHostelStudent(IntegrationTestCase):
 		stored = frappe.db.get_value(
 			"Hostel Student",
 			target.name,
-			["validation_status", "user", "profile_confirmed", "privacy_consent_version", "current_bed", "last_hostel"],
+			[
+				"validation_status",
+				"user",
+				"profile_confirmed",
+				"privacy_consent_version",
+				"current_bed",
+				"last_hostel",
+			],
 			as_dict=True,
 		)
 		self.assertEqual(stored.validation_status, "Validated")
@@ -154,7 +165,9 @@ class TestHostelStudent(IntegrationTestCase):
 		self.assertIsNone(stored.privacy_consent_version)
 		self.assertIsNone(stored.current_bed)
 		self.assertIsNone(stored.last_hostel)
-		self.assertEqual(frappe.get_all("Hostel Student", filters={"user": owner_user}, pluck="name"), [owner.name])
+		self.assertEqual(
+			frappe.get_all("Hostel Student", filters={"user": owner_user}, pluck="name"), [owner.name]
+		)
 
 	def test_rejection_checks_the_stored_allotment(self):
 		hostel = make_hostel("Male")

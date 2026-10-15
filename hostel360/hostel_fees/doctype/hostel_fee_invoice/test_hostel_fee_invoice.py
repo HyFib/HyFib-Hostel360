@@ -286,7 +286,9 @@ class TestHostelFeeInvoice(FeeTestCase):
 		fresh = make_invoice(self.student, 300, due_date=add_days(nowdate(), 2))
 		self.notifications.reset_mock()
 		send_fee_reminders()
-		self.assertEqual(self.reminded_invoices(), {fresh.name}, "a capped invoice is left out of the message")
+		self.assertEqual(
+			self.reminded_invoices(), {fresh.name}, "a capped invoice is left out of the message"
+		)
 
 		frappe.db.set_single_value(SETTINGS, {"max_reminders_per_invoice": 0, "send_fee_reminders": 0})
 		frappe.clear_document_cache(SETTINGS, SETTINGS)
@@ -343,12 +345,18 @@ class TestHostelFeeInvoice(FeeTestCase):
 
 		# Without a bed the record carries no hostel, whatever was sent.
 		homeless = make_student()
-		self.assertIsNone(self.draft_invoice(homeless, hostel=elsewhere).insert(ignore_permissions=True).hostel)
+		self.assertIsNone(
+			self.draft_invoice(homeless, hostel=elsewhere).insert(ignore_permissions=True).hostel
+		)
 
 	def test_trusted_callers_and_migration_may_file_elsewhere(self):
 		billed_in = make_hostel()
 		name = create_invoice(
-			self.student, [{"fee_head": "Fine", "amount": 80}], "Fine", add_days(nowdate(), 7), hostel=billed_in
+			self.student,
+			[{"fee_head": "Fine", "amount": 80}],
+			"Fine",
+			add_days(nowdate(), 7),
+			hostel=billed_in,
 		)
 		self.assertEqual(frappe.db.get_value(INVOICE, name, "hostel"), billed_in)
 

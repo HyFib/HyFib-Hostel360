@@ -432,8 +432,13 @@ class RoomBoard {
 					label: __("Student"),
 					options: "Hostel Student",
 					reqd: 1,
-					get_query: () => ({ filters: student_filters }),
-					description: __("Students without a bed whose gender matches this hostel."),
+					get_query: () => ({
+						query: "hostel360.hostel_people.queries.allottable_student_query",
+						filters: student_filters,
+					}),
+					description: __(
+						"Students without a bed whose gender matches this hostel. For a student returning from another hostel, type the exact register or mobile number."
+					),
 				},
 				{
 					fieldname: "from_date",

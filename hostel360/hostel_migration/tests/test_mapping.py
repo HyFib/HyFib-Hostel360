@@ -159,7 +159,9 @@ class TestBuildRows(UnitTestCase):
 			m["entities"]["hostels"]["fields"]["is_active"] = {"column": "active", "transforms": ["boolean"]}
 
 		with self.assertRaises(RowError) as ctx:
-			self.entity(mutate=mutate).build({"id": "H1", "code": "X", "name": "x", "active": "perhaps"}, no_lookup)
+			self.entity(mutate=mutate).build(
+				{"id": "H1", "code": "X", "name": "x", "active": "perhaps"}, no_lookup
+			)
 		self.assertTrue(str(ctx.exception).startswith("is_active:"))
 
 	def test_defaults_constants_and_columns(self):
@@ -170,7 +172,8 @@ class TestBuildRows(UnitTestCase):
 			fields["address"] = {"columns": ["street", "town"], "separator": ", "}
 
 		built = self.entity(mutate=mutate).build(
-			{"id": "H1", "code": "X", "name": "x", "type": "", "street": "1 Main Rd", "town": "Karaikudi"}, no_lookup
+			{"id": "H1", "code": "X", "name": "x", "type": "", "street": "1 Main Rd", "town": "Karaikudi"},
+			no_lookup,
 		)
 		self.assertEqual(built.values["gender"], "Mixed")
 		self.assertEqual(built.values["is_active"], 1)
@@ -193,7 +196,9 @@ class TestBuildRows(UnitTestCase):
 			m["entities"]["hostels"]["fields"]["remarks"] = {"template": "Legacy {legacy_no}"}
 
 		with self.assertRaises(RowError):
-			self.entity(mutate=mutate).build({"id": "H1", "code": "X", "name": "x", "legacy_no": ""}, no_lookup)
+			self.entity(mutate=mutate).build(
+				{"id": "H1", "code": "X", "name": "x", "legacy_no": ""}, no_lookup
+			)
 
 	def test_child_rows_and_when(self):
 		def mutate(m):
@@ -203,15 +208,21 @@ class TestBuildRows(UnitTestCase):
 					{"$when": "fan", "facility": {"value": "Ceiling Fan"}},
 					{"$when": "wifi", "facility": {"value": "Wi-Fi"}},
 				],
-				"items": [{"fee_head": {"value": "Rent"}, "amount": {"column": "rent", "transforms": ["decimal"]}}],
+				"items": [
+					{"fee_head": {"value": "Rent"}, "amount": {"column": "rent", "transforms": ["decimal"]}}
+				],
 			}
 
 		entity = self.entity(mutate=mutate)
-		built = entity.build({"id": "H1", "code": "X", "name": "x", "fan": "Y", "wifi": "N", "rent": "0"}, no_lookup)
+		built = entity.build(
+			{"id": "H1", "code": "X", "name": "x", "fan": "Y", "wifi": "N", "rent": "0"}, no_lookup
+		)
 		self.assertEqual([r["facility"] for r in built.children["facilities"]], ["Cot", "Ceiling Fan"])
 		# A row whose only source column is zero is left out.
 		self.assertEqual(built.children["items"], [])
-		built = entity.build({"id": "H1", "code": "X", "name": "x", "fan": "", "wifi": "yes", "rent": "1,200"}, no_lookup)
+		built = entity.build(
+			{"id": "H1", "code": "X", "name": "x", "fan": "", "wifi": "yes", "rent": "1,200"}, no_lookup
+		)
 		self.assertEqual([r["facility"] for r in built.children["facilities"]], ["Cot", "Wi-Fi"])
 		self.assertEqual(built.children["items"], [{"fee_head": "Rent", "amount": 1200.0}])
 
@@ -229,7 +240,9 @@ class TestBuildRows(UnitTestCase):
 			m["defaults"] = {"null_values": ["NIL"]}
 			m["entities"]["hostels"]["fields"]["address"] = "address"
 
-		built = self.entity(mutate=mutate).build({"id": "H1", "code": "X", "name": "x", "address": "nil"}, no_lookup)
+		built = self.entity(mutate=mutate).build(
+			{"id": "H1", "code": "X", "name": "x", "address": "nil"}, no_lookup
+		)
 		self.assertIsNone(built.values["address"])
 
 	def test_checksum_follows_values(self):

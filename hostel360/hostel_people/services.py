@@ -204,7 +204,9 @@ def record_privacy_consent(doctype: str, name: str, version: str) -> None:
 	else:
 		user = frappe.session.user
 		if get_guardian_for_user(user) != name and not has_any_role(STAFF_ROLES, user):
-			frappe.throw(_("You are not permitted to record consent for this guardian."), frappe.PermissionError)
+			frappe.throw(
+				_("You are not permitted to record consent for this guardian."), frappe.PermissionError
+			)
 
 	doc = frappe.get_doc(doctype, name)
 	if doc.privacy_consent_version == current_version:
@@ -216,7 +218,9 @@ def record_privacy_consent(doctype: str, name: str, version: str) -> None:
 	doc.save()
 	doc.add_comment(
 		"Info",
-		_("Accepted privacy notice version {0} (signed in as {1})").format(current_version, frappe.session.user),
+		_("Accepted privacy notice version {0} (signed in as {1})").format(
+			current_version, frappe.session.user
+		),
 	)
 
 

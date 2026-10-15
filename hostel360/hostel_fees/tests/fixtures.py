@@ -15,7 +15,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, nowdate
 
-from hostel360.hostel_fees.constants import INVOICE, SETTINGS
+from hostel360.hostel_fees.constants import INVOICE, SETTINGS, STRUCTURE, TRANSACTION
 
 # Linked DocTypes belong to other modules; fee tests build exactly the records they need.
 IGNORE_TEST_RECORD_DEPENDENCIES = [
@@ -37,7 +37,7 @@ LIVE_KEY_ID = "rzp_live_H360UnitTests"
 TEST_KEY_SECRET = "unit-test-key-secret"  # noqa: S105
 TEST_WEBHOOK_SECRET = "unit-test-webhook-secret"  # noqa: S105
 PAYU_KEY = "h360UTkey"
-PAYU_SALT = "h360-unit-test-salt"  # noqa: S105
+PAYU_SALT = "h360-unit-test-salt"
 
 
 def unique(prefix: str = "") -> str:
@@ -414,6 +414,31 @@ class FeeTestCase(IntegrationTestCase):
 	def alerts_in(self, category: str) -> list:
 		return [call for call in self.alerts.call_args_list if call.kwargs.get("category") == category]
 
+	# Records the site already holds (seeded demo data, an earlier committed run) must not decide
+	# a test's outcome. These take them out of play for one test; the changes are undone after it.
+
+	def deactivate_site_structures(self) -> None:
+		"""Deactivate every active fee structure on the site.
+
+		A structure that leaves hostel, year and programme blank applies to every student, so one
+		already on the site would otherwise be found for any student a test creates.
+		"""
+		active = frappe.get_all(STRUCTURE, filters={"is_active": 1}, pluck="name")
+		if not active:
+			return
+		frappe.db.set_value(STRUCTURE, {"name": ["in", active]}, "is_active", 0, update_modified=False)
+		self.addCleanup(
+			frappe.db.set_value, STRUCTURE, {"name": ["in", active]}, "is_active", 1, update_modified=False
+		)
+
+	def hide_site_transactions(self, gateway: str) -> None:
+		"""Make the site look as if it never took a payment through ``gateway``."""
+		alias = f"{gateway} (hidden by test)"
+		frappe.db.set_value(TRANSACTION, {"gateway": gateway}, "gateway", alias, update_modified=False)
+		self.addCleanup(
+			frappe.db.set_value, TRANSACTION, {"gateway": alias}, "gateway", gateway, update_modified=False
+		)
+
 
 # -- PayU ------------------------------------------------------------------------------------
 # Hashes are computed here from PayU's published formulas, independently of the adapter, so the
@@ -495,8 +520,12 @@ class FakePayU:
 		if data.get("command") == "check_payment":
 			record = next((t for t in self.transactions.values() if t["mihpayid"] == var1), None)
 			if not record:
-				return FakeResponse(200, {"status": 0, "msg": "No transaction found", "transaction_details": {}})
-			return FakeResponse(200, {"status": 1, "msg": "Transaction Fetched", "transaction_details": record})
+				return FakeResponse(
+					200, {"status": 0, "msg": "No transaction found", "transaction_details": {}}
+				)
+			return FakeResponse(
+				200, {"status": 1, "msg": "Transaction Fetched", "transaction_details": record}
+			)
 		return FakeResponse(200, {"status": 0, "msg": "Unknown command"})
 
 	def pay(

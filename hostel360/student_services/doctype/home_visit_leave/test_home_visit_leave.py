@@ -283,7 +283,9 @@ class TestHomeVisitLeave(IntegrationTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			self.as_user(guard, leave.mark_checked_out, str(add_to_date(now_datetime(), minutes=-30)))
 		with self.assertRaises(frappe.PermissionError):
-			self.as_user(guard, run_form_action, frappe.get_doc("Home Visit Leave", leave.name), "cancel_leave")
+			self.as_user(
+				guard, run_form_action, frappe.get_doc("Home Visit Leave", leave.name), "cancel_leave"
+			)
 		pending = services.apply_leave(make_student(self.hostel).name, leave_data(), "Warden", self.warden)
 		with self.assertRaises(frappe.PermissionError):
 			self.as_user(guard, frappe.get_doc("Home Visit Leave", pending).warden_approve, "ok")
@@ -387,12 +389,20 @@ class TestHomeVisitLeave(IntegrationTestCase):
 
 	def test_approval_raises_mess_reduction(self):
 		set_hostel_settings(leave_requires_parent_approval=0)
-		start = get_datetime(add_to_date(now_datetime(), days=3)).replace(hour=8, minute=0, second=0, microsecond=0)
-		data = {"from_datetime": start, "to_datetime": add_to_date(start, days=5, hours=10), "apply_mess_reduction": 1}
+		start = get_datetime(add_to_date(now_datetime(), days=3)).replace(
+			hour=8, minute=0, second=0, microsecond=0
+		)
+		data = {
+			"from_datetime": start,
+			"to_datetime": add_to_date(start, days=5, hours=10),
+			"apply_mess_reduction": 1,
+		}
 		name = services.apply_leave(self.student.name, {**leave_data(), **data}, "Student", self.student.user)
 		self.assertEqual(frappe.db.get_value("Home Visit Leave", name, "mess_reduction_days"), 6)
 
-		with patch("hostel360.hostel_mess.services.apply_mess_reduction", return_value="MRA-TEST-0001") as apply:
+		with patch(
+			"hostel360.hostel_mess.services.apply_mess_reduction", return_value="MRA-TEST-0001"
+		) as apply:
 			services.warden_decision(name, True, None, self.warden)
 		apply.assert_called_once()
 		args, kwargs = apply.call_args
@@ -425,7 +435,11 @@ class TestHomeVisitLeave(IntegrationTestCase):
 		self.assertTrue(
 			frappe.db.exists(
 				"Comment",
-				{"reference_doctype": "Home Visit Leave", "reference_name": name, "content": ["like", "%already billed%"]},
+				{
+					"reference_doctype": "Home Visit Leave",
+					"reference_name": name,
+					"content": ["like", "%already billed%"],
+				},
 			)
 		)
 
@@ -495,7 +509,13 @@ class TestHomeVisitLeave(IntegrationTestCase):
 			self.as_user(
 				office,
 				client_insert,
-				{"doctype": "Home Visit Leave", "student": other.name, "hostel": self.hostel, "applied_by": "Warden", **leave_data()},
+				{
+					"doctype": "Home Visit Leave",
+					"student": other.name,
+					"hostel": self.hostel,
+					"applied_by": "Warden",
+					**leave_data(),
+				},
 			)
 
 		# Stored hostel decides, whatever the in-memory copy says
@@ -505,12 +525,22 @@ class TestHomeVisitLeave(IntegrationTestCase):
 	def test_an_ordinary_save_cannot_decide_a_leave(self):
 		name = self.apply()
 		office = make_user([OFFICE_ROLE])
-		decision = {"status": "Approved", "parent_approval_status": "Approved", "warden_approval_status": "Approved"}
+		decision = {
+			"status": "Approved",
+			"parent_approval_status": "Approved",
+			"warden_approval_status": "Approved",
+		}
 		with self.assertRaises(frappe.PermissionError):
 			self.as_user(office, client_set_value, "Home Visit Leave", name, decision)
 		# Not even a warden can skip the parent's consent by saving the form
 		with self.assertRaises(frappe.PermissionError):
-			self.as_user(self.warden, client_set_value, "Home Visit Leave", name, {**decision, "warden_user": self.warden})
+			self.as_user(
+				self.warden,
+				client_set_value,
+				"Home Visit Leave",
+				name,
+				{**decision, "warden_user": self.warden},
+			)
 		self.assertEqual(frappe.db.get_value("Home Visit Leave", name, "status"), "Pending Parent Approval")
 
 		# Ordinary details can still be corrected while the leave is pending
@@ -602,7 +632,11 @@ class TestHomeVisitLeave(IntegrationTestCase):
 		self.assertTrue(
 			frappe.db.exists(
 				"Comment",
-				{"reference_doctype": "Home Visit Leave", "reference_name": leave.name, "content": ["like", "%published up to%"]},
+				{
+					"reference_doctype": "Home Visit Leave",
+					"reference_name": leave.name,
+					"content": ["like", "%published up to%"],
+				},
 			)
 		)
 		alerted = set(
@@ -640,7 +674,11 @@ class TestHomeVisitLeave(IntegrationTestCase):
 		with capture_notifications() as sent:
 			mine = self.apply()
 			theirs = services.apply_leave(westerner.name, leave_data(), "Student", westerner.user)
-		told = {m["reference_name"]: {r.get("user") for r in m["recipients"]} for m in sent if m["event"] == "leave_warden_approval_required"}
+		told = {
+			m["reference_name"]: {r.get("user") for r in m["recipients"]}
+			for m in sent
+			if m["event"] == "leave_warden_approval_required"
+		}
 		self.assertIn(east_deputy, told[mine])
 		self.assertNotIn(east_deputy, told[theirs])
 		# A deputy assigned to the whole hostel hears about both
@@ -650,4 +688,3 @@ class TestHomeVisitLeave(IntegrationTestCase):
 			services.warden_decision(theirs, True, None, east_deputy)
 		services.warden_decision(mine, True, None, east_deputy)
 		self.assertEqual(frappe.db.get_value("Home Visit Leave", mine, "status"), "Approved")
-

@@ -82,12 +82,17 @@ def decide(doctype: str, name: str, action: str, remarks: str | None = None) -> 
 
 @frappe.whitelist(methods=["POST"])
 def act_on_grievance(name: str, action: str, message: str | None = None) -> dict:
-	"""Take ownership of, or resolve, a grievance that needs attention."""
+	"""Take ownership of, or resolve, a grievance that needs attention.
+
+	``message`` is the card's resolution box and is used only to resolve. Taking ownership
+	writes no note: what was typed there is meant for the student once the work is done, not
+	an internal remark to file on the way.
+	"""
 	doc = frappe.get_doc(GRIEVANCE, name, for_update=True)
 	doc.check_permission("read")
 	user = frappe.session.user
 	if action == "take":
-		doc.assign_to_user(user, user, message)
+		doc.assign_to_user(user, user)
 	elif action == "resolve":
 		doc.resolve_by(message, user)
 	else:

@@ -257,7 +257,14 @@ describe("PayView in test mode", () => {
 
 	it("says no real money is taken before the payer starts", async () => {
 		applySession(studentSession());
-		vi.mocked(portal.getFees).mockResolvedValue({ outstanding: 1500, overdue: 0, payments: [], invoices: [invoice], payment_enabled: true, payment_test_mode: true });
+		vi.mocked(portal.getFees).mockResolvedValue({
+			outstanding: 1500,
+			overdue: 0,
+			payments: [],
+			invoices: [invoice],
+			payment_enabled: true,
+			payment_test_mode: true,
+		});
 		const wrapper = await mountAt("/fees/pay", await PayView());
 		expect(wrapper.find('[data-test="test-mode"]').text()).toContain("No real money is taken");
 		wrapper.unmount();
@@ -265,12 +272,26 @@ describe("PayView in test mode", () => {
 
 	it("keeps the dues open after a failed attempt and marks it as a test", async () => {
 		applySession(studentSession());
-		vi.mocked(portal.getFees).mockResolvedValue({ outstanding: 1500, overdue: 0, payments: [], invoices: [invoice], payment_enabled: true });
+		vi.mocked(portal.getFees).mockResolvedValue({
+			outstanding: 1500,
+			overdue: 0,
+			payments: [],
+			invoices: [invoice],
+			payment_enabled: true,
+		});
 		vi.mocked(portal.createPayment).mockResolvedValue({
 			transaction: "PTX-9",
 			gateway: "razorpay",
 			test_mode: 1,
-			checkout: { key: "rzp_test_x", order_id: "order_9", amount: 150000, currency: "INR", name: "ACGCET", description: "Hostel dues", prefill: {} },
+			checkout: {
+				key: "rzp_test_x",
+				order_id: "order_9",
+				amount: 150000,
+				currency: "INR",
+				name: "ACGCET",
+				description: "Hostel dues",
+				prefill: {},
+			},
 		});
 		vi.mocked(razorpay.openCheckout).mockResolvedValue({
 			type: "success",
@@ -329,7 +350,13 @@ describe("HomeView", () => {
 		vi.mocked(portal.getDashboard).mockResolvedValue(
 			dashboard({
 				notifications: [
-					{ name: "N1", subject: "Leave rejected", message: "LV-0001: Remarks: exams", created: "2026-10-15 10:00:00", read: 0 },
+					{
+						name: "N1",
+						subject: "Leave rejected",
+						message: "LV-0001: Remarks: exams",
+						created: "2026-10-15 10:00:00",
+						read: 0,
+					},
 					{ name: "N2", subject: "Fee due", created: "2026-10-14 10:00:00", read: 1 },
 				],
 			}),
@@ -343,7 +370,11 @@ describe("HomeView", () => {
 	});
 
 	it("explains a suspended student's limits instead of showing resident features", async () => {
-		applySession(studentSession({ wards: [{ student: "REG001", full_name: "Priya Raman", status: "Suspended", validation_status: "Validated" }] }));
+		applySession(
+			studentSession({
+				wards: [{ student: "REG001", full_name: "Priya Raman", status: "Suspended", validation_status: "Validated" }],
+			}),
+		);
 		vi.mocked(portal.getDashboard).mockResolvedValue(dashboard({ restricted: true, student_status: "Suspended" }));
 		const wrapper = await mountAt("/", await HomeView());
 		expect(wrapper.find('[data-test="restricted-notice"]').text()).toContain("Suspended");
@@ -386,10 +417,23 @@ describe("GrievanceDetailView", () => {
 			status: "Open",
 			creation: "2026-10-15 09:00:00",
 			description: "Geyser not working for a week.",
-			attachments: [{ name: "f1a2b3", file_name: "geyser.jpg", file_size: 2048, url: "/api/method/hostel360.api.portal.download_grievance_attachment?name=GRV-2026-00001&file=f1a2b3" }],
+			attachments: [
+				{
+					name: "f1a2b3",
+					file_name: "geyser.jpg",
+					file_size: 2048,
+					url: "/api/method/hostel360.api.portal.download_grievance_attachment?name=GRV-2026-00001&file=f1a2b3",
+				},
+			],
 			timeline: [
 				{ on: "2026-10-15 09:00:00", by: "Raman K", is_staff: false, is_mine: false, message: "Grievance registered." },
-				{ on: "2026-10-15 09:05:00", by: "Raman K", is_staff: false, is_mine: false, message: "Please fix this quickly." },
+				{
+					on: "2026-10-15 09:05:00",
+					by: "Raman K",
+					is_staff: false,
+					is_mine: false,
+					message: "Please fix this quickly.",
+				},
 				{ on: "2026-10-15 10:00:00", by: "Priya Raman", is_staff: false, is_mine: true, message: "Still not fixed." },
 			],
 		};
@@ -401,7 +445,9 @@ describe("GrievanceDetailView", () => {
 		const wrapper = await mountAt("/grievances/GRV-2026-00001", await GrievanceDetailView());
 
 		const entries = wrapper.findAll("ol li");
-		const authors = Object.fromEntries(entries.map((entry) => [entry.find(".whitespace-pre-line").text(), entry.find(".font-semibold").text()]));
+		const authors = Object.fromEntries(
+			entries.map((entry) => [entry.find(".whitespace-pre-line").text(), entry.find(".font-semibold").text()]),
+		);
 		expect(authors["Please fix this quickly."]).toBe("Raman K");
 		expect(authors["Grievance registered."]).toBe("Raman K");
 		expect(authors["Still not fixed."]).toBe("You");
@@ -409,6 +455,39 @@ describe("GrievanceDetailView", () => {
 		const link = wrapper.find('a[href*="download_grievance_attachment"]');
 		expect(link.exists()).toBe(true);
 		expect(wrapper.find('a[href^="/private/files"]').exists()).toBe(false);
+		wrapper.unmount();
+	});
+
+	it("shows each entry in the reader's language and typed text as it was written", async () => {
+		applySession(studentSession());
+		vi.mocked(portal.getGrievance).mockResolvedValue({
+			...grievance(),
+			timeline: [
+				{
+					id: "u1",
+					on: "2026-10-15 09:00:00",
+					by: "Hostel Office",
+					is_staff: true,
+					message: "Assigned to Murugan K.",
+					display_message: "Murugan K.-இடம் ஒப்படைக்கப்பட்டது.",
+				},
+				{
+					id: "u2",
+					on: "2026-10-15 09:05:00",
+					by: "Priya Raman",
+					is_mine: true,
+					message: "Closed",
+					display_message: "Closed",
+				},
+				// An older server that does not send display_message.
+				{ id: "u3", on: "2026-10-15 09:10:00", by: "Hostel Office", is_staff: true, message: "Grievance registered." },
+			],
+		});
+		const wrapper = await mountAt("/grievances/GRV-2026-00001", await GrievanceDetailView());
+
+		const texts = wrapper.findAll("ol li .whitespace-pre-line").map((node) => node.text());
+		expect(texts.sort()).toEqual(["Closed", "Grievance registered.", "Murugan K.-இடம் ஒப்படைக்கப்பட்டது."]);
+		expect(wrapper.text()).not.toContain("Assigned to Murugan K.");
 		wrapper.unmount();
 	});
 });
@@ -429,7 +508,11 @@ describe("GrievanceNewView", () => {
 	});
 
 	it("advertises the server's upload limit", async () => {
-		applySession(studentSession({ settings: { upload: { max_bytes: 5 * 1024 * 1024, extensions: ["pdf", "jpg", "jpeg", "png", "webp"] } } }));
+		applySession(
+			studentSession({
+				settings: { upload: { max_bytes: 5 * 1024 * 1024, extensions: ["pdf", "jpg", "jpeg", "png", "webp"] } },
+			}),
+		);
 		const wrapper = await mountAt("/grievances/new", await GrievanceNewView());
 		expect(wrapper.find("#attach-hint").text()).toContain("5.0 MB");
 		expect(wrapper.find('input[type="file"]').attributes("accept")).not.toContain("gif");
@@ -469,10 +552,14 @@ describe("AccessClosedView", () => {
 	it("says why the session ended and how to reach the hostel office", async () => {
 		updateBoot({ office_phone: "04565 224528", office_email: "hostel.office@example.com" });
 		vi.mocked(portal.getSession).mockRejectedValue(
-			new ApiError("permission", "Portal access for this hostel record has been closed. Please contact the hostel office.", {
-				status: 403,
-				excType: "PortalAccessClosed",
-			}),
+			new ApiError(
+				"permission",
+				"Portal access for this hostel record has been closed. Please contact the hostel office.",
+				{
+					status: 403,
+					excType: "PortalAccessClosed",
+				},
+			),
 		);
 		await loadSession(true);
 
@@ -512,8 +599,24 @@ describe("WardSwitcher", () => {
 		applySession(
 			parentSession({
 				wards: [
-					{ student: "REG001", full_name: "Priya Raman", register_number: "UAT24CS0012", hostel: "GH1", hostel_name: "Girls Hostel I", room: "GH1-A003", room_number: "A003", status: "Active", validation_status: "Validated" },
-					{ student: "REG002", full_name: "Arun Raman", register_number: "UAT26ME0007", status: "Applied", validation_status: "Pending" },
+					{
+						student: "REG001",
+						full_name: "Priya Raman",
+						register_number: "UAT24CS0012",
+						hostel: "GH1",
+						hostel_name: "Girls Hostel I",
+						room: "GH1-A003",
+						room_number: "A003",
+						status: "Active",
+						validation_status: "Validated",
+					},
+					{
+						student: "REG002",
+						full_name: "Arun Raman",
+						register_number: "UAT26ME0007",
+						status: "Applied",
+						validation_status: "Pending",
+					},
 				],
 			}),
 		);
@@ -525,7 +628,9 @@ describe("WardSwitcher", () => {
 		expect(text).not.toContain("GH1-A003");
 		expect(text).toContain("Being verified");
 
-		const arun = [...document.body.querySelectorAll("button")].find((button) => button.textContent?.includes("Arun Raman"));
+		const arun = [...document.body.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("Arun Raman"),
+		);
 		arun!.click();
 		await flushPromises();
 		expect(session.activeStudent).toBe("REG002");
@@ -537,7 +642,11 @@ describe("WardSwitcher", () => {
 describe("attachment uploads", () => {
 	it("send the ward the grievance is for", async () => {
 		const actual = await vi.importActual<typeof import("@/api/portal")>("@/api/portal");
-		const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ message: { file_url: "/private/files/a.png", file_name: "a.png" } }))));
+		const fetchMock = vi.fn(() =>
+			Promise.resolve(
+				new Response(JSON.stringify({ message: { file_url: "/private/files/a.png", file_name: "a.png" } })),
+			),
+		);
 		vi.stubGlobal("fetch", fetchMock);
 		await actual.uploadAttachment(new File(["x"], "a.png", { type: "image/png" }), "REG002");
 		const body = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;

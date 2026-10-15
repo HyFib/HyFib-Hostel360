@@ -12,6 +12,7 @@ or settling one that already exists needs only the gateway's credentials.
 import frappe
 from frappe import _
 
+from hostel360.hostel_fees.constants import TRANSACTION
 from hostel360.hostel_fees.gateways.base import (
 	GatewayError,
 	GatewayNotConfiguredError,
@@ -83,6 +84,19 @@ def get_webhook_gateway(settings=None, gateway_name: str | None = None) -> Payme
 	return get_gateway_class(gateway_name or settings.get("gateway"))(settings)
 
 
+def gateway_in_use(gateway_name: str, settings=None) -> bool:
+	"""True when the site takes payments through ``gateway_name`` or has taken some before.
+
+	Callback URLs are public. Only on a site that uses the gateway does a delivery that cannot be
+	verified point at a setup problem worth an operations alert; anywhere else it is an anonymous
+	post and must not be able to open (or keep open) an alert.
+	"""
+	settings = _settings(settings)
+	if settings.get("enabled") and (settings.get("gateway") or DEFAULT_GATEWAY) == gateway_name:
+		return True
+	return bool(frappe.db.exists(TRANSACTION, {"gateway": gateway_name}))
+
+
 def is_gateway_configured(settings=None) -> bool:
 	"""True only when online payments are enabled and the selected gateway's keys are present."""
 	settings = _settings(settings)
@@ -128,6 +142,7 @@ __all__ = [
 	"PaymentGateway",
 	"SettlementGateways",
 	"from_minor_units",
+	"gateway_in_use",
 	"get_gateway",
 	"get_gateway_code",
 	"get_settlement_gateway",

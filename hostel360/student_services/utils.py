@@ -42,6 +42,7 @@ def N_(message: str) -> str:
 	"""
 	return message
 
+
 STUDENT_FIELDS = (
 	"name",
 	"full_name",
@@ -114,7 +115,9 @@ def assert_student_eligible(student: frappe._dict, service: str) -> None:
 		)
 	if student.get("validation_status") != "Validated":
 		frappe.throw(
-			_("{0} is available once the hostel office has validated the student's registration.").format(service)
+			_("{0} is available once the hostel office has validated the student's registration.").format(
+				service
+			)
 		)
 	if not student.get("current_hostel"):
 		frappe.throw(_("{0} is not available because no room is allotted to the student.").format(service))
@@ -254,9 +257,9 @@ def is_warden_approver(user: str, hostel: str | None, student: str | None = None
 def assert_warden_approver(user: str, hostel: str | None, student: str | None = None) -> None:
 	if not is_warden_approver(user, hostel, student):
 		frappe.throw(
-			_("Only the Warden, a Hostel Administrator or a Deputy Warden of {0} can decide this request.").format(
-				hostel or _("this hostel")
-			),
+			_(
+				"Only the Warden, a Hostel Administrator or a Deputy Warden of {0} can decide this request."
+			).format(hostel or _("this hostel")),
 			frappe.PermissionError,
 		)
 

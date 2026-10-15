@@ -114,8 +114,9 @@ def guardian_query_conditions(user: str | None = None, doctype: str | None = Non
 	if not visible:
 		return ""
 	guardian = "`tabHostel Guardian`.`name`"
+	# Permission query condition: {visible} is built from escaped values (_student_visibility_sql).
 	return (
-		"(not exists (select 1 from `tabHostel Student Guardian` link"
+		"(not exists (select 1 from `tabHostel Student Guardian` link"  # noqa: S608
 		f" where link.`guardian` = {guardian} and link.`parenttype` = 'Hostel Student')"
 		" or exists (select 1 from `tabHostel Student Guardian` link"
 		" join `tabHostel Student` ward on ward.`name` = link.`parent`"
@@ -166,8 +167,9 @@ def _student_visibility_sql(user: str, alias: str) -> str:
 
 
 def _student_block_condition(table: str, restricted: dict) -> str:
+	# ``table`` is a fixed alias from this module; hostel and block names are escaped.
 	hidden = [
-		f"(ifnull({table}.`current_hostel`, '') = {frappe.db.escape(hostel)}"
+		f"(ifnull({table}.`current_hostel`, '') = {frappe.db.escape(hostel)}"  # noqa: S608
 		" and not exists (select 1 from `tabHostel Room` room"
 		f" where room.`name` = {table}.`current_room` and room.`block` in ({_sql_list(blocks)})))"
 		for hostel, blocks in sorted(restricted.items())

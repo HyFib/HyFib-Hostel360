@@ -27,7 +27,9 @@ const { busy, error, run } = useSubmit();
 const contactRows = computed(() => {
 	const data = profile.data.value;
 	if (!data) return [];
-	const address = [data.address_line1, data.address_line2, data.city, data.district, data.state, data.pincode].filter(Boolean).join(", ");
+	const address = [data.address_line1, data.address_line2, data.city, data.district, data.state, data.pincode]
+		.filter(Boolean)
+		.join(", ");
 	const email = data.email && !String(data.email).endsWith(".invalid") ? data.email : "";
 	return [
 		{ label: t("fields.email"), value: email },
@@ -48,7 +50,11 @@ async function save(updates: ProfileUpdates) {
 }
 
 async function logout() {
-	const ok = await confirm({ title: t("profile.logoutTitle"), message: t("profile.logoutConfirm"), confirmLabel: t("profile.logout") });
+	const ok = await confirm({
+		title: t("profile.logoutTitle"),
+		message: t("profile.logoutConfirm"),
+		confirmLabel: t("profile.logout"),
+	});
 	if (!ok) return;
 	await signOut();
 	resetInbox();
@@ -65,7 +71,9 @@ async function logout() {
 			<dl class="grid gap-3 text-sm sm:grid-cols-2">
 				<div>
 					<dt class="text-muted">{{ t("profile.signedInAsLabel") }}</dt>
-					<dd class="font-medium text-ink">{{ session.displayName }} · {{ isParent ? t("profile.kindParent") : t("profile.kindStudent") }}</dd>
+					<dd class="font-medium text-ink">
+						{{ session.displayName }} · {{ isParent ? t("profile.kindParent") : t("profile.kindStudent") }}
+					</dd>
 				</div>
 				<div v-if="session.mobileMasked">
 					<dt class="text-muted">{{ t("fields.mobile") }}</dt>
@@ -86,13 +94,20 @@ async function logout() {
 		<ErrorState v-else-if="profile.error.value" :error="profile.error.value" @retry="profile.reload" />
 
 		<template v-else-if="profile.data.value">
-			<p v-if="isParent" class="mb-2 text-sm font-semibold text-muted">{{ t("profile.wardDetails", { name: profile.data.value.full_name || "" }) }}</p>
+			<p v-if="isParent" class="mb-2 text-sm font-semibold text-muted">
+				{{ t("profile.wardDetails", { name: profile.data.value.full_name || "" }) }}
+			</p>
 			<ProfileSummary :profile="profile.data.value" />
 
 			<section class="card mt-4" aria-labelledby="pf-contact">
 				<div class="mb-3 flex items-center justify-between gap-2">
 					<h2 id="pf-contact" class="section-title">{{ t("profile.contactAndAddress") }}</h2>
-					<button v-if="isStudent && !editing" type="button" class="btn-ghost min-h-10 px-3 text-sm" @click="editing = true">
+					<button
+						v-if="isStudent && !editing"
+						type="button"
+						class="btn-ghost min-h-10 px-3 text-sm"
+						@click="editing = true"
+					>
 						<Pencil :size="16" aria-hidden="true" />{{ t("profile.edit") }}
 					</button>
 				</div>

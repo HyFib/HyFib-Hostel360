@@ -5,6 +5,11 @@ frappe.ui.form.on("Hostel Student", {
 	setup(frm) {
 		frm.set_query("program", () => ({ filters: { is_active: 1 } }));
 		frm.set_query("academic_year", () => ({ order_by: "start_date desc" }));
+		// A parent may already be registered for a child in another hostel, whom this desk
+		// cannot see: typing the parent's exact mobile number finds them for linking.
+		frm.set_query("guardian", "guardians", () => ({
+			query: "hostel360.hostel_people.queries.guardian_link_query",
+		}));
 	},
 
 	refresh(frm) {
@@ -22,13 +27,17 @@ frappe.ui.form.on("Hostel Student", {
 					frm
 						.call({ doc: frm.doc, method: "create_portal_user", freeze: true })
 						.then((r) => {
-							frappe.show_alert({
-								message: __("Portal user {0} created. The student signs in with an OTP sent to {1}.", [
-									r.message,
-									frm.doc.mobile_number,
-								]),
-								indicator: "green",
-							});
+							const message =
+								frm.doc.validation_status === "Validated"
+									? __("Portal user {0} created. The student signs in with an OTP sent to {1}.", [
+											r.message,
+											frm.doc.mobile_number,
+										])
+									: __(
+											"Portal user {0} created. The student can sign in with an OTP sent to {1} once the registration is validated.",
+											[r.message, frm.doc.mobile_number]
+										);
+							frappe.show_alert({ message, indicator: "green" });
 							frm.reload_doc();
 						}),
 				__("Actions")
@@ -68,7 +77,7 @@ frappe.ui.form.on("Hostel Student", {
 		const doc = frm.doc;
 		if (doc.validation_status === "Pending") {
 			frm.dashboard.set_headline_alert(
-				__("Registration is pending validation. The student can sign in and confirm details, but full portal features open only after validation."),
+				__("Registration is pending validation. Check the details against the college register and validate them. Only then can the student sign in to the portal, confirm the details and accept the privacy notice."),
 				"orange"
 			);
 		} else if (doc.validation_status === "Rejected") {

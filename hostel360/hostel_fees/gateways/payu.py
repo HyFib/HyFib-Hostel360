@@ -300,7 +300,9 @@ class PayUGateway(PaymentGateway):
 			self._log_failure(command, f"HTTP {response.status_code}: {message}")
 			if response.status_code in (401, 403) or re.search(r"hash|key|merchant", message, re.I):
 				raise GatewayError(
-					_("The payment gateway rejected the merchant credentials. Please contact the hostel office."),
+					_(
+						"The payment gateway rejected the merchant credentials. Please contact the hostel office."
+					),
 					http_status=401,
 					code="credentials",
 					detail=message,
@@ -363,7 +365,10 @@ def payu_status(status: str | None, unmapped: str | None) -> str:
 
 
 def not_found(details: dict) -> bool:
-	return "not found" in (str(details.get("status") or "").lower(), str(details.get("mihpayid") or "").lower())
+	return "not found" in (
+		str(details.get("status") or "").lower(),
+		str(details.get("mihpayid") or "").lower(),
+	)
 
 
 def payu_timestamp(value) -> int | None:
@@ -433,4 +438,3 @@ def get_return_url() -> str:
 
 def get_webhook_url() -> str:
 	return f"{get_site_base_url()}/api/method/{WEBHOOK_METHOD}"
-

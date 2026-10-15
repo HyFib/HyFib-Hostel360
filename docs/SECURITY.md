@@ -71,7 +71,7 @@ flowchart LR
 | Rate limits per signed-in user on every portal write (a campus shares public addresses) | `RATE_LIMITS` in `api/portal.py` |
 | Errors never show tracebacks to users | `allow_error_traceback = 0` in `setup/install.py` |
 | Secrets (gateway keys, SMS/WhatsApp tokens, ingest secret) are Password fields, encrypted with the site key | DocType definitions |
-| Sharing restrictions: no "share with everyone" and no shares to accounts without desk access for Hostel360 records and personal-data core records | `hostel360/security/sharing.py` (DocShare `validate` hook; active once registered in `hooks.py`) |
+| Sharing restrictions: no "share with everyone" and no shares to accounts without desk access for Hostel360 records and personal-data core records | `hostel360/security/sharing.py` (DocShare `validate` hook registered in `hooks.py`; older shares removed on every migrate) |
 
 ## 2. Authentication
 

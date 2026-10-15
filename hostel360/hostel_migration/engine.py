@@ -214,7 +214,8 @@ class MigrationEngine:
 		acquired = frappe.db.sql("SELECT GET_LOCK(%s, 0)", (lock_name,))[0][0]
 		if not cint(acquired):
 			frappe.throw(
-				_("Another migration run is in progress on this site. Wait for it to finish."), MigrationLocked
+				_("Another migration run is in progress on this site. Wait for it to finish."),
+				MigrationLocked,
 			)
 
 		previous_user = frappe.session.user
@@ -291,7 +292,9 @@ class MigrationEngine:
 		if problems:
 			for problem in problems:
 				self.log("  " + problem)
-			raise MappingError(_("The mapping does not match this site ({0} problems).").format(len(problems)))
+			raise MappingError(
+				_("The mapping does not match this site ({0} problems).").format(len(problems))
+			)
 
 	def finish(self, reconciliation: dict | None, fatal: Exception | None) -> str:
 		try:
@@ -347,7 +350,11 @@ class MigrationEngine:
 
 		lines = self.log_lines
 		if len(lines) > MAX_LOG_LINES:
-			lines = [*lines[: MAX_LOG_LINES // 2], _("... {0} lines omitted ...").format(len(lines) - MAX_LOG_LINES), *lines[-MAX_LOG_LINES // 2 :]]
+			lines = [
+				*lines[: MAX_LOG_LINES // 2],
+				_("... {0} lines omitted ...").format(len(lines) - MAX_LOG_LINES),
+				*lines[-MAX_LOG_LINES // 2 :],
+			]
 		run.log = "\n".join(lines)
 		run.flags.ignore_permissions = True
 		run.flags.from_engine = True
@@ -378,7 +385,15 @@ class MigrationEngine:
 		record = self.load_maps(entity).get(source_id)
 		return record.target_name if record else None
 
-	def save_record(self, entity: EntitySpec, source_id: str, target_doctype: str, target_name: str, checksum: str, line: int):
+	def save_record(
+		self,
+		entity: EntitySpec,
+		source_id: str,
+		target_doctype: str,
+		target_name: str,
+		checksum: str,
+		line: int,
+	):
 		records = self.load_maps(entity.name)
 		existing = records.get(source_id)
 		values = {
@@ -480,7 +495,9 @@ class MigrationEngine:
 				continue
 			if source_id in seen:
 				stats.failed += 1
-				self.record_failure(entity.name, line, source_id, _("The legacy ID appears more than once in the file."))
+				self.record_failure(
+					entity.name, line, source_id, _("The legacy ID appears more than once in the file.")
+				)
 				continue
 			seen.add(source_id)
 
@@ -582,21 +599,29 @@ class MigrationEngine:
 
 		record = self.load_maps(entity.name).get(source_id)
 		target = None
-		if record and record.target_doctype == entity.doctype and frappe.db.exists(entity.doctype, record.target_name):
+		if (
+			record
+			and record.target_doctype == entity.doctype
+			and frappe.db.exists(entity.doctype, record.target_name)
+		):
 			target = record.target_name
 		if not target and entity.match_on:
 			target = self.find_match(entity, built.values)
 
 		if target and record and record.target_name == target and record.row_checksum == checksum:
 			for fieldname, (relative, _path, sha256) in files.items():
-				pending.append(self.check_kept_attachment(entity, source_id, target, fieldname, relative, sha256))
+				pending.append(
+					self.check_kept_attachment(entity, source_id, target, fieldname, relative, sha256)
+				)
 			return "skipped"
 
 		if target:
 			doc = frappe.get_doc(entity.doctype, target)
 			if doc.docstatus == 2:
 				raise RowError(
-					_("{0} {1} is cancelled in Hostel360; the legacy row was not applied.").format(entity.doctype, target)
+					_("{0} {1} is cancelled in Hostel360; the legacy row was not applied.").format(
+						entity.doctype, target
+					)
 				)
 			if doc.docstatus == 1:
 				if entity.on_submitted_change == "skip":
@@ -641,7 +666,11 @@ class MigrationEngine:
 			}
 			if not self.dry_run:
 				result = attach_file(doc, fieldname, path, sha256)
-				entry.update(target_file=result["file_url"], target_sha256=result["target_sha256"], status=result["status"])
+				entry.update(
+					target_file=result["file_url"],
+					target_sha256=result["target_sha256"],
+					status=result["status"],
+				)
 			pending.append(entry)
 
 		self.save_record(entity, source_id, entity.doctype, doc.name, checksum, line)
@@ -698,7 +727,9 @@ class MigrationEngine:
 
 		parent = frappe.get_doc(entity.doctype, parent_name)
 		if parent.docstatus != 0:
-			raise RowError(_("{0} {1} is submitted; its rows cannot be changed.").format(entity.doctype, parent_name))
+			raise RowError(
+				_("{0} {1} is submitted; its rows cannot be changed.").format(entity.doctype, parent_name)
+			)
 
 		rows = parent.get(entity.table) or []
 		child = None
@@ -706,7 +737,9 @@ class MigrationEngine:
 			child = next((r for r in rows if r.name == record.target_name), None)
 		if not child and entity.match_field:
 			wanted = built.values.get(entity.match_field)
-			child = next((r for r in rows if wanted is not None and r.get(entity.match_field) == wanted), None)
+			child = next(
+				(r for r in rows if wanted is not None and r.get(entity.match_field) == wanted), None
+			)
 
 		values = {k: v for k, v in built.values.items() if v is not None}
 		if child:
@@ -776,7 +809,10 @@ def run_in_background(run: str) -> None:
 	except MigrationLocked:
 		frappe.db.set_value(RUN_DOCTYPE, run, "status", STATUS_DRAFT)
 		frappe.db.set_value(
-			RUN_DOCTYPE, run, "log", _("Another migration was running; start this run again when it has finished.")
+			RUN_DOCTYPE,
+			run,
+			"log",
+			_("Another migration was running; start this run again when it has finished."),
 		)
 		frappe.db.commit()  # nosemgrep
 

@@ -21,10 +21,17 @@ def tiny_png(rgb=(10, 120, 200)) -> bytes:
 	raw = b"".join(b"\x00" + bytes(rgb) * 4 for _ in range(4))
 
 	def chunk(tag, data):
-		return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+		return (
+			struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+		)
 
 	header = struct.pack(">IIBBBBB", 4, 4, 8, 2, 0, 0, 0)
-	return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+	return (
+		b"\x89PNG\r\n\x1a\n"
+		+ chunk(b"IHDR", header)
+		+ chunk(b"IDAT", zlib.compress(raw))
+		+ chunk(b"IEND", b"")
+	)
 
 
 class LegacyExport:
@@ -37,7 +44,10 @@ class LegacyExport:
 		self.hostel_code = f"T{self.tag}"
 		self.mobiles = [self.mobile() for _i in range(8)]
 		self.files = {
-			"hostels.csv": [["id", "code", "name", "type"], ["H1", self.hostel_code.lower(), "TEST HOSTEL", "BOYS"]],
+			"hostels.csv": [
+				["id", "code", "name", "type"],
+				["H1", self.hostel_code.lower(), "TEST HOSTEL", "BOYS"],
+			],
 			"rooms.csv": [
 				["id", "hostel_id", "room_no", "type", "beds"],
 				["R1", "H1", "101", "2 SHARING", "2"],
@@ -45,7 +55,15 @@ class LegacyExport:
 			],
 			"students.csv": [
 				["id", "reg", "name", "sex", "mobile", "city", "photo"],
-				["S1", f"t{self.tag}1", "ARUN KUMAR", "M", f"+91 {self.mobiles[0]}", "karaikudi", "photo1.png"],
+				[
+					"S1",
+					f"t{self.tag}1",
+					"ARUN KUMAR",
+					"M",
+					f"+91 {self.mobiles[0]}",
+					"karaikudi",
+					"photo1.png",
+				],
 				["S2", f"T{self.tag}2", "Karthik Raja", "M", self.mobiles[1], "Madurai", ""],
 				["S3", f"T{self.tag}3", "Surya", "M", f"0{self.mobiles[2]}", "Theni", ""],
 			],
@@ -106,7 +124,11 @@ class LegacyExport:
 					"fields": {
 						"hostel_code": {"column": "code", "transforms": ["upper"], "required": True},
 						"hostel_name": {"column": "name", "transforms": ["title"]},
-						"gender": {"column": "type", "value_map": {"BOYS": "Male", "GIRLS": "Female"}, "strict": True},
+						"gender": {
+							"column": "type",
+							"value_map": {"BOYS": "Male", "GIRLS": "Female"},
+							"strict": True,
+						},
 					},
 				},
 				"rooms": {
@@ -116,7 +138,11 @@ class LegacyExport:
 					"fields": {
 						"hostel": lookup("hostels", "hostel_id"),
 						"room_number": {"column": "room_no", "required": True},
-						"room_type": {"column": "type", "value_map": {"2 SHARING": "Double", "3 SHARING": "Triple"}, "strict": True},
+						"room_type": {
+							"column": "type",
+							"value_map": {"2 SHARING": "Double", "3 SHARING": "Triple"},
+							"strict": True,
+						},
 						"capacity": {"column": "beds", "transforms": ["integer"]},
 					},
 				},
@@ -126,9 +152,19 @@ class LegacyExport:
 					"key": "id",
 					"fields": {
 						"register_number": {"column": "reg", "transforms": ["upper"], "required": True},
-						"first_name": {"column": "name", "transforms": ["title", {"name": "split_name", "part": "first"}]},
-						"last_name": {"column": "name", "transforms": ["title", {"name": "split_name", "part": "last"}]},
-						"gender": {"column": "sex", "value_map": {"M": "Male", "F": "Female"}, "strict": True},
+						"first_name": {
+							"column": "name",
+							"transforms": ["title", {"name": "split_name", "part": "first"}],
+						},
+						"last_name": {
+							"column": "name",
+							"transforms": ["title", {"name": "split_name", "part": "last"}],
+						},
+						"gender": {
+							"column": "sex",
+							"value_map": {"M": "Male", "F": "Female"},
+							"strict": True,
+						},
 						"mobile_number": {"column": "mobile", "transforms": ["mobile"], "required": True},
 						"city": {"column": "city", "transforms": ["title"]},
 						"validation_status": {"value": "Validated"},
@@ -162,13 +198,25 @@ class LegacyExport:
 					},
 					"children": {
 						"items": [
-							{"$when": "rent", "fee_head": {"value": "Hostel Rent"}, "amount": {"column": "rent", "transforms": ["decimal"]}},
-							{"$when": "electricity", "fee_head": {"value": "Electricity Charges"}, "amount": {"column": "electricity", "transforms": ["decimal"]}},
+							{
+								"$when": "rent",
+								"fee_head": {"value": "Hostel Rent"},
+								"amount": {"column": "rent", "transforms": ["decimal"]},
+							},
+							{
+								"$when": "electricity",
+								"fee_head": {"value": "Electricity Charges"},
+								"amount": {"column": "electricity", "transforms": ["decimal"]},
+							},
 						]
 					},
 					"reconcile": [
 						{"label": "Invoice total", "source_column": "total", "target_field": "total_amount"},
-						{"label": "Outstanding", "source_column": "balance", "target_field": "outstanding_amount"},
+						{
+							"label": "Outstanding",
+							"source_column": "balance",
+							"target_field": "outstanding_amount",
+						},
 					],
 				},
 				"payments": {
@@ -179,12 +227,19 @@ class LegacyExport:
 					"fields": {
 						"student": lookup("students", "stud"),
 						"payment_date": {"column": "date", "transforms": ["date"]},
-						"mode_of_payment": {"column": "mode", "value_map": {"UPI": "UPI", "CASH": "Cash"}, "strict": True},
+						"mode_of_payment": {
+							"column": "mode",
+							"value_map": {"UPI": "UPI", "CASH": "Cash"},
+							"strict": True,
+						},
 						"amount": {"column": "amount", "transforms": ["decimal"]},
 					},
 					"children": {
 						"allocations": [
-							{"invoice": {"column": "inv", "lookup": "invoices"}, "allocated_amount": {"column": "amount", "transforms": ["decimal"]}}
+							{
+								"invoice": {"column": "inv", "lookup": "invoices"},
+								"allocated_amount": {"column": "amount", "transforms": ["decimal"]},
+							}
 						]
 					},
 					"reconcile": [{"label": "Receipts", "source_column": "amount", "target_field": "amount"}],
@@ -213,7 +268,11 @@ class TestMigrationEngine(IntegrationTestCase):
 	def target(self, entity: str, source_id: str) -> str | None:
 		return frappe.db.get_value(
 			"Migration Record Map",
-			{"source_system": f"engine-test-{self.export.tag.lower()}", "source_entity": entity, "source_id": source_id},
+			{
+				"source_system": f"engine-test-{self.export.tag.lower()}",
+				"source_entity": entity,
+				"source_id": source_id,
+			},
 			"target_name",
 		)
 
@@ -226,13 +285,17 @@ class TestMigrationEngine(IntegrationTestCase):
 
 		student = frappe.get_doc("Hostel Student", self.target("students", "S1"))
 		self.assertEqual(student.register_number, f"T{self.export.tag}1")
-		self.assertEqual((student.first_name, student.last_name, student.city), ("Arun", "Kumar", "Karaikudi"))
+		self.assertEqual(
+			(student.first_name, student.last_name, student.city), ("Arun", "Kumar", "Karaikudi")
+		)
 		self.assertEqual(student.mobile_number, self.export.mobiles[0])
 		self.assertEqual(student.current_bed, f"{self.export.hostel_code}-101-A")
 		self.assertEqual(frappe.db.get_value("Hostel Bed", student.current_bed, "status"), "Occupied")
 
 		invoice = frappe.get_doc("Hostel Fee Invoice", self.target("invoices", "I2"))
-		self.assertEqual((invoice.total_amount, invoice.paid_amount, invoice.outstanding_amount), (12000, 10000, 2000))
+		self.assertEqual(
+			(invoice.total_amount, invoice.paid_amount, invoice.outstanding_amount), (12000, 10000, 2000)
+		)
 		self.assertEqual([row.fee_head for row in invoice.items], ["Hostel Rent"])
 		totals = {t["label"]: t for t in first.recon["totals"]}
 		self.assertEqual(totals["Invoice total"]["source_total"], 41000)
@@ -248,7 +311,9 @@ class TestMigrationEngine(IntegrationTestCase):
 		third = self.export.run()
 		self.assertEqual(third.counts["students"].updated, 1)
 		self.assertEqual(third.counts["students"].skipped, 2)
-		self.assertEqual(frappe.db.get_value("Hostel Student", self.target("students", "S2"), "city"), "Sivakasi")
+		self.assertEqual(
+			frappe.db.get_value("Hostel Student", self.target("students", "S2"), "city"), "Sivakasi"
+		)
 
 	def test_dry_run_keeps_only_the_report(self):
 		maps_before = frappe.db.count("Migration Record Map")
@@ -260,7 +325,9 @@ class TestMigrationEngine(IntegrationTestCase):
 		self.assertEqual(frappe.db.count("Migration Record Map"), maps_before)
 		self.assertTrue(result.doc.report_file and result.doc.report_markdown and result.doc.report_json)
 		attached = frappe.get_all(
-			"File", filters={"attached_to_doctype": "Migration Run", "attached_to_name": result.doc.name}, pluck="is_private"
+			"File",
+			filters={"attached_to_doctype": "Migration Run", "attached_to_name": result.doc.name},
+			pluck="is_private",
 		)
 		self.assertEqual(attached, [1, 1, 1])
 		self.assertEqual(result.recon["attachments"]["checked_dry_run"], 1)
@@ -318,7 +385,8 @@ class TestMigrationEngine(IntegrationTestCase):
 		self.export.set_cell("students.csv", "S1", "city", "Devakottai")
 		self.export.run()
 		count = frappe.db.count(
-			"File", {"attached_to_doctype": "Hostel Student", "attached_to_name": self.target("students", "S1")}
+			"File",
+			{"attached_to_doctype": "Hostel Student", "attached_to_name": self.target("students", "S1")},
 		)
 		self.assertEqual(count, 1)
 
@@ -336,7 +404,12 @@ class TestMigrationEngine(IntegrationTestCase):
 
 	def test_match_on_adopts_existing_records(self):
 		frappe.get_doc(
-			{"doctype": "Hostel", "hostel_code": self.export.hostel_code, "hostel_name": "Already Here", "gender": "Male"}
+			{
+				"doctype": "Hostel",
+				"hostel_code": self.export.hostel_code,
+				"hostel_name": "Already Here",
+				"gender": "Male",
+			}
 		).insert()
 		frappe.db.commit()  # nosemgrep
 		result = self.export.run(entities=["hostels"])
@@ -364,12 +437,16 @@ class TestMigrationEngine(IntegrationTestCase):
 	def test_desk_runs_read_only_the_migration_folder(self):
 		with self.assertRaises(frappe.PermissionError):
 			resolve_source_dir(self.export.folder, restrict=True)
-		self.assertEqual(resolve_source_dir(self.export.folder, restrict=False), os.path.realpath(self.export.folder))
+		self.assertEqual(
+			resolve_source_dir(self.export.folder, restrict=False), os.path.realpath(self.export.folder)
+		)
 
 		inside = frappe.get_site_path("private", "migration", f"test-{self.export.tag}")
 		os.makedirs(inside)
 		self.addCleanup(shutil.rmtree, inside, True)
-		self.assertEqual(resolve_source_dir(f"test-{self.export.tag}", restrict=True), os.path.realpath(inside))
+		self.assertEqual(
+			resolve_source_dir(f"test-{self.export.tag}", restrict=True), os.path.realpath(inside)
+		)
 		with self.assertRaises(frappe.PermissionError):
 			resolve_source_dir(f"test-{self.export.tag}/../../..", restrict=True)
 
@@ -391,5 +468,7 @@ class TestSampleMigration(IntegrationTestCase):
 		self.assertEqual(totals["Mess bills total"], 12371.25)
 		self.assertEqual(totals["Receipts total"], 112830.5)
 		students = next(e for e in recon["entities"] if e["entity"] == "students")
-		self.assertEqual((students["source_rows"], students["excluded"], students["target_records"]), (9, 1, 8))
+		self.assertEqual(
+			(students["source_rows"], students["excluded"], students["target_records"]), (9, 1, 8)
+		)
 		self.assertEqual(frappe.db.count("Migration Record Map"), maps_before)

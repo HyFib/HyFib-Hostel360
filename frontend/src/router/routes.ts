@@ -33,7 +33,12 @@ export const routes: RouteRecordRaw[] = [
 		component: () => import("@/views/ConfirmDetailsView.vue"),
 		meta: { kind: "student", firstRun: true, title: "confirm.title" },
 	},
-	{ path: "/profile", name: "profile", component: () => import("@/views/ProfileView.vue"), meta: { title: "profile.title" } },
+	{
+		path: "/profile",
+		name: "profile",
+		component: () => import("@/views/ProfileView.vue"),
+		meta: { title: "profile.title" },
+	},
 	{ path: "/more", name: "more", component: () => import("@/views/MoreView.vue"), meta: { title: "nav.more" } },
 	{
 		path: "/fees",

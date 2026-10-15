@@ -23,7 +23,9 @@ def make_export(root: str, files: dict[str, bytes]) -> dict:
 		os.makedirs(os.path.dirname(path), exist_ok=True)
 		with open(path, "wb") as f:
 			f.write(content)
-		entries.append({"path": relative, "size": len(content), "sha256": hashlib.sha256(content).hexdigest()})
+		entries.append(
+			{"path": relative, "size": len(content), "sha256": hashlib.sha256(content).hexdigest()}
+		)
 	manifest = {
 		"format": "hostel360-exit-export",
 		"format_version": 1,

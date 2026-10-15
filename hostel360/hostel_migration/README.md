@@ -327,23 +327,25 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 HEADER = struct.Struct(">8sBBBBB16s7sI")
 
+
 def decrypt(src, dst, passphrase):
-    with open(src, "rb") as f, open(dst, "wb") as out:
-        header = f.read(HEADER.size)
-        magic, version, kdf, log2_n, r, p, salt, prefix, _chunk = HEADER.unpack(header)
-        assert magic == b"H360ENC1" and version == 1 and kdf == 1
-        aead = AESGCM(Scrypt(salt=salt, length=32, n=2**log2_n, r=r, p=p).derive(passphrase.encode()))
+	with open(src, "rb") as f, open(dst, "wb") as out:
+		header = f.read(HEADER.size)
+		magic, version, kdf, log2_n, r, p, salt, prefix, _chunk = HEADER.unpack(header)
+		assert magic == b"H360ENC1" and version == 1 and kdf == 1
+		aead = AESGCM(Scrypt(salt=salt, length=32, n=2**log2_n, r=r, p=p).derive(passphrase.encode()))
 
-        def record():
-            raw = f.read(4)
-            return f.read(struct.unpack(">I", raw)[0]) if raw else None
+		def record():
+			raw = f.read(4)
+			return f.read(struct.unpack(">I", raw)[0]) if raw else None
 
-        sealed, index = record(), 0
-        while sealed is not None:
-            following = record()
-            nonce = prefix + struct.pack(">I", index) + (b"\x01" if following is None else b"\x00")
-            out.write(aead.decrypt(nonce, sealed, header))
-            sealed, index = following, index + 1
+		sealed, index = record(), 0
+		while sealed is not None:
+			following = record()
+			nonce = prefix + struct.pack(">I", index) + (b"\x01" if following is None else b"\x00")
+			out.write(aead.decrypt(nonce, sealed, header))
+			sealed, index = following, index + 1
+
 
 decrypt(sys.argv[1], sys.argv[2], input("Passphrase: "))
 ```

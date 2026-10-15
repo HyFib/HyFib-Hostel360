@@ -64,11 +64,29 @@ def get_rows(filters, from_date, to_date):
 
 def get_columns():
 	return [
-		{"fieldname": "name", "label": _("Request"), "fieldtype": "Link", "options": "Bonafide Certificate Request", "width": 150},
+		{
+			"fieldname": "name",
+			"label": _("Request"),
+			"fieldtype": "Link",
+			"options": "Bonafide Certificate Request",
+			"width": 150,
+		},
 		{"fieldname": "requested_on", "label": _("Requested On"), "fieldtype": "Date", "width": 110},
-		{"fieldname": "student", "label": _("Student"), "fieldtype": "Link", "options": "Hostel Student", "width": 120},
+		{
+			"fieldname": "student",
+			"label": _("Student"),
+			"fieldtype": "Link",
+			"options": "Hostel Student",
+			"width": 120,
+		},
 		{"fieldname": "student_name", "label": _("Student Name"), "fieldtype": "Data", "width": 170},
-		{"fieldname": "program", "label": _("Program"), "fieldtype": "Link", "options": "Academic Program", "width": 150},
+		{
+			"fieldname": "program",
+			"label": _("Program"),
+			"fieldtype": "Link",
+			"options": "Academic Program",
+			"width": 150,
+		},
 		{"fieldname": "year_of_study", "label": _("Year"), "fieldtype": "Data", "width": 60},
 		{"fieldname": "hostel", "label": _("Hostel"), "fieldtype": "Link", "options": "Hostel", "width": 90},
 		{"fieldname": "purpose", "label": _("Purpose"), "fieldtype": "Data", "width": 120},
@@ -78,7 +96,13 @@ def get_columns():
 		{"fieldname": "issue_date", "label": _("Issue Date"), "fieldtype": "Date", "width": 100},
 		{"fieldname": "valid_till", "label": _("Valid Till"), "fieldtype": "Date", "width": 100},
 		{"fieldname": "validity", "label": _("Validity"), "fieldtype": "Data", "width": 80},
-		{"fieldname": "approved_by", "label": _("Decided By"), "fieldtype": "Link", "options": "User", "width": 150},
+		{
+			"fieldname": "approved_by",
+			"label": _("Decided By"),
+			"fieldtype": "Link",
+			"options": "User",
+			"width": 150,
+		},
 		{"fieldname": "approved_on", "label": _("Decided On"), "fieldtype": "Datetime", "width": 150},
 		{"fieldname": "rejection_reason", "label": _("Rejection Reason"), "fieldtype": "Data", "width": 180},
 		{"fieldname": "issued_on", "label": _("Handed Over On"), "fieldtype": "Datetime", "width": 150},

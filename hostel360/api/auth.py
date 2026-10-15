@@ -15,6 +15,7 @@ from frappe.utils import cstr
 
 from hostel360.auth import otp as otp_codes
 from hostel360.setup.roles import ADMIN_ROLE, OFFICE_ROLE, WARDEN_ROLE
+from hostel360.utils.validation import mask_mobile
 
 PORTAL_REDIRECT = "/hostel"
 FLOOD_LIMIT_PER_HOUR = 3000
@@ -22,6 +23,8 @@ FLOOD_LIMIT_PER_HOUR = 3000
 TRUSTED_FLOOD_LIMIT_PER_HOUR = 100_000
 # Staff who may lift a sign-in lock after confirming with the number's owner.
 UNLOCK_ROLES = (ADMIN_ROLE, WARDEN_ROLE, OFFICE_ROLE, "System Manager")
+# Records whose mobile number is a portal sign-in.
+UNLOCK_DOCTYPES = ("Hostel Student", "Hostel Guardian")
 
 
 def _client_ip() -> str | None:
@@ -74,16 +77,63 @@ def verify_otp(mobile: str, otp: str, kind: str | None = None) -> dict:
 
 
 @frappe.whitelist(methods=["POST"])
-def unlock_sign_in(mobile: str) -> dict:
+def unlock_sign_in(mobile: str | None = None, doctype: str | None = None, name: str | None = None) -> dict:
 	"""Lift the one-hour sign-in lock on a number (desk staff only).
 
 	The lock follows repeated wrong codes. When the student or parent calls the office,
 	staff confirm who they are and can let them try again straight away.
+
+	``doctype`` and ``name`` (a Hostel Student or Hostel Guardian) say whose number it is,
+	as the student and guardian forms send them; the saved number of that record is
+	unlocked. With ``mobile`` alone, every student and guardian holding the number must
+	be within the caller's hostels. Either way staff scoped to some hostels cannot lift
+	the lock of another hostel's student or parent.
 	"""
 	frappe.only_for(UNLOCK_ROLES)
-	otp_codes.unlock_number(mobile)
-	otp_codes.security_log("otp_number_unlocked", mobile, _client_ip(), by_hash=_user_hash())
+	number = _number_to_unlock(cstr(mobile).strip(), cstr(doctype).strip(), cstr(name).strip())
+	otp_codes.unlock_number(number)
+	otp_codes.security_log(
+		"otp_number_unlocked", number, _client_ip(), by_hash=_user_hash(), record=doctype or None
+	)
 	return {"ok": True}
+
+
+def _number_to_unlock(mobile: str, doctype: str, name: str) -> str:
+	if doctype or name:
+		if doctype not in UNLOCK_DOCTYPES or not name:
+			frappe.throw(_("Sign-in can only be unlocked for a Hostel Student or a Hostel Guardian."))
+		record = frappe.db.get_value(doctype, name, ["name", "mobile_number"], as_dict=True)
+		# One answer for a missing record and for one outside the caller's hostels, so the
+		# endpoint does not tell scoped staff which records exist elsewhere.
+		if not record or not frappe.has_permission(doctype, "read", doc=record.name):
+			_refuse_unlock(mobile)
+		if not record.mobile_number:
+			frappe.throw(_("{0} {1} has no mobile number saved.").format(_(doctype), frappe.bold(name)))
+		number = otp_codes.normalised_number(record.mobile_number)
+		if mobile and otp_codes.normalised_number(mobile) != number:
+			frappe.throw(
+				_("{0} is not the mobile number saved on {1}. Save the record first, then unlock.").format(
+					frappe.bold(mask_mobile(mobile)), frappe.bold(name)
+				)
+			)
+		return number
+
+	if not mobile:
+		frappe.throw(_("Please enter a valid 10-digit mobile number."))
+	number = otp_codes.normalised_number(mobile)
+	for holder_doctype in UNLOCK_DOCTYPES:
+		holders = frappe.get_all(holder_doctype, filters={"mobile_number": number}, pluck="name")
+		if not all(frappe.has_permission(holder_doctype, "read", doc=holder) for holder in holders):
+			_refuse_unlock(number)
+	return number
+
+
+def _refuse_unlock(mobile: str | None) -> None:
+	otp_codes.security_log("otp_unlock_refused", mobile, _client_ip(), by_hash=_user_hash())
+	frappe.throw(
+		_("You can only unlock sign-in for students and parents of the hostels you look after."),
+		frappe.PermissionError,
+	)
 
 
 @frappe.whitelist(methods=["GET", "POST"])

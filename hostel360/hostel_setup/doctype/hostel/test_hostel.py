@@ -11,7 +11,10 @@ from hostel360.hostel_setup.occupancy import refresh_all, refresh_hostel
 class TestHostelOccupancy(IntegrationTestCase):
 	def counters(self, hostel):
 		return frappe.db.get_value(
-			"Hostel", hostel, ["total_capacity", "occupied_beds", "vacant_beds", "occupancy_percent"], as_dict=True
+			"Hostel",
+			hostel,
+			["total_capacity", "occupied_beds", "vacant_beds", "occupancy_percent"],
+			as_dict=True,
 		)
 
 	def test_occupancy_math(self):

@@ -91,7 +91,9 @@ class SecurityIncident(Document):
 					title=_("Reports Missing"),
 				)
 			if not (self.assessment_notes or "").strip():
-				frappe.throw(_("Add assessment notes before closing the incident."), title=_("Assessment Required"))
+				frappe.throw(
+					_("Add assessment notes before closing the incident."), title=_("Assessment Required")
+				)
 			self.closed_on = self.closed_on or now_datetime()
 		else:
 			self.closed_on = None
@@ -125,7 +127,9 @@ class SecurityIncident(Document):
 					"comment_type": "Info",
 					"reference_doctype": ALERT_DOCTYPE,
 					"reference_name": self.ops_alert,
-					"content": _("Security Incident {0} declared by {1}.").format(self.name, frappe.session.user),
+					"content": _("Security Incident {0} declared by {1}.").format(
+						self.name, frappe.session.user
+					),
 				}
 			).insert(ignore_permissions=True)
 

@@ -14,7 +14,9 @@ PURGE_BATCH_SIZE = 10_000
 RECEIPT_RETENTION_DAYS = 3
 
 
-def purge_old_metric_samples(retention_days: int = METRIC_RETENTION_DAYS, batch_size: int = PURGE_BATCH_SIZE) -> int:
+def purge_old_metric_samples(
+	retention_days: int = METRIC_RETENTION_DAYS, batch_size: int = PURGE_BATCH_SIZE
+) -> int:
 	"""Delete metric samples older than the retention period, in batches.
 
 	400 days keeps a full year for the monthly reports plus the 180-day log retention the
@@ -37,7 +39,9 @@ def purge_old_metric_samples(retention_days: int = METRIC_RETENTION_DAYS, batch_
 		if len(names) < batch_size:
 			break
 	if deleted:
-		frappe.logger("hostel360").info(f"Purged {deleted} ops metric samples older than {retention_days} days")
+		frappe.logger("hostel360").info(
+			f"Purged {deleted} ops metric samples older than {retention_days} days"
+		)
 
 	# The same daily run keeps the ingest receipt table small.
 	try:
@@ -47,7 +51,9 @@ def purge_old_metric_samples(retention_days: int = METRIC_RETENTION_DAYS, batch_
 	return deleted
 
 
-def purge_ingest_receipts(retention_days: int = RECEIPT_RETENTION_DAYS, batch_size: int = PURGE_BATCH_SIZE) -> int:
+def purge_ingest_receipts(
+	retention_days: int = RECEIPT_RETENTION_DAYS, batch_size: int = PURGE_BATCH_SIZE
+) -> int:
 	"""Delete host agent receipts that no retry can refer to any more."""
 	if not frappe.db.table_exists(RECEIPT_DOCTYPE):
 		return 0

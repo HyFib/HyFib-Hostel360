@@ -156,7 +156,11 @@ onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 		<ErrorState v-else-if="fees.error.value" :error="fees.error.value" @retry="fees.reload" />
 
 		<template v-else-if="!payable.length">
-			<p v-if="problem" class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+			<p
+				v-if="problem"
+				class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+				role="alert"
+			>
 				<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ problem }}
 			</p>
 			<EmptyState :title="t('pay.nothingToPay')" :body="t('pay.nothingToPayHint')">
@@ -172,7 +176,10 @@ onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 						<div class="min-w-0">
 							<p class="font-medium text-ink">{{ tv("invoiceTypes", invoice.invoice_type) }}</p>
 							<p class="text-xs text-muted">
-								{{ invoice.name }}<template v-if="invoice.due_date"> · {{ t("fees.dueOn", { date: formatDate(invoice.due_date) }) }}</template>
+								{{ invoice.name
+								}}<template v-if="invoice.due_date">
+									· {{ t("fees.dueOn", { date: formatDate(invoice.due_date) }) }}</template
+								>
 							</p>
 						</div>
 						<p class="shrink-0 font-semibold text-ink">{{ formatINR(invoice.outstanding_amount, "always") }}</p>
@@ -184,14 +191,25 @@ onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 				</div>
 			</section>
 
-			<p v-if="problem" class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+			<p
+				v-if="problem"
+				class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+				role="alert"
+			>
 				<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ problem }}
 			</p>
 
-			<p v-if="!onlineEnabled" class="card mt-4 bg-info-soft text-sm text-info" role="status">{{ t("fees.paymentDisabled") }}</p>
+			<p v-if="!onlineEnabled" class="card mt-4 bg-info-soft text-sm text-info" role="status">
+				{{ t("fees.paymentDisabled") }}
+			</p>
 
 			<template v-else>
-				<p v-if="testMode" class="mt-4 flex items-start gap-2 rounded-xl bg-info-soft p-3 text-sm font-medium text-info" role="status" data-test="test-mode">
+				<p
+					v-if="testMode"
+					class="mt-4 flex items-start gap-2 rounded-xl bg-info-soft p-3 text-sm font-medium text-info"
+					role="status"
+					data-test="test-mode"
+				>
 					<FlaskConical :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("pay.testMode") }}
 				</p>
 				<button
@@ -212,10 +230,18 @@ onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 				<p class="mt-3 flex items-start gap-2 text-xs text-muted">
 					<Lock :size="14" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("pay.secure") }}
 				</p>
-				<p v-if="phase === 'redirecting'" class="mt-3 rounded-xl bg-info-soft p-3 text-sm font-medium text-info" role="status">
+				<p
+					v-if="phase === 'redirecting'"
+					class="mt-3 rounded-xl bg-info-soft p-3 text-sm font-medium text-info"
+					role="status"
+				>
 					{{ t("pay.redirectingHint") }}
 				</p>
-				<p v-if="phase === 'confirming'" class="mt-3 rounded-xl bg-warning-soft p-3 text-sm font-medium text-warning" role="status">
+				<p
+					v-if="phase === 'confirming'"
+					class="mt-3 rounded-xl bg-warning-soft p-3 text-sm font-medium text-warning"
+					role="status"
+				>
 					{{ t("pay.dontClose") }}
 				</p>
 				<div v-if="phase === 'checkout'" class="mt-3 text-center">

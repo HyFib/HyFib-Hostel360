@@ -433,6 +433,8 @@ class TestMessBillRun(IntegrationTestCase):
 		self.assertIn("1,20,000.00", summary)
 		self.assertNotIn("no such element", summary)
 		self.assertNotIn("no such element", html)
+		for rendered in (html, summary):
+			self.assertIn('"Noto Sans Tamil"', rendered)
 
 	# ------------------------------------------------------------------ endpoints and jobs
 

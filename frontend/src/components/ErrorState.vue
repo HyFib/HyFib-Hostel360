@@ -11,12 +11,7 @@ const offline = computed(() => props.error?.isNetwork ?? false);
 </script>
 
 <template>
-	<div
-		v-if="error"
-		role="alert"
-		class="card flex items-start gap-3"
-		:class="compact ? 'p-3' : 'p-5'"
-	>
+	<div v-if="error" role="alert" class="card flex items-start gap-3" :class="compact ? 'p-3' : 'p-5'">
 		<span class="mt-0.5 text-danger" aria-hidden="true">
 			<WifiOff v-if="offline" :size="22" />
 			<CircleAlert v-else :size="22" />

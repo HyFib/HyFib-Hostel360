@@ -12,8 +12,8 @@ from hostel360.hostel_people.doctype.room_allotment.room_allotment import (
 	BedNotAvailableError,
 	DuplicateAllotmentError,
 	GenderMismatchError,
+	allot_bed,
 )
-from hostel360.hostel_people.doctype.room_allotment.room_allotment import allot_bed
 from hostel360.hostel_people.tasks import close_ended_allotments
 from hostel360.hostel_people.testing import allot, beds_of, make_hostel, make_room, make_staff, make_student
 
@@ -31,8 +31,13 @@ class TestRoomAllotment(IntegrationTestCase):
 		self.assertEqual(allotment.status, "Active")
 		self.assertEqual(allotment.hostel, self.hostel.name)
 		self.assertEqual(allotment.room, self.room.name)
-		bed = frappe.db.get_value("Hostel Bed", self.bed_a, ["status", "current_student", "current_allotment"], as_dict=True)
-		self.assertEqual((bed.status, bed.current_student, bed.current_allotment), ("Occupied", student.name, allotment.name))
+		bed = frappe.db.get_value(
+			"Hostel Bed", self.bed_a, ["status", "current_student", "current_allotment"], as_dict=True
+		)
+		self.assertEqual(
+			(bed.status, bed.current_student, bed.current_allotment),
+			("Occupied", student.name, allotment.name),
+		)
 
 		student.reload()
 		self.assertEqual(student.current_hostel, self.hostel.name)
@@ -67,10 +72,20 @@ class TestRoomAllotment(IntegrationTestCase):
 
 	def test_draft_for_occupied_bed_cannot_be_submitted(self):
 		first = frappe.get_doc(
-			{"doctype": "Room Allotment", "student": make_student("Male").name, "bed": self.bed_a, "from_date": nowdate()}
+			{
+				"doctype": "Room Allotment",
+				"student": make_student("Male").name,
+				"bed": self.bed_a,
+				"from_date": nowdate(),
+			}
 		).insert()
 		second = frappe.get_doc(
-			{"doctype": "Room Allotment", "student": make_student("Male").name, "bed": self.bed_a, "from_date": nowdate()}
+			{
+				"doctype": "Room Allotment",
+				"student": make_student("Male").name,
+				"bed": self.bed_a,
+				"from_date": nowdate(),
+			}
 		).insert()
 		first.submit()
 		with self.assertRaises(BedNotAvailableError):
@@ -113,7 +128,9 @@ class TestRoomAllotment(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Hostel Room", self.room.name, "occupied_beds"), 0)
 		self.assertEqual(frappe.db.get_value("Hostel Room", other_room.name, "status"), "Full")
 
-		history = frappe.get_all("Room Allotment", filters={"student": student.name, "docstatus": 1}, pluck="status")
+		history = frappe.get_all(
+			"Room Allotment", filters={"student": student.name, "docstatus": 1}, pluck="status"
+		)
 		self.assertEqual(sorted(history), ["Active", "Transferred"])
 
 		# Transferred history is permanent.
@@ -134,8 +151,12 @@ class TestRoomAllotment(IntegrationTestCase):
 		allotment = allot(student.name, self.bed_a, from_date=add_days(nowdate(), -10))
 
 		self.assertRaises(frappe.ValidationError, allotment.vacate, vacated_on=nowdate(), reason="")
-		self.assertRaises(frappe.ValidationError, allotment.vacate, vacated_on=add_days(nowdate(), 2), reason="Leaving")
-		self.assertRaises(frappe.ValidationError, allotment.vacate, vacated_on=add_days(nowdate(), -20), reason="Leaving")
+		self.assertRaises(
+			frappe.ValidationError, allotment.vacate, vacated_on=add_days(nowdate(), 2), reason="Leaving"
+		)
+		self.assertRaises(
+			frappe.ValidationError, allotment.vacate, vacated_on=add_days(nowdate(), -20), reason="Leaving"
+		)
 
 		allotment.vacate(vacated_on=nowdate(), reason="Course completed")
 		allotment.reload()
@@ -211,7 +232,9 @@ class TestRoomAllotment(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Room Allotment", old.name, "status"), "Vacated")
 		self.assertEqual(frappe.db.get_value("Hostel Bed", self.bed_a, "status"), "Vacant")
 		self.assertEqual(frappe.db.get_value("Hostel Bed", self.bed_b, "current_allotment"), current.name)
-		self.assertEqual(frappe.db.get_value("Hostel Student", student.name, "current_allotment"), current.name)
+		self.assertEqual(
+			frappe.db.get_value("Hostel Student", student.name, "current_allotment"), current.name
+		)
 
 	def test_from_date_window_outside_migration(self):
 		with self.assertRaises(frappe.ValidationError):
@@ -222,7 +245,9 @@ class TestRoomAllotment(IntegrationTestCase):
 		allotment.bed = self.bed_b
 		allotment.student = make_student("Male").name
 		allotment.vacate(vacated_on=nowdate(), reason="Left the hostel")
-		stored = frappe.db.get_value("Room Allotment", allotment.name, ["bed", "student", "status"], as_dict=True)
+		stored = frappe.db.get_value(
+			"Room Allotment", allotment.name, ["bed", "student", "status"], as_dict=True
+		)
 		self.assertEqual(stored.bed, self.bed_a)
 		self.assertEqual(stored.status, "Vacated")
 		self.assertEqual(frappe.db.get_value("Hostel Bed", self.bed_a, "status"), "Vacant")
@@ -249,8 +274,15 @@ class TestRoomAllotment(IntegrationTestCase):
 			self.skipTest("Hostel Operations is not installed")
 		from hostel360.hostel_people.tasks import ALERT_KEY
 
-		allot(make_student("Male").name, self.bed_a, from_date=add_days(nowdate(), -20), to_date=add_days(nowdate(), -1))
-		target = "hostel360.hostel_people.doctype.room_allotment.room_allotment.RoomAllotment.vacate_allotment"
+		allot(
+			make_student("Male").name,
+			self.bed_a,
+			from_date=add_days(nowdate(), -20),
+			to_date=add_days(nowdate(), -1),
+		)
+		target = (
+			"hostel360.hostel_people.doctype.room_allotment.room_allotment.RoomAllotment.vacate_allotment"
+		)
 		with (
 			patch(target, side_effect=frappe.ValidationError("bed locked")),
 			patch.object(frappe.db, "commit"),
@@ -262,7 +294,11 @@ class TestRoomAllotment(IntegrationTestCase):
 
 		with patch.object(frappe.db, "commit"), patch.object(frappe.db, "rollback"):
 			close_ended_allotments()
-		self.assertFalse(frappe.db.exists("Ops Alert", {"alert_key": ALERT_KEY, "status": ["in", ["Open", "Acknowledged"]]}))
+		self.assertFalse(
+			frappe.db.exists(
+				"Ops Alert", {"alert_key": ALERT_KEY, "status": ["in", ["Open", "Acknowledged"]]}
+			)
+		)
 
 	def test_scoped_user_cannot_transfer_a_student_out_of_another_hostel(self):
 		other_hostel = make_hostel("Male").name
@@ -292,9 +328,11 @@ class TestRoomAllotment(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Hostel Bed", other_bed, "current_allotment"), elsewhere.name)
 		self.assertEqual(frappe.db.get_value("Hostel Student", student, "current_hostel"), other_hostel)
 
-	def test_scoped_user_allots_only_students_they_can_see(self):
+	def test_scoped_user_allots_students_who_live_in_no_other_hostel(self):
 		other_hostel = make_hostel("Male").name
-		other_bed = beds_of(make_room(other_hostel, capacity=1).name)[0]
+		other_bed, other_bed_2 = beds_of(make_room(other_hostel, capacity=2).name)
+		resident = make_student("Male").name
+		allot(resident, other_bed_2)
 		former = make_student("Male").name
 		left = allot(former, other_bed, from_date=add_days(nowdate(), -5))
 		left.vacate_allotment(nowdate(), "Left the hostel")
@@ -302,10 +340,14 @@ class TestRoomAllotment(IntegrationTestCase):
 		office = make_staff("Office Staff", [self.hostel.name]).user
 
 		with self.set_user(office):
-			self.assertRaises(frappe.PermissionError, allot_bed, former, self.bed_a)
+			# A resident of another hostel stays out of reach; one who has left it may come here.
+			self.assertRaises(frappe.PermissionError, allot_bed, resident, self.bed_a)
+			self.assertFalse(frappe.has_permission("Hostel Student", "read", doc=former))
+			returning = allot_bed(former, self.bed_a)
 			allotment = allot_bed(newcomer, self.bed_b)
 		self.assertEqual(frappe.db.get_value("Room Allotment", allotment, "status"), "Active")
-		self.assertIsNone(frappe.db.get_value("Hostel Bed", self.bed_a, "current_allotment"))
+		self.assertEqual(frappe.db.get_value("Hostel Bed", self.bed_a, "current_allotment"), returning)
+		self.assertEqual(frappe.db.get_value("Hostel Student", resident, "current_hostel"), other_hostel)
 
 	def test_allotment_files_hostel_less_fee_records_under_the_hostel(self):
 		if not frappe.db.exists("Hostel Fee Head", "Hostel Rent"):

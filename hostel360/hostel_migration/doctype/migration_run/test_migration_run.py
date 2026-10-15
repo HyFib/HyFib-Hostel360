@@ -99,7 +99,9 @@ class TestMigrationRun(IntegrationTestCase):
 		run = make_run(source_path=os.path.basename(folder))
 		run.start()
 		comments = frappe.get_all(
-			"Comment", filters={"reference_doctype": "Migration Run", "reference_name": run.name}, pluck="content"
+			"Comment",
+			filters={"reference_doctype": "Migration Run", "reference_name": run.name},
+			pluck="content",
 		)
 		self.assertIn("Dry run queued", comments)
 
@@ -123,7 +125,9 @@ class TestMigrationRun(IntegrationTestCase):
 		copy = frappe.get_doc("Migration Run", run.run_again(dry_run=0))
 		self.assertEqual(copy.status, "Draft")
 		self.assertEqual(copy.dry_run, 0)
-		self.assertEqual((copy.mapping, copy.source_path, copy.entity_filter), (run.mapping, run.source_path, "hostels"))
+		self.assertEqual(
+			(copy.mapping, copy.source_path, copy.entity_filter), (run.mapping, run.source_path, "hostels")
+		)
 
 	def test_stale_running_run_is_released(self):
 		# Nothing holds the engine lock, so a "Running" run is left over from a dead process.

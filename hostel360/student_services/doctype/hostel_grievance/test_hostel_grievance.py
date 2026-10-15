@@ -20,8 +20,9 @@ from hostel360.setup.roles import (
 )
 from hostel360.student_services import services
 from hostel360.student_services.doctype.hostel_grievance.hostel_grievance import staff_user_query
-from hostel360.student_services.grievance_tasks import escalate_overdue_grievances
+from hostel360.student_services.grievance_tasks import escalate_overdue_grievances, overdue_grievances
 from hostel360.student_services.permissions import grievance_has_permission
+from hostel360.student_services.setup import set_missing_grievance_deadlines
 from hostel360.student_services.testing import (
 	capture_notifications,
 	make_guardian,
@@ -225,6 +226,22 @@ class TestHostelGrievance(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			services.add_grievance_comment(name, "Still broken", self.student.user)
 
+	def test_assignment_note_stays_with_staff(self):
+		name = self.raise_grievance()
+		doc = frappe.get_doc("Hostel Grievance", name)
+		electrician = make_user([OFFICE_ROLE], first_name="Murugan")
+		note = "Student probably broke the regulator; recover the cost"
+
+		with capture_notifications() as sent:
+			doc.assign_to_user(electrician, self.deputy, note)
+
+		self.assertEqual([c["message"] for c in sent.contexts("grievance_assigned", electrician)], [note])
+		to_student = sent.contexts("grievance_updated", self.student.user)
+		self.assertEqual(len(to_student), 1)
+		self.assertEqual(to_student[0]["message"], "")
+		self.assertNotIn(note, frappe.as_json(to_student))
+		self.assertNotIn(note, frappe.as_json(services.get_grievance(name)["timeline"]))
+
 	def test_staff_without_rights_cannot_act(self):
 		name = self.raise_grievance()
 		doc = frappe.get_doc("Hostel Grievance", name)
@@ -372,7 +389,9 @@ class TestHostelGrievance(IntegrationTestCase):
 		self.assertEqual(doc.escalation_level, 1)
 		self.assertTrue(doc.sla_breached)
 		self.assertGreater(get_datetime(doc.sla_due_by), now_datetime())
-		self.assertEqual(sent.references("grievance_escalated"), [name])
+		# Other open grievances on the site may be overdue too; only these two matter here.
+		self.assertEqual(sent.references("grievance_escalated").count(name), 1)
+		self.assertNotIn(fresh, sent.references("grievance_escalated"))
 		self.assertIn(self.deputy, sent.recipients("grievance_escalated"))
 		self.assertIn(self.warden, sent.recipients("grievance_escalated"))
 		self.assertEqual(frappe.db.get_value("Hostel Grievance", fresh, "status"), "Open")
@@ -380,7 +399,7 @@ class TestHostelGrievance(IntegrationTestCase):
 		# Not again until the next period has passed
 		with capture_notifications() as sent:
 			escalate_overdue_grievances()
-		self.assertEqual(sent.references("grievance_escalated"), [])
+		self.assertNotIn(name, sent.references("grievance_escalated"))
 
 		# Second escalation goes to the Warden and administrators, not the deputies
 		frappe.db.set_value("Hostel Grievance", name, "sla_due_by", add_to_date(now_datetime(), hours=-1))
@@ -395,6 +414,39 @@ class TestHostelGrievance(IntegrationTestCase):
 			frappe.db.set_value("Hostel Grievance", name, "sla_due_by", add_to_date(now_datetime(), hours=-1))
 			escalate_overdue_grievances()
 		self.assertEqual(frappe.db.get_value("Hostel Grievance", name, "escalation_level"), 3)
+
+	def test_grievance_without_a_deadline_is_not_overdue(self):
+		name = self.raise_grievance()
+		frappe.db.set_value("Hostel Grievance", name, "sla_due_by", None)
+		self.assertNotIn(name, overdue_grievances())
+		with capture_notifications() as sent:
+			escalate_overdue_grievances()
+		self.assertNotIn(name, sent.references("grievance_escalated"))
+		self.assertEqual(
+			self.stored(name, "status", "escalation_level", "sla_breached"),
+			{"status": "Open", "escalation_level": 0, "sla_breached": 0},
+		)
+
+	def test_missing_deadlines_get_a_full_period_from_now(self):
+		medium = self.raise_grievance()
+		urgent = self.raise_grievance(priority="Urgent", subject="Sparks from the switchboard")
+		resolved = self.raise_grievance(subject="Tube light")
+		frappe.get_doc("Hostel Grievance", resolved).resolve_by("Replaced", self.warden)
+		for name in (medium, urgent, resolved):
+			frappe.db.set_value("Hostel Grievance", name, "sla_due_by", None)
+
+		before = now_datetime()
+		set_missing_grievance_deadlines()
+		medium_due = get_datetime(self.stored(medium, "sla_due_by").sla_due_by)
+		urgent_due = get_datetime(self.stored(urgent, "sla_due_by").sla_due_by)
+		self.assertAlmostEqual(time_diff_in_hours(medium_due, before), 48, delta=0.1)
+		self.assertAlmostEqual(time_diff_in_hours(urgent_due, before), 4, delta=0.1)
+		self.assertIsNone(self.stored(resolved, "sla_due_by").sla_due_by)
+
+		# Safe on every migrate: deadlines already set are left alone.
+		set_missing_grievance_deadlines()
+		self.assertEqual(get_datetime(self.stored(medium, "sla_due_by").sla_due_by), medium_due)
+		self.assertNotIn(medium, overdue_grievances())
 
 	def test_resolved_grievances_do_not_escalate(self):
 		name = self.raise_grievance()
@@ -429,7 +481,46 @@ class TestHostelGrievance(IntegrationTestCase):
 		finally:
 			frappe.flags.hostel360_migration = False
 		self.assertEqual(doc.status, "Closed")
+		self.assertIsNone(doc.sla_due_by)
 		self.assertEqual(sent, [])
+
+	def test_migrated_open_grievance_waits_one_period_after_loading(self):
+		source_deadline = add_to_date(now_datetime(), hours=10)
+		frappe.flags.hostel360_migration = True
+		try:
+			loaded = []
+			for status, priority, sla_due_by in (
+				("Open", "Medium", None),
+				("In Progress", "Urgent", None),
+				("Reopened", "Low", source_deadline),
+			):
+				doc = frappe.get_doc(
+					{
+						"doctype": "Hostel Grievance",
+						"student": self.student.name,
+						"category": "Water",
+						"subject": f"Old complaint ({status})",
+						"description": "Carried over from the previous system",
+						"priority": priority,
+						"status": status,
+						"sla_due_by": sla_due_by,
+					}
+				).insert(ignore_permissions=True)
+				# Created long ago in the old system.
+				frappe.db.set_value("Hostel Grievance", doc.name, "creation", add_days(now_datetime(), -30))
+				loaded.append(doc)
+		finally:
+			frappe.flags.hostel360_migration = False
+
+		opened, in_progress, reopened = loaded
+		self.assertAlmostEqual(time_diff_in_hours(opened.sla_due_by, now_datetime()), 48, delta=0.1)
+		self.assertAlmostEqual(time_diff_in_hours(in_progress.sla_due_by, now_datetime()), 4, delta=0.1)
+		self.assertEqual(get_datetime(reopened.sla_due_by), get_datetime(source_deadline))
+		self.assertEqual(in_progress.status, "In Progress")
+
+		with capture_notifications() as sent:
+			escalate_overdue_grievances()
+		self.assertFalse({doc.name for doc in loaded} & set(sent.references("grievance_escalated")))
 
 	# ------------------------------------------------------------------ tampering
 
@@ -446,7 +537,11 @@ class TestHostelGrievance(IntegrationTestCase):
 	def test_staff_cannot_open_a_confidential_grievance_by_rewriting_it(self):
 		name = self.raise_grievance(category="Ragging or Harassment", description="SECRET: senior in room 12")
 		office = make_user([OFFICE_ROLE])
-		for values in ({"assigned_to": office}, {"category": "Other", "is_confidential": 0}, {"is_confidential": 0}):
+		for values in (
+			{"assigned_to": office},
+			{"category": "Other", "is_confidential": 0},
+			{"is_confidential": 0},
+		):
 			with self.assertRaises(frappe.PermissionError):
 				self.as_user(office, client_set_value, "Hostel Grievance", name, values)
 		self.assertEqual(
@@ -462,17 +557,33 @@ class TestHostelGrievance(IntegrationTestCase):
 		name = self.raise_grievance(category="Ragging or Harassment")
 		frappe.get_doc("Hostel Grievance", name).assign_to_user(self.deputy, self.warden)
 		with self.assertRaises(frappe.PermissionError):
-			self.as_user(self.deputy, client_set_value, "Hostel Grievance", name, {"category": "Other", "is_confidential": 0})
+			self.as_user(
+				self.deputy,
+				client_set_value,
+				"Hostel Grievance",
+				name,
+				{"category": "Other", "is_confidential": 0},
+			)
 		self.assertEqual(self.stored(name, "is_confidential").is_confidential, 1)
 		# The Warden may correct a misfiled complaint
-		self.as_user(self.warden, client_set_value, "Hostel Grievance", name, {"category": "Other", "is_confidential": 0})
+		self.as_user(
+			self.warden,
+			client_set_value,
+			"Hostel Grievance",
+			name,
+			{"category": "Other", "is_confidential": 0},
+		)
 		self.assertEqual(self.stored(name, "category").category, "Other")
 
 	def test_staff_may_make_a_grievance_confidential(self):
 		name = self.raise_grievance(subject="Seniors keep calling me to their room")
 		office = make_user([OFFICE_ROLE])
-		self.as_user(office, client_set_value, "Hostel Grievance", name, {"category": "Ragging or Harassment"})
-		self.assertEqual(self.stored(name, "is_confidential", "priority"), {"is_confidential": 1, "priority": "Urgent"})
+		self.as_user(
+			office, client_set_value, "Hostel Grievance", name, {"category": "Ragging or Harassment"}
+		)
+		self.assertEqual(
+			self.stored(name, "is_confidential", "priority"), {"is_confidential": 1, "priority": "Urgent"}
+		)
 		doc = frappe.get_doc("Hostel Grievance", name)
 		self.assertFalse(frappe.has_permission("Hostel Grievance", "read", doc=doc, user=office))
 
@@ -562,7 +673,9 @@ class TestHostelGrievance(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.assign_to_user(auditor, self.warden)
 
-		picker = {row[0] for row in self.as_user(self.warden, staff_user_query, "User", "", "name", 0, 500, {})}
+		picker = {
+			row[0] for row in self.as_user(self.warden, staff_user_query, "User", "", "name", 0, 500, {})
+		}
 		self.assertIn(self.deputy, picker)
 		self.assertNotIn(auditor, picker)
 
@@ -577,7 +690,9 @@ class TestHostelGrievance(IntegrationTestCase):
 			with self.assertRaises(frappe.PermissionError):
 				self.as_user(user, staff_user_query, "User", "", "name", 0, 20, {})
 		mess_manager = make_user([MESS_MANAGER_ROLE])
-		picker = {row[0] for row in self.as_user(mess_manager, staff_user_query, "User", "", "name", 0, 500, {})}
+		picker = {
+			row[0] for row in self.as_user(mess_manager, staff_user_query, "User", "", "name", 0, 500, {})
+		}
 		self.assertIn(self.warden, picker)
 
 	# ------------------------------------------------------------------ vacated students
@@ -594,4 +709,3 @@ class TestHostelGrievance(IntegrationTestCase):
 		scope_to_hostel(elsewhere, make_hostel())
 		self.assertEqual(self.visible_to(elsewhere, [name]), set())
 		self.assertEqual(self.visible_to(self.deputy, [name]), {name})
-

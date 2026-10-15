@@ -22,7 +22,13 @@ def execute(filters=None):
 
 def get_columns():
 	return [
-		{"fieldname": "alert", "label": _("Alert"), "fieldtype": "Link", "options": "Ops Alert", "width": 150},
+		{
+			"fieldname": "alert",
+			"label": _("Alert"),
+			"fieldtype": "Link",
+			"options": "Ops Alert",
+			"width": 150,
+		},
 		{"fieldname": "title", "label": _("Title"), "fieldtype": "Data", "width": 280},
 		{"fieldname": "severity", "label": _("Severity"), "fieldtype": "Data", "width": 90},
 		{"fieldname": "category", "label": _("Category"), "fieldtype": "Data", "width": 110},
@@ -31,8 +37,20 @@ def get_columns():
 		{"fieldname": "first_seen", "label": _("First Seen"), "fieldtype": "Datetime", "width": 160},
 		{"fieldname": "acknowledged_on", "label": _("Acknowledged"), "fieldtype": "Datetime", "width": 160},
 		{"fieldname": "resolved_on", "label": _("Resolved"), "fieldtype": "Datetime", "width": 160},
-		{"fieldname": "minutes_to_acknowledge", "label": _("Minutes to Acknowledge"), "fieldtype": "Float", "precision": 1, "width": 120},
-		{"fieldname": "minutes_to_resolve", "label": _("Minutes to Resolve"), "fieldtype": "Float", "precision": 1, "width": 120},
+		{
+			"fieldname": "minutes_to_acknowledge",
+			"label": _("Minutes to Acknowledge"),
+			"fieldtype": "Float",
+			"precision": 1,
+			"width": 120,
+		},
+		{
+			"fieldname": "minutes_to_resolve",
+			"label": _("Minutes to Resolve"),
+			"fieldtype": "Float",
+			"precision": 1,
+			"width": 120,
+		},
 		{"fieldname": "occurrence_count", "label": _("Occurrences"), "fieldtype": "Int", "width": 100},
 		{"fieldname": "escalation_level", "label": _("Escalation Level"), "fieldtype": "Int", "width": 100},
 		{"fieldname": "is_outage", "label": _("Outage"), "fieldtype": "Check", "width": 80},
@@ -106,8 +124,18 @@ def get_summary(data):
 	open_now = sum(1 for row in data if row["status"] in ("Open", "Acknowledged"))
 	return [
 		{"value": len(data), "label": _("Alerts"), "datatype": "Int", "indicator": "Blue"},
-		{"value": critical, "label": _("Critical"), "datatype": "Int", "indicator": "Red" if critical else "Green"},
-		{"value": open_now, "label": _("Still Open"), "datatype": "Int", "indicator": "Orange" if open_now else "Green"},
+		{
+			"value": critical,
+			"label": _("Critical"),
+			"datatype": "Int",
+			"indicator": "Red" if critical else "Green",
+		},
+		{
+			"value": open_now,
+			"label": _("Still Open"),
+			"datatype": "Int",
+			"indicator": "Orange" if open_now else "Green",
+		},
 		{
 			"value": _mean(row["minutes_to_acknowledge"] for row in data),
 			"label": _("Mean Time to Acknowledge (min)"),
@@ -137,7 +165,10 @@ def get_chart(data, from_date, to_date):
 				values[index[getdate(row["first_seen"])]] += 1
 		datasets.append({"name": _(severity), "values": values})
 	return {
-		"data": {"labels": [frappe.format(day, {"fieldtype": "Date"}) for day in labels], "datasets": datasets},
+		"data": {
+			"labels": [frappe.format(day, {"fieldtype": "Date"}) for day in labels],
+			"datasets": datasets,
+		},
 		"type": "bar",
 		"barOptions": {"stacked": 1},
 		"colors": [SEVERITY_COLOURS["Critical"], SEVERITY_COLOURS["Warning"], SEVERITY_COLOURS["Info"]],

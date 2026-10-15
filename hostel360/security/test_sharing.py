@@ -1,7 +1,7 @@
 # Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 # For license information, please see license.txt
 
-from unittest.mock import patch
+from unittest.mock import DEFAULT, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
@@ -12,15 +12,6 @@ from hostel360.setup.roles import ADMIN_ROLE, STUDENT_ROLE
 SHARE_HOOK = "hostel360.security.sharing.validate_doc_share"
 # Shares made by code paths that skip the sharer's own permission check.
 UNCHECKED = {"ignore_share_permission": True}
-
-
-def doc_hooks_with_share_rule() -> dict:
-	"""The site's document hooks plus the DocShare rule (as hooks.py is asked to register it)."""
-	hooks = dict(frappe.get_doc_hooks())
-	docshare = dict(hooks.get("DocShare", {}))
-	docshare["validate"] = [*docshare.get("validate", []), SHARE_HOOK]
-	hooks["DocShare"] = docshare
-	return hooks
 
 
 def make_user(*roles: str, desk: bool = True) -> str:
@@ -90,21 +81,63 @@ class TestSharingRules(IntegrationTestCase):
 		with self.assertRaises(sharing.ShareNotAllowed):
 			sharing.validate_doc_share(new_share("User", student, everyone=1))
 
-	def test_rule_runs_through_frappe_share_when_hooked(self):
+	def test_rule_is_registered_for_docshare(self):
+		self.assertIn(SHARE_HOOK, frappe.get_doc_hooks().get("DocShare", {}).get("validate", []))
+
+	def test_rule_runs_through_frappe_share(self):
+		# The site's own hooks, as the desk Share dialog and frappe.share.add use them.
 		student = make_user(STUDENT_ROLE, desk=False)
-		with patch.object(frappe, "get_doc_hooks", return_value=doc_hooks_with_share_rule()):
-			with self.assertRaises(sharing.ShareNotAllowed):
-				frappe.share.add(self.hostel_doctype, self.hostel_record, everyone=1, flags=UNCHECKED)
-			with self.assertRaises(sharing.ShareNotAllowed):
-				frappe.share.add(self.hostel_doctype, self.hostel_record, student, flags=UNCHECKED)
-			# Creating a portal account still works: its self-share is allowed.
-			make_user(STUDENT_ROLE, desk=False)
+		colleague = make_user(ADMIN_ROLE)
+		with self.assertRaises(sharing.ShareNotAllowed):
+			frappe.share.add(self.hostel_doctype, self.hostel_record, everyone=1, flags=UNCHECKED)
+		with self.assertRaises(sharing.ShareNotAllowed):
+			frappe.share.add(self.hostel_doctype, self.hostel_record, student, flags=UNCHECKED)
+		with self.assertRaises(sharing.ShareNotAllowed):
+			frappe.share.add_docshare(self.hostel_doctype, self.hostel_record, everyone=1, flags=UNCHECKED)
+		# Creating a portal account still works: its self-share is allowed.
+		make_user(STUDENT_ROLE, desk=False)
+		self.assertTrue(frappe.share.add(self.hostel_doctype, self.hostel_record, colleague, flags=UNCHECKED))
 		self.assertFalse(
 			frappe.db.exists(
 				"DocShare",
 				{"share_doctype": self.hostel_doctype, "share_name": self.hostel_record, "everyone": 1},
 			)
 		)
+		self.assertFalse(
+			frappe.db.exists(
+				"DocShare",
+				{"share_doctype": self.hostel_doctype, "share_name": self.hostel_record, "user": student},
+			)
+		)
+
+	def test_a_share_does_not_open_a_record_to_portal_users(self):
+		# A refused share never reaches has_permission's "shared with the user" fallback.
+		student = make_user(STUDENT_ROLE, desk=False)
+		self.assertFalse(frappe.has_permission(self.hostel_doctype, "read", self.hostel_record, user=student))
+		for kwargs in ({"everyone": 1}, {"user": student}):
+			with self.assertRaises(sharing.ShareNotAllowed):
+				frappe.share.add_docshare(self.hostel_doctype, self.hostel_record, flags=UNCHECKED, **kwargs)
+		self.assertFalse(frappe.has_permission(self.hostel_doctype, "read", self.hostel_record, user=student))
+
+	def test_unsafe_shares_are_cleared_on_install_and_migrate(self):
+		from hostel360.setup import install
+
+		steps = (
+			"sync_roles",
+			"enforce_log_retention",
+			"enable_languages",
+			"run_module_setup",
+			"apply_settings",
+		)
+		with (
+			patch.multiple(install, **{step: DEFAULT for step in steps}),
+			patch.object(frappe.db, "commit"),
+			patch("hostel360.security.sharing.remove_unsafe_shares", return_value=0) as clear,
+		):
+			install.after_migrate()
+			self.assertEqual(clear.call_count, 1)
+			install.after_install()
+			self.assertEqual(clear.call_count, 2)
 
 	def test_existing_unsafe_shares_are_removed(self):
 		student = make_user(STUDENT_ROLE, desk=False)

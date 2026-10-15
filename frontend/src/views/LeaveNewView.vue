@@ -16,7 +16,9 @@ const { busy, error, run } = useSubmit();
 async function submit(input: LeaveInput) {
 	const result = await run(() => applyLeave(input, studentArg()));
 	if (result) {
-		showToast(result.status ? t("leave.submittedWithStatus", { status: tv("status", result.status) }) : t("leave.submitted"));
+		showToast(
+			result.status ? t("leave.submittedWithStatus", { status: tv("status", result.status) }) : t("leave.submitted"),
+		);
 		await router.push({ name: "leave" });
 	}
 }

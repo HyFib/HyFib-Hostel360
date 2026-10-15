@@ -9,15 +9,7 @@ import { locale, t } from "@/i18n";
 import { htmlToText } from "@/utils/sanitize";
 
 export type ApiErrorKind =
-	| "offline"
-	| "timeout"
-	| "auth"
-	| "permission"
-	| "validation"
-	| "rate_limit"
-	| "not_found"
-	| "csrf"
-	| "server";
+	"offline" | "timeout" | "auth" | "permission" | "validation" | "rate_limit" | "not_found" | "csrf" | "server";
 
 export class ApiError extends Error {
 	readonly kind: ApiErrorKind;

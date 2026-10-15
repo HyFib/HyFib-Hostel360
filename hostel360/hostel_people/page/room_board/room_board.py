@@ -38,7 +38,9 @@ def get_board(hostel: str | None = None, block: str | None = None, floor: str | 
 	by_name = {row.name: row for row in hostels}
 	if hostel:
 		if hostel not in by_name:
-			frappe.throw(_("You are not permitted to view hostel {0}.").format(hostel), frappe.PermissionError)
+			frappe.throw(
+				_("You are not permitted to view hostel {0}.").format(hostel), frappe.PermissionError
+			)
 		selected = [hostel]
 	else:
 		selected = list(by_name)
@@ -91,7 +93,7 @@ def get_board(hostel: str | None = None, block: str | None = None, floor: str | 
 		left join `tabHostel Floor` floor on floor.name = room.floor
 		left join `tabHostel Student` student on student.name = bed.current_student
 		where {" and ".join(conditions)}
-		""",
+		""",  # noqa: S608 - fixed column list and conditions; values are bound parameters
 		values,
 		as_dict=True,
 	)
@@ -249,7 +251,7 @@ def search_vacant_beds(doctype: str, txt: str, searchfield: str, start: int, pag
 		where {" and ".join(conditions)}
 		order by bed.hostel, length(room.room_number), room.room_number, length(bed.bed_label), bed.bed_label
 		limit %(start)s, %(page_len)s
-		""",
+		""",  # noqa: S608 - conditions are fixed strings; values are bound parameters
 		values,
 		as_dict=True,
 	)

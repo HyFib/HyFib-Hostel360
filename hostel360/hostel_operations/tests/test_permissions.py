@@ -11,7 +11,9 @@ FORBIDDEN_FOR_AUDITOR = ("write", "create", "delete", "submit", "cancel", "amend
 
 class TestOperationsPermissions(IntegrationTestCase):
 	def test_institution_auditor_is_read_only(self):
-		doctypes = frappe.get_all("DocType", filters={"module": "Hostel Operations", "istable": 0}, pluck="name")
+		doctypes = frappe.get_all(
+			"DocType", filters={"module": "Hostel Operations", "istable": 0}, pluck="name"
+		)
 		self.assertIn("Security Incident", doctypes)
 		checked = 0
 		for doctype in doctypes:
@@ -25,7 +27,9 @@ class TestOperationsPermissions(IntegrationTestCase):
 		self.assertGreater(checked, 0)
 
 	def test_security_incident_access(self):
-		perms = {perm.role: perm for perm in frappe.get_meta("Security Incident").permissions if not perm.permlevel}
+		perms = {
+			perm.role: perm for perm in frappe.get_meta("Security Incident").permissions if not perm.permlevel
+		}
 		self.assertTrue(perms["HyFib Operations"].write and perms["HyFib Operations"].create)
 		self.assertFalse(perms["HyFib Operations"].delete, "incident records are kept for the audit trail")
 		for role in (AUDITOR_ROLE, "Hostel Administrator"):

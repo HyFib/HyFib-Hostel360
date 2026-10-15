@@ -77,16 +77,16 @@ class HostelRoom(Document):
 
 		if not self.is_active and occupied:
 			frappe.throw(
-				_("Room {0} has {1} resident(s). Vacate or transfer them before deactivating the room.").format(
-					frappe.bold(self.name), occupied
-				)
+				_(
+					"Room {0} has {1} resident(s). Vacate or transfer them before deactivating the room."
+				).format(frappe.bold(self.name), occupied)
 			)
 
 		if self.status == "Blocked" and occupied:
 			frappe.throw(
-				_("Room {0} has residents and cannot be blocked. Use Under Maintenance to stop new allotments.").format(
-					frappe.bold(self.name)
-				)
+				_(
+					"Room {0} has residents and cannot be blocked. Use Under Maintenance to stop new allotments."
+				).format(frappe.bold(self.name))
 			)
 
 		if self.status not in MANUAL_ROOM_STATUSES and not occupied:
@@ -99,12 +99,19 @@ class HostelRoom(Document):
 			"Hostel Bed", {"room": self.name, "is_active": 1, "status": "Occupied"}
 		) + frappe.db.count(
 			"Hostel Bed",
-			{"room": self.name, "is_active": 1, "status": ["!=", "Occupied"], "current_student": ["is", "set"]},
+			{
+				"room": self.name,
+				"is_active": 1,
+				"status": ["!=", "Occupied"],
+				"current_student": ["is", "set"],
+			},
 		)
 
 	def on_update(self):
 		self.sync_beds()
-		if self.get_doc_before_save() and (self.has_value_changed("block") or self.has_value_changed("floor")):
+		if self.get_doc_before_save() and (
+			self.has_value_changed("block") or self.has_value_changed("floor")
+		):
 			frappe.db.set_value(
 				"Hostel Bed",
 				{"room": self.name},
@@ -115,7 +122,9 @@ class HostelRoom(Document):
 		refresh_hostel(self.hostel)
 		# Return the recomputed counters to the form that saved the room.
 		self.update(
-			frappe.db.get_value("Hostel Room", self.name, ["status", "occupied_beds", "vacant_beds"], as_dict=True)
+			frappe.db.get_value(
+				"Hostel Room", self.name, ["status", "occupied_beds", "vacant_beds"], as_dict=True
+			)
 		)
 
 	def sync_beds(self) -> None:
@@ -176,7 +185,9 @@ class HostelRoom(Document):
 				reverse=True,
 			)
 			if len(removable) < excess:
-				frappe.throw(_("Not enough unoccupied beds to reduce the capacity of room {0}.").format(self.name))
+				frappe.throw(
+					_("Not enough unoccupied beds to reduce the capacity of room {0}.").format(self.name)
+				)
 
 			for bed in removable[:excess]:
 				if frappe.db.exists("Room Allotment", {"bed": bed.name}):
@@ -210,6 +221,13 @@ class HostelRoom(Document):
 		beds = frappe.get_all(
 			"Hostel Bed",
 			filters={"room": self.name, "is_active": 1},
-			fields=["name", "bed_label", "status", "current_student", "current_student_name", "current_allotment"],
+			fields=[
+				"name",
+				"bed_label",
+				"status",
+				"current_student",
+				"current_student_name",
+				"current_allotment",
+			],
 		)
 		return sorted(beds, key=lambda b: bed_label_key(b.bed_label))

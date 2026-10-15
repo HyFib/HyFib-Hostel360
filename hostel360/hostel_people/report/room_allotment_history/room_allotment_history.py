@@ -65,11 +65,29 @@ def get_allotments(filters) -> list[dict]:
 
 def get_columns() -> list[dict]:
 	return [
-		{"label": _("Allotment"), "fieldname": "name", "fieldtype": "Link", "options": "Room Allotment", "width": 150},
-		{"label": _("Student"), "fieldname": "student", "fieldtype": "Link", "options": "Hostel Student", "width": 120},
+		{
+			"label": _("Allotment"),
+			"fieldname": "name",
+			"fieldtype": "Link",
+			"options": "Room Allotment",
+			"width": 150,
+		},
+		{
+			"label": _("Student"),
+			"fieldname": "student",
+			"fieldtype": "Link",
+			"options": "Hostel Student",
+			"width": 120,
+		},
 		{"label": _("Name"), "fieldname": "student_name", "fieldtype": "Data", "width": 170},
 		{"label": _("Hostel"), "fieldname": "hostel", "fieldtype": "Link", "options": "Hostel", "width": 80},
-		{"label": _("Room"), "fieldname": "room", "fieldtype": "Link", "options": "Hostel Room", "width": 100},
+		{
+			"label": _("Room"),
+			"fieldname": "room",
+			"fieldtype": "Link",
+			"options": "Hostel Room",
+			"width": 100,
+		},
 		{"label": _("Bed"), "fieldname": "bed", "fieldtype": "Link", "options": "Hostel Bed", "width": 110},
 		{"label": _("Type"), "fieldname": "allotment_type", "fieldtype": "Data", "width": 80},
 		{"label": _("From"), "fieldname": "from_date", "fieldtype": "Date", "width": 100},
@@ -78,8 +96,20 @@ def get_columns() -> list[dict]:
 		{"label": _("Vacated On"), "fieldname": "vacated_on", "fieldtype": "Date", "width": 100},
 		{"label": _("Days"), "fieldname": "days", "fieldtype": "Int", "width": 70},
 		{"label": _("Reason"), "fieldname": "vacate_reason", "fieldtype": "Data", "width": 220},
-		{"label": _("Previous Allotment"), "fieldname": "previous_allotment", "fieldtype": "Link", "options": "Room Allotment", "width": 150},
-		{"label": _("Academic Year"), "fieldname": "academic_year", "fieldtype": "Link", "options": "Hostel Academic Year", "width": 100},
+		{
+			"label": _("Previous Allotment"),
+			"fieldname": "previous_allotment",
+			"fieldtype": "Link",
+			"options": "Room Allotment",
+			"width": 150,
+		},
+		{
+			"label": _("Academic Year"),
+			"fieldname": "academic_year",
+			"fieldtype": "Link",
+			"options": "Hostel Academic Year",
+			"width": 100,
+		},
 	]
 
 
@@ -87,9 +117,24 @@ def get_summary(rows: list[dict]) -> list[dict]:
 	stays = [row.days for row in rows if row.status in ("Vacated", "Transferred") and row.days]
 	return [
 		{"value": len(rows), "label": _("Allotments"), "datatype": "Int", "indicator": "Blue"},
-		{"value": sum(1 for r in rows if r.status == "Active"), "label": _("Active"), "datatype": "Int", "indicator": "Green"},
-		{"value": sum(1 for r in rows if r.allotment_type == "Transfer"), "label": _("Transfers"), "datatype": "Int", "indicator": "Blue"},
-		{"value": sum(1 for r in rows if r.status == "Vacated"), "label": _("Vacated"), "datatype": "Int", "indicator": "Gray"},
+		{
+			"value": sum(1 for r in rows if r.status == "Active"),
+			"label": _("Active"),
+			"datatype": "Int",
+			"indicator": "Green",
+		},
+		{
+			"value": sum(1 for r in rows if r.allotment_type == "Transfer"),
+			"label": _("Transfers"),
+			"datatype": "Int",
+			"indicator": "Blue",
+		},
+		{
+			"value": sum(1 for r in rows if r.status == "Vacated"),
+			"label": _("Vacated"),
+			"datatype": "Int",
+			"indicator": "Gray",
+		},
 		{
 			"value": flt(sum(stays) / len(stays), 1) if stays else 0,
 			"label": _("Average Completed Stay (days)"),

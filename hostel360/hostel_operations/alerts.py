@@ -268,7 +268,7 @@ def _raise_alert(key, title, severity, category, source, description, details, i
 		# A plain read: a locking read of a key that does not exist yet takes a gap lock,
 		# and two such gap locks followed by two inserts are a guaranteed deadlock.
 		name, plan = _record(*args, locking=False)
-	except (frappe.UniqueValidationError, frappe.DuplicateEntryError):
+	except frappe.UniqueValidationError, frappe.DuplicateEntryError:
 		# Someone opened the same key between our lookup and our insert (only possible for
 		# alerts written inline, or created by hand on the desk). The locking read sees
 		# their committed row. The duplicate-key message is not meant for the caller.
@@ -291,7 +291,9 @@ def _record(key, title, severity, category, source, description, details_text, i
 
 	recent = _recently_resolved(key, now)
 	if recent:
-		return recent, _reopen(recent, settings, notify, title, severity, description, details_text, is_outage, now)
+		return recent, _reopen(
+			recent, settings, notify, title, severity, description, details_text, is_outage, now
+		)
 
 	alert = frappe.get_doc(
 		{
@@ -484,7 +486,9 @@ def _forget_messages(count: int) -> None:
 
 def _log_failure(title: str, key, defer: bool = False) -> None:
 	try:
-		frappe.log_error(title=title, message=f"Alert key: {key}\n\n{frappe.get_traceback()}", defer_insert=defer)
+		frappe.log_error(
+			title=title, message=f"Alert key: {key}\n\n{frappe.get_traceback()}", defer_insert=defer
+		)
 	except Exception:
 		# Logging must never be the thing that breaks the caller.
 		frappe.logger("hostel360").exception(title)

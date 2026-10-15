@@ -4,6 +4,7 @@
 import base64
 import re
 from io import BytesIO
+from pathlib import Path
 from unittest.mock import patch
 
 import frappe
@@ -28,6 +29,31 @@ from hostel360.student_services.utils import mask_name
 
 IGNORE_TEST_RECORD_DEPENDENCIES = ["Hostel Student", "Hostel", "Hostel Room", "User"]
 DOCTYPE = "Bonafide Certificate Request"
+TAMIL_FONTS = ("Noto Serif Tamil", "Noto Sans Tamil", "Lohit Tamil")
+FONT_DIRS = ("/usr/share/fonts", "/usr/local/share/fonts", "~/.local/share/fonts", "~/.fonts")
+
+
+def tamil_font_installed() -> bool:
+	"""Whether a Tamil font (Noto or Lohit) is where fontconfig, and so wkhtmltopdf, finds fonts."""
+	for folder in FONT_DIRS:
+		root = Path(folder).expanduser()
+		if root.is_dir() and next(root.rglob("*Tamil*"), None):
+			return True
+	return False
+
+
+def offline_pdf(get_pdf):
+	"""frappe.utils.pdf.get_pdf without the links to the site's own assets.
+
+	The dev container cannot resolve the site's host name, and wkhtmltopdf would otherwise
+	fail fetching the stylesheets.
+	"""
+
+	def render(html, *args, **kwargs):
+		html = re.sub(r"<link[^>]*>|<script[^>]*>.*?</script>", "", html, flags=re.S)
+		return get_pdf(html, *args, **kwargs)
+
+	return render
 
 
 class TestBonafideCertificateRequest(IntegrationTestCase):
@@ -239,20 +265,45 @@ class TestBonafideCertificateRequest(IntegrationTestCase):
 	def test_portal_pdf_download(self):
 		from frappe.utils import pdf as frappe_pdf
 
-		original_get_pdf = frappe_pdf.get_pdf
-
-		def offline_get_pdf(html, *args, **kwargs):
-			# The dev container cannot resolve the site's host name, so leave out the links
-			# to the site's own stylesheets that wkhtmltopdf would otherwise fetch.
-			html = re.sub(r"<link[^>]*>|<script[^>]*>.*?</script>", "", html, flags=re.S)
-			return original_get_pdf(html, *args, **kwargs)
-
 		doc = self.approved()
 		frappe.set_user(self.student.user)
-		with patch("frappe.utils.pdf.get_pdf", side_effect=offline_get_pdf):
+		with patch("frappe.utils.pdf.get_pdf", side_effect=offline_pdf(frappe_pdf.get_pdf)):
 			pdf = services.get_bonafide_pdf(doc.name)
 		self.assertTrue(pdf.startswith(b"%PDF"))
 		self.assertFalse(frappe.flags.ignore_print_permissions)
+
+	def test_certificate_fonts_fall_back_to_tamil(self):
+		"""Latin text keeps the serif face; Tamil names and addresses fall through to a Tamil font
+		instead of dropping out of the PDF."""
+		tamil = make_student(self.hostel, first_name="மீனாட்சி")
+		doc = self.approved(student=tamil)
+		html = frappe.get_print(DOCTYPE, doc.name, print_format="Bonafide Certificate", no_letterhead=1)
+		self.assertIn("மீனாட்சி", html)
+
+		match = re.search(r"\.bc\s*\{\s*font-family:\s*([^;]+);", html)
+		self.assertTrue(match, "certificate font stack missing")
+		families = [f.strip().strip('"').strip("'") for f in match.group(1).split(",")]
+		self.assertEqual(families[0], "Times New Roman")
+		self.assertEqual(families[-1], "serif")
+		positions = [families.index(font) for font in TAMIL_FONTS if font in families]
+		self.assertTrue(positions, "no Tamil font in the certificate font stack")
+		self.assertGreater(min(positions), families.index("Times New Roman"))
+
+	def test_tamil_text_is_embedded_in_the_pdf(self):
+		if not tamil_font_installed():
+			self.skipTest("No Tamil font is installed for wkhtmltopdf on this machine")
+		from frappe.utils import pdf as frappe_pdf
+		from pypdf import PdfReader
+
+		tamil = make_student(self.hostel, first_name="மீனாட்சி")
+		doc = self.approved(student=tamil)
+		with patch("frappe.utils.pdf.get_pdf", side_effect=offline_pdf(frappe_pdf.get_pdf)):
+			pdf = services.get_bonafide_pdf(doc.name)
+		fonts = set()
+		for page in PdfReader(BytesIO(pdf)).pages:
+			for font in (page.get("/Resources", {}).get("/Font") or {}).values():
+				fonts.add(str(font.get_object().get("/BaseFont", "")))
+		self.assertTrue(any("Tamil" in font for font in fonts), f"no Tamil font embedded: {sorted(fonts)}")
 
 	def test_portal_lists(self):
 		doc = self.approved()
@@ -347,4 +398,3 @@ class TestBonafideCertificateRequest(IntegrationTestCase):
 			with self.assertRaises(frappe.PermissionError):
 				self.as_user(office, client_set_value, DOCTYPE, name, {"hostel": hostel})
 		self.assertEqual(frappe.db.get_value(DOCTYPE, name, "hostel"), other.hostel)
-

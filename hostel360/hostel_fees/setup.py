@@ -104,7 +104,7 @@ def backfill_fee_record_hostels() -> None:
 			inner join `tabHostel Student` st on st.name = doc.student
 			set doc.hostel = {source}
 			where (doc.hostel is null or doc.hostel = '') and {source} is not null
-			"""  # nosemgrep: values are constants defined in this module
+			"""  # noqa: S608  # nosemgrep: values are constants defined in this module
 		)
 
 

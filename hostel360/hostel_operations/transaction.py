@@ -16,7 +16,7 @@ commits on its own. The caller's connection is restored afterwards, whatever hap
 """
 
 import hashlib
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 import frappe
 
@@ -111,14 +111,11 @@ def independent():
 	finally:
 		frappe.flags.hostel360_independent_depth -= 1
 		frappe.local.db = main
-		try:
+		# Cleanup must not mask the block's own exception; a broken connection is discarded anyway.
+		with suppress(Exception):
 			db.rollback()
-		except Exception:
-			pass
-		try:
+		with suppress(Exception):
 			db.close()
-		except Exception:
-			pass
 		if hasattr(frappe.local, "_realtime_log"):
 			del frappe.local._realtime_log
 		if had_realtime:
@@ -138,8 +135,6 @@ def acquire_named_lock(name: str, timeout: int = NAMED_LOCK_SECONDS) -> bool:
 
 
 def release_named_lock(name: str) -> None:
-	try:
+	# The lock goes with the connection anyway.
+	with suppress(Exception):
 		frappe.db.sql("select release_lock(%s)", (name,))
-	except Exception:
-		# The lock goes with the connection anyway.
-		pass

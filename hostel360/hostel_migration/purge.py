@@ -1174,7 +1174,7 @@ class InstitutionDataPurge:
 			try:
 				with open(path, encoding="utf-8") as f:
 					data = json.load(f)
-			except (OSError, ValueError):
+			except OSError, ValueError:
 				continue
 			if data.get("site") != self.site:
 				continue

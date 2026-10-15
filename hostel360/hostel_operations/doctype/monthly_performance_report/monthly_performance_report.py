@@ -11,8 +11,14 @@ class MonthlyPerformanceReport(Document):
 		from hostel360.hostel_operations.reports import month_bounds
 
 		month_bounds(self.month)
-		if self.is_new() and frappe.db.exists(self.doctype, {"month": self.month, "docstatus": 1}) and not self.amended_from:
-			frappe.throw(_("A submitted report for {0} already exists.").format(self.month), frappe.DuplicateEntryError)
+		if (
+			self.is_new()
+			and frappe.db.exists(self.doctype, {"month": self.month, "docstatus": 1})
+			and not self.amended_from
+		):
+			frappe.throw(
+				_("A submitted report for {0} already exists.").format(self.month), frappe.DuplicateEntryError
+			)
 
 	def before_submit(self):
 		if not self.prepared_on:

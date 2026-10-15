@@ -88,10 +88,15 @@ def apply_leave(student: str, data: dict, applied_by: str, user: str) -> str:
 	if applied_by == "Parent":
 		guardian = get_guardian_for_user(user)
 		if not guardian:
-			frappe.throw(_("Only a registered parent or guardian can apply on a student's behalf."), frappe.PermissionError)
+			frappe.throw(
+				_("Only a registered parent or guardian can apply on a student's behalf."),
+				frappe.PermissionError,
+			)
 		doc.parent_guardian = guardian
 	elif applied_by == "Warden" and not is_staff_user(user):
-		frappe.throw(_("Only hostel staff can apply for leave on a student's behalf."), frappe.PermissionError)
+		frappe.throw(
+			_("Only hostel staff can apply for leave on a student's behalf."), frappe.PermissionError
+		)
 	elif applied_by == "Student":
 		identity = get_portal_identity(user)
 		if identity.kind != "student" or identity.student != student:
@@ -259,7 +264,9 @@ def get_own_unattached_files(file_urls: list[str], user: str) -> list[str]:
 			"name",
 		)
 		if not name:
-			frappe.throw(_("Attachment {0} was not found. Please upload it again.").format(url.rsplit("/", 1)[-1]))
+			frappe.throw(
+				_("Attachment {0} was not found. Please upload it again.").format(url.rsplit("/", 1)[-1])
+			)
 		names.append(name)
 	return names
 
@@ -357,7 +364,8 @@ def get_bonafide_pdf(name: str) -> bytes:
 	previous = frappe.flags.ignore_print_permissions
 	frappe.flags.ignore_print_permissions = True
 	try:
-		return frappe.get_print(BONAFIDE, name, print_format=BONAFIDE_PRINT_FORMAT, as_pdf=True, no_letterhead=1)
+		return frappe.get_print(
+			BONAFIDE, name, print_format=BONAFIDE_PRINT_FORMAT, as_pdf=True, no_letterhead=1
+		)
 	finally:
 		frappe.flags.ignore_print_permissions = previous
-

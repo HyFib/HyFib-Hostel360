@@ -30,7 +30,13 @@ def execute(filters=None):
 
 	feedback = get_feedback(filters, from_period, to_period)
 	if filters.show_comments:
-		return get_detail_columns(), get_detail_rows(feedback), None, get_chart(feedback), get_summary(feedback)
+		return (
+			get_detail_columns(),
+			get_detail_rows(feedback),
+			None,
+			get_chart(feedback),
+			get_summary(feedback),
+		)
 	return get_columns(), summarise(feedback), None, get_chart(feedback), get_summary(feedback)
 
 
@@ -127,7 +133,13 @@ def get_columns():
 
 def get_detail_columns():
 	return [
-		{"fieldname": "name", "label": _("Feedback"), "fieldtype": "Link", "options": "Hostel Feedback", "width": 140},
+		{
+			"fieldname": "name",
+			"label": _("Feedback"),
+			"fieldtype": "Link",
+			"options": "Hostel Feedback",
+			"width": 140,
+		},
 		{"fieldname": "period", "label": _("Period"), "fieldtype": "Data", "width": 90},
 		{"fieldname": "feedback_type", "label": _("Type"), "fieldtype": "Data", "width": 100},
 		{"fieldname": "hostel", "label": _("Hostel"), "fieldtype": "Link", "options": "Hostel", "width": 100},
@@ -151,7 +163,12 @@ def get_chart(feedback):
 	return {
 		"data": {
 			"labels": periods,
-			"datasets": [{"name": _("Average Overall Rating"), "values": [average_stars(by_period[p]) or 0 for p in periods]}],
+			"datasets": [
+				{
+					"name": _("Average Overall Rating"),
+					"values": [average_stars(by_period[p]) or 0 for p in periods],
+				}
+			],
 		},
 		"type": "line",
 		"lineOptions": {"regionFill": 1},
@@ -171,7 +188,12 @@ def get_summary(feedback):
 			"datatype": "Float",
 			"indicator": "Green" if (overall or 0) >= 3.5 else "Orange",
 		},
-		{"label": _("Average Food Quality (of 5)"), "value": food or 0, "datatype": "Float", "indicator": "Blue"},
+		{
+			"label": _("Average Food Quality (of 5)"),
+			"value": food or 0,
+			"datatype": "Float",
+			"indicator": "Blue",
+		},
 		{
 			"label": _("Anonymous"),
 			"value": sum(1 for r in feedback if r.is_anonymous),

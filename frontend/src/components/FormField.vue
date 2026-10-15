@@ -15,7 +15,9 @@ const props = defineProps<{
 const id = useId();
 const hintId = `${id}-hint`;
 const errorId = `${id}-error`;
-const describedBy = computed(() => [props.error ? errorId : "", props.hint ? hintId : ""].filter(Boolean).join(" ") || undefined);
+const describedBy = computed(
+	() => [props.error ? errorId : "", props.hint ? hintId : ""].filter(Boolean).join(" ") || undefined,
+);
 const invalid = computed<"true" | undefined>(() => (props.error ? "true" : undefined));
 </script>
 

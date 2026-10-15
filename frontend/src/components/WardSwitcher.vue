@@ -16,7 +16,9 @@ const open = ref(false);
 
 /** "UAT24CS0012 · Boys Hostel 1 · A-103": names, not internal codes. */
 function wardLine(ward: Ward): string {
-	return [ward.register_number, ward.hostel_name || ward.hostel, ward.room_number || ward.room].filter(Boolean).join(" · ");
+	return [ward.register_number, ward.hostel_name || ward.hostel, ward.room_number || ward.room]
+		.filter(Boolean)
+		.join(" · ");
 }
 
 /** What the hostel office still has to do before this ward's pages open, if anything. */
@@ -73,7 +75,10 @@ function choose(ward: Ward) {
 						:data-autofocus="ward.student === session.activeStudent ? '' : undefined"
 						@click="choose(ward)"
 					>
-						<span class="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-semibold text-brand-ink" aria-hidden="true">
+						<span
+							class="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-semibold text-brand-ink"
+							aria-hidden="true"
+						>
 							{{ ward.full_name.charAt(0) }}
 						</span>
 						<span class="min-w-0 flex-1">

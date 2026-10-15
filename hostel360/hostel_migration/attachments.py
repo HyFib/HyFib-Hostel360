@@ -54,7 +54,7 @@ def stored_file_sha256(file_url: str | None) -> str | None:
 	try:
 		path = frappe.get_doc("File", name).get_full_path()
 		return sha256_file(path)
-	except (OSError, frappe.ValidationError):
+	except OSError, frappe.ValidationError:
 		return None
 
 

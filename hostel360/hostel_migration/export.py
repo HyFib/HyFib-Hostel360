@@ -267,7 +267,9 @@ class ExitExport:
 			if dt.istable or dt.issingle:
 				continue
 			for df in frappe.get_meta(dt.name).get_table_fields():
-				children_by_parent.setdefault(dt.name, []).append((df.fieldname, df.label or df.fieldname, df.options))
+				children_by_parent.setdefault(dt.name, []).append(
+					(df.fieldname, df.label or df.fieldname, df.options)
+				)
 
 		for dt in doctypes:
 			self.say(_("Exporting {0}").format(dt.name))
@@ -279,7 +281,9 @@ class ExitExport:
 					"select field, value from `tabSingles` where doctype = %(doctype)s order by field",
 					{"doctype": dt.name},
 				)
-				entry["rows"] = write_csv(self.path("data", "csv", f"{file_stem}.csv"), ["field", "value"], rows)
+				entry["rows"] = write_csv(
+					self.path("data", "csv", f"{file_stem}.csv"), ["field", "value"], rows
+				)
 				book = XlsxBook()
 				book.add_sheet(dt.name, ["field", "value"], rows)
 				book.save(self.path("data", "xlsx", f"{file_stem}.xlsx"))
@@ -292,7 +296,9 @@ class ExitExport:
 			order_by = ("parenttype", "parent", "parentfield", "idx") if child else ("creation", "name")
 			entry["kind"] = "child" if child else "document"
 			entry["rows"] = write_csv(
-				self.path("data", "csv", f"{file_stem}.csv"), columns, iter_rows(dt.name, columns, order_by=order_by)
+				self.path("data", "csv", f"{file_stem}.csv"),
+				columns,
+				iter_rows(dt.name, columns, order_by=order_by),
 			)
 			entry["csv"] = f"data/csv/{file_stem}.csv"
 			if not child:
@@ -415,7 +421,8 @@ class ExitExport:
 				"--triggers",
 				conf.db_name,
 			]
-			with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=error_log) as proc:
+			# Argument list without a shell; the binary is the mariadb-dump found on PATH.
+			with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=error_log) as proc:  # noqa: S603
 				with gzip.open(target, "wb", compresslevel=6) as out:
 					out.write(f"-- {FORMAT} database dump of {frappe.local.site}\n".encode())
 					while chunk := proc.stdout.read(COPY_CHUNK):
@@ -452,7 +459,10 @@ class ExitExport:
 		if not self.include_files:
 			return
 		self.say(_("Copying uploaded files"))
-		for kind, source in (("public", frappe.get_site_path("public", "files")), ("private", frappe.get_site_path("private", "files"))):
+		for kind, source in (
+			("public", frappe.get_site_path("public", "files")),
+			("private", frappe.get_site_path("private", "files")),
+		):
 			source = os.path.realpath(source)
 			if not os.path.isdir(source):
 				continue

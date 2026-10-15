@@ -11,6 +11,11 @@ the transaction is then read back from PayU's verify API, exactly like the payer
 
 Webhooks are retried by the gateway, so every branch is idempotent. Unknown orders are
 acknowledged and ignored: the merchant account may serve other applications too.
+
+Both URLs are public, so a rejected delivery raises an operations alert only when it can matter:
+"not configured" only on a site that uses (or has used) that gateway, and "invalid signature"
+only when the post names one of our own orders. Anything else is an anonymous request; it is
+answered the same way but only logged, so outsiders cannot open alerts or keep them open.
 """
 
 import json
@@ -20,7 +25,7 @@ from frappe import _
 
 from hostel360.hostel_fees import alerting
 from hostel360.hostel_fees.constants import TRANSACTION
-from hostel360.hostel_fees.gateways import get_webhook_gateway
+from hostel360.hostel_fees.gateways import gateway_in_use, get_webhook_gateway
 from hostel360.hostel_fees.gateways.base import CAPTURED
 from hostel360.hostel_fees.transactions import (
 	PaymentVerificationError,
@@ -34,6 +39,9 @@ NOT_CONFIGURED_ALERT_KEY = "razorpay-webhook-not-configured"
 PAYU_NOT_CONFIGURED_ALERT_KEY = "payu-webhook-not-configured"
 COMPLETION_EVENTS = ("payment.captured", "order.paid")
 REFUND_EVENTS = ("refund.created", "refund.processed")
+# Razorpay events are a few kilobytes. A larger unverified body is not parsed at all, so that
+# anonymous posts cannot make each request spend time decoding JSON.
+MAX_UNVERIFIED_BODY_BYTES = 64 * 1024
 
 
 def handle_razorpay_webhook(
@@ -45,47 +53,57 @@ def handle_razorpay_webhook(
 	gateway = get_webhook_gateway(gateway_name="Razorpay")
 
 	if not gateway.webhook_secret:
-		alerting.raise_alert(
-			NOT_CONFIGURED_ALERT_KEY,
-			_("Payment webhook received but no webhook secret is configured"),
-			severity="Warning",
-			category="Payments",
-			description=_(
-				"Set the webhook secret in Hostel Payment Settings so webhook deliveries can be verified."
-			),
-		)
+		if gateway_in_use(gateway.name):
+			alerting.raise_alert(
+				NOT_CONFIGURED_ALERT_KEY,
+				_("Payment webhook received but no webhook secret is configured"),
+				severity="Warning",
+				category="Payments",
+				description=_(
+					"Set the webhook secret in Hostel Payment Settings so webhook deliveries can be verified."
+				),
+			)
+		else:
+			alerting.log_rejected_post(gateway.name, "webhook", "not configured")
 		return 400, {"status": "not_configured"}
 
 	if not gateway.verify_webhook(body, signature):
-		alerting.raise_alert(
-			SIGNATURE_ALERT_KEY,
-			_("Payment webhook with an invalid signature was rejected"),
-			severity="Warning",
-			category="Security",
-			description=_(
-				"A request to the payment webhook failed signature verification and was ignored. A single "
-				"occurrence usually means the webhook secret was changed in the dashboard; repeated "
-				"occurrences may be an attempt to forge payment confirmations."
-			),
-			details={
-				"ip": getattr(frappe.local, "request_ip", None),
-				"event_id": event_id,
-				"signature_present": bool(signature),
-				"body_bytes": len(body or b""),
-			},
-		)
+		# Read without trusting it, only to tell a delivery about our own payments (a changed
+		# secret, or a forged confirmation) from an anonymous post that could not settle anything.
+		claimed = _claimed_transaction(body)
+		if claimed:
+			alerting.raise_alert(
+				SIGNATURE_ALERT_KEY,
+				_("Payment webhook with an invalid signature was rejected"),
+				severity="Warning",
+				category="Security",
+				description=_(
+					"A request to the payment webhook failed signature verification and was ignored. A single "
+					"occurrence usually means the webhook secret was changed in the dashboard; repeated "
+					"occurrences may be an attempt to forge payment confirmations."
+				),
+				details={
+					"ip": getattr(frappe.local, "request_ip", None),
+					"event_id": event_id,
+					"transaction": claimed,
+					"signature_present": bool(signature),
+					"body_bytes": len(body or b""),
+				},
+			)
+		else:
+			alerting.log_rejected_post(gateway.name, "webhook", "invalid signature")
 		return 400, {"status": "invalid_signature"}
 
 	try:
 		event = json.loads(body or b"{}")
 	except ValueError:
 		return 400, {"status": "invalid_payload"}
+	if not isinstance(event, dict):
+		return 400, {"status": "invalid_payload"}
 
 	name = event.get("event") or ""
-	payload = event.get("payload") or {}
-	payment_entity = (payload.get("payment") or {}).get("entity") or {}
-	order_entity = (payload.get("order") or {}).get("entity") or {}
-	order_id = payment_entity.get("order_id") or order_entity.get("id")
+	payment_entity = _entity(event, "payment")
+	order_id = _order_id(event)
 	transaction = (
 		frappe.db.get_value(TRANSACTION, {"gateway_order_id": order_id}, "name") if order_id else None
 	)
@@ -141,6 +159,33 @@ def handle_razorpay_webhook(
 		frappe.set_user(previous_user)
 
 
+def _entity(event: dict, kind: str) -> dict:
+	"""``payload.<kind>.entity`` of a Razorpay event, or ``{}`` when the body is not shaped like one."""
+	payload = event.get("payload")
+	wrapper = payload.get(kind) if isinstance(payload, dict) else None
+	entity = wrapper.get("entity") if isinstance(wrapper, dict) else None
+	return entity if isinstance(entity, dict) else {}
+
+
+def _order_id(event: dict) -> str | None:
+	order_id = _entity(event, "payment").get("order_id") or _entity(event, "order").get("id")
+	return order_id if isinstance(order_id, str) and order_id else None
+
+
+def _claimed_transaction(body: bytes) -> str | None:
+	"""Our Razorpay transaction an unverified delivery names, if any. Never acted on."""
+	if len(body or b"") > MAX_UNVERIFIED_BODY_BYTES:
+		return None
+	try:
+		event = json.loads(body or b"{}")
+	except ValueError:
+		return None
+	order_id = _order_id(event) if isinstance(event, dict) else None
+	if not order_id:
+		return None
+	return frappe.db.get_value(TRANSACTION, {"gateway_order_id": order_id, "gateway": "Razorpay"}, "name")
+
+
 def _delivered(transaction: str | None, not_configured_key: str = NOT_CONFIGURED_ALERT_KEY) -> None:
 	"""A verified delivery was processed: close alerts an earlier failed delivery left open.
 
@@ -160,13 +205,16 @@ def handle_payu_webhook(fields: dict) -> tuple[int, dict]:
 
 	outcome = confirm_gateway_return("PayU", fields, source="webhook")
 	if outcome.result == "not_configured":
-		alerting.raise_alert(
-			PAYU_NOT_CONFIGURED_ALERT_KEY,
-			_("PayU webhook received but the merchant key and salt are not configured"),
-			severity="Warning",
-			category="Payments",
-			description=_("Enter the PayU merchant key and salt in Hostel Payment Settings."),
-		)
+		if gateway_in_use("PayU"):
+			alerting.raise_alert(
+				PAYU_NOT_CONFIGURED_ALERT_KEY,
+				_("PayU webhook received but the merchant key and salt are not configured"),
+				severity="Warning",
+				category="Payments",
+				description=_("Enter the PayU merchant key and salt in Hostel Payment Settings."),
+			)
+		else:
+			alerting.log_rejected_post("PayU", "webhook", "not configured")
 		return 400, {"status": "not_configured"}
 	if outcome.result == "invalid_signature":
 		return 400, {"status": "invalid_signature"}

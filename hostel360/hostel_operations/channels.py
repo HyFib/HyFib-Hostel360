@@ -170,7 +170,10 @@ def slack_payload(message: dict) -> dict:
 		)
 	if message.get("description"):
 		blocks.append(
-			{"type": "section", "text": {"type": "mrkdwn", "text": _slack_escape(message["description"])[:2900]}}
+			{
+				"type": "section",
+				"text": {"type": "mrkdwn", "text": _slack_escape(message["description"])[:2900]},
+			}
 		)
 	if message.get("url"):
 		blocks.append(
@@ -238,7 +241,11 @@ def google_chat_payload(message: dict) -> dict:
 		widgets.append({"textParagraph": {"text": escape_html(message["description"][:3000])}})
 	if message.get("url"):
 		widgets.append(
-			{"buttonList": {"buttons": [{"text": "Open alert", "onClick": {"openLink": {"url": message["url"]}}}]}}
+			{
+				"buttonList": {
+					"buttons": [{"text": "Open alert", "onClick": {"openLink": {"url": message["url"]}}}]
+				}
+			}
 		)
 	return {
 		"text": subject(message),
@@ -339,7 +346,9 @@ def post_webhook(
 	headers = {}
 	if channel_type == CHANNEL_WEBHOOK:
 		headers["X-H360-Event"] = f"alert.{message['event']}"
-	return post_json(url, builder(message), headers=headers, signing_secret=signing_secret, allow_http=allow_http)
+	return post_json(
+		url, builder(message), headers=headers, signing_secret=signing_secret, allow_http=allow_http
+	)
 
 
 def post_json(

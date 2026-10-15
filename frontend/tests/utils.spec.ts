@@ -20,6 +20,8 @@ describe("sanitizeHtml", () => {
 		const html = sanitizeHtml(
 			'<p onclick="x()">Hello <strong>there</strong><script>alert(1)</script></p><img src=x onerror=alert(1)><a href="javascript:alert(1)">bad</a><a href="https://example.org">good</a>',
 		);
-		expect(html).toBe('<p>Hello <strong>there</strong></p><a>bad</a><a href="https://example.org" target="_blank" rel="noopener noreferrer">good</a>');
+		expect(html).toBe(
+			'<p>Hello <strong>there</strong></p><a>bad</a><a href="https://example.org" target="_blank" rel="noopener noreferrer">good</a>',
+		);
 	});
 });

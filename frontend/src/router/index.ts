@@ -37,7 +37,8 @@ export function createAppRouter(history: RouterHistory = createWebHistory(PORTAL
 
 	// Pages are loaded on demand. After a new release the old files are gone, and on a dead
 	// connection they cannot be fetched; reload once into the new release, or explain.
-	const CHUNK_ERROR = /dynamically imported module|Importing a module script failed|Loading chunk|Unable to preload CSS/i;
+	const CHUNK_ERROR =
+		/dynamically imported module|Importing a module script failed|Loading chunk|Unable to preload CSS/i;
 	router.onError((error, to) => {
 		if (!CHUNK_ERROR.test(String((error as Error)?.message ?? error))) return;
 		if (!navigator.onLine) {

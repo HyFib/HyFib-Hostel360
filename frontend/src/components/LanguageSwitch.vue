@@ -8,7 +8,11 @@ defineProps<{ compact?: boolean }>();
 <template>
 	<div class="flex items-center gap-2">
 		<Languages v-if="!compact" :size="18" class="text-muted" aria-hidden="true" />
-		<div role="group" :aria-label="t('profile.language')" class="inline-flex rounded-xl border border-line bg-surface p-1">
+		<div
+			role="group"
+			:aria-label="t('profile.language')"
+			class="inline-flex rounded-xl border border-line bg-surface p-1"
+		>
 			<button
 				v-for="option in LOCALES"
 				:key="option.code"

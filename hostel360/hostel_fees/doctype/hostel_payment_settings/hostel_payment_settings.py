@@ -101,7 +101,9 @@ class HostelPaymentSettings(Document):
 		# even though the old one is still stored until this save completes.
 		if self.gateway == "PayU":
 			if not self.payu_merchant_key or not self.payu_merchant_salt:
-				frappe.throw(_("Enter the PayU Merchant Key and Merchant Salt before enabling online payments."))
+				frappe.throw(
+					_("Enter the PayU Merchant Key and Merchant Salt before enabling online payments.")
+				)
 			return
 		if not self.key_id or not self.key_secret:
 			frappe.throw(_("Enter the Key ID and Key Secret before enabling online payments."))

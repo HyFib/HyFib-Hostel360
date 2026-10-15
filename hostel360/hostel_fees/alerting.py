@@ -63,3 +63,16 @@ def resolve_alert(key: str, notes: str = "") -> bool:
 	except Exception:
 		frappe.log_error(title=f"Hostel360 could not resolve alert {key}")
 		return False
+
+
+def log_rejected_post(gateway_name: str, source: str, reason: str) -> None:
+	"""Note a rejected post to a public payment URL that concerns nothing of ours, without an alert.
+
+	Such posts can come from anyone; an alert for each would let outsiders open operations alerts
+	at will. The log line keeps them visible to whoever investigates.
+	"""
+	frappe.logger("hostel360").warning(
+		f"{gateway_name} {source} post rejected ({reason}) from "
+		f"{getattr(frappe.local, 'request_ip', None) or 'an unknown address'}; no alert raised, as it "
+		"concerns no payment of this site"
+	)

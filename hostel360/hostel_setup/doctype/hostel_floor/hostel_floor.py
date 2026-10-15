@@ -14,4 +14,6 @@ class HostelFloor(Document):
 		if not -3 <= cint(self.floor_number) <= 50:
 			frappe.throw(_("Floor Number must be between -3 and 50."))
 		self.hostel = frappe.db.get_value("Hostel Block", self.block, "hostel")
-		self.floor_label = " ".join((self.floor_label or "").split()) or default_floor_label(cint(self.floor_number))
+		self.floor_label = " ".join((self.floor_label or "").split()) or default_floor_label(
+			cint(self.floor_number)
+		)

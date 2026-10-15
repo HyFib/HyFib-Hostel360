@@ -13,7 +13,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from hostel360.api import payments as payment_api
 from hostel360.hostel_fees.constants import INVOICE, PAYMENT, SETTINGS, TRANSACTION
-from hostel360.hostel_fees.gateways import GatewayError, get_gateway
+from hostel360.hostel_fees.gateways import GatewayError, gateway_in_use, get_gateway
 from hostel360.hostel_fees.gateways.base import CAPTURED, CREATED, FAILED, REFUNDED
 from hostel360.hostel_fees.gateways.payu import payu_status
 from hostel360.hostel_fees.reconciliation import reconcile_pending_transactions
@@ -32,7 +32,7 @@ from hostel360.hostel_fees.tests.fixtures import (
 	payu_response_hash,
 	payu_sha512,
 )
-from hostel360.hostel_fees.webhooks import handle_payu_webhook
+from hostel360.hostel_fees.webhooks import PAYU_NOT_CONFIGURED_ALERT_KEY, handle_payu_webhook
 
 RETURN_URL_SUFFIX = "/api/method/hostel360.api.payments.payu_return"
 
@@ -57,7 +57,9 @@ class TestPayUGateway(FeeTestCase):
 	# -- helpers -----------------------------------------------------------------------------
 
 	def start(self, invoices=None) -> dict:
-		return create_payment_order(self.student, invoices or [self.invoice.name], "Administrator", "203.0.113.9")
+		return create_payment_order(
+			self.student, invoices or [self.invoice.name], "Administrator", "203.0.113.9"
+		)
 
 	def post_return(self, fields: dict):
 		"""Post ``fields`` to the return URL as PayU does; returns (response, query)."""
@@ -77,11 +79,17 @@ class TestPayUGateway(FeeTestCase):
 		return [c["data"] for c in self.payu.calls if c["data"].get("command") == "verify_payment"]
 
 	def receipts_for(self, transaction: str) -> list[str]:
-		return frappe.get_all(PAYMENT, filters={"payment_transaction": transaction, "docstatus": 1}, pluck="name")
+		return frappe.get_all(
+			PAYMENT, filters={"payment_transaction": transaction, "docstatus": 1}, pluck="name"
+		)
 
 	def age(self, transaction: str, minutes: int):
 		frappe.db.set_value(
-			TRANSACTION, transaction, "creation", add_to_date(now_datetime(), minutes=-minutes), update_modified=False
+			TRANSACTION,
+			transaction,
+			"creation",
+			add_to_date(now_datetime(), minutes=-minutes),
+			update_modified=False,
 		)
 
 	# -- checkout form -----------------------------------------------------------------------
@@ -96,7 +104,9 @@ class TestPayUGateway(FeeTestCase):
 		self.assertEqual(result["amount"], 1500)
 
 		checkout = result["checkout"]
-		self.assertEqual((checkout["action_url"], checkout["method"]), ("https://test.payu.in/_payment", "POST"))
+		self.assertEqual(
+			(checkout["action_url"], checkout["method"]), ("https://test.payu.in/_payment", "POST")
+		)
 		fields = checkout["fields"]
 		self.assertEqual(fields["key"], PAYU_KEY)
 		self.assertEqual(fields["txnid"], tx.gateway_order_id)
@@ -144,7 +154,8 @@ class TestPayUGateway(FeeTestCase):
 		self.assertEqual(receipts, [tx.payment])
 		receipt = frappe.get_doc(PAYMENT, tx.payment)
 		self.assertEqual(
-			(receipt.mode_of_payment, receipt.amount, receipt.reference_no), ("Online", 1500, record["mihpayid"])
+			(receipt.mode_of_payment, receipt.amount, receipt.reference_no),
+			("Online", 1500, record["mihpayid"]),
 		)
 		self.assertEqual(frappe.db.get_value(INVOICE, self.invoice.name, "status"), "Paid")
 		self.assertNotIn(fields["email"], tx.gateway_response or "")
@@ -287,6 +298,44 @@ class TestPayUGateway(FeeTestCase):
 		status, response = handle_payu_webhook(fields)
 		self.assertEqual((status, response["result"]), (200, "Success"))
 		self.assertEqual(len(self.receipts_for(result["transaction"])), 1)
+
+	def test_forged_post_naming_no_order_of_ours_is_refused_without_an_alert(self):
+		result = self.start()
+		record = self.payu.pay(result["checkout"])
+		stranger = dict(
+			self.payu.return_fields(result["checkout"], record, txnid="NOTOURS42"), hash="0" * 128
+		)
+
+		self.assertEqual(handle_payu_webhook(stranger), (400, {"status": "invalid_signature"}))
+		_response, query = self.post_return(stranger)
+		self.assertEqual(query["status"], "pending")
+		# Anyone can post to these URLs; only a post about one of our payments may open an alert.
+		self.assertEqual(self.alert_keys(), [])
+		self.assertEqual(self.verify_calls(), [])
+
+		forged = dict(self.payu.return_fields(result["checkout"], record), hash="0" * 128)
+		self.assertEqual(handle_payu_webhook(forged)[0], 400)
+		self.assertEqual(self.alert_keys(), ["payu-return-signature"])
+		self.assertEqual(self.alerts.call_args.kwargs["details"]["transaction"], result["transaction"])
+
+	def test_unconfigured_webhook_alerts_only_where_payu_is_used(self):
+		self.hide_site_transactions("PayU")
+		configure_gateway(gateway="Razorpay", payu_salt="")
+
+		# The site never took a PayU payment: a post to the public URL is refused quietly.
+		self.assertEqual(handle_payu_webhook({"key": "x", "txnid": "x"}), (400, {"status": "not_configured"}))
+		self.assertNotIn(PAYU_NOT_CONFIGURED_ALERT_KEY, self.alert_keys())
+		self.assertFalse(gateway_in_use("PayU"))
+		self.assertTrue(gateway_in_use("PayU", frappe._dict(enabled=1, gateway="PayU")))
+		self.assertFalse(gateway_in_use("PayU", frappe._dict(enabled=0, gateway="PayU")))
+
+	def test_unconfigured_webhook_alerts_while_payu_payments_exist(self):
+		self.hide_site_transactions("PayU")
+		self.start()  # taken through PayU before the institution moved to Razorpay
+		configure_gateway(gateway="Razorpay", payu_salt="")
+
+		self.assertEqual(handle_payu_webhook({"key": "x", "txnid": "x"}), (400, {"status": "not_configured"}))
+		self.assertIn(PAYU_NOT_CONFIGURED_ALERT_KEY, self.alert_keys())
 
 	def test_reconciliation_polls_pending_payu_transactions(self):
 		result = self.start()

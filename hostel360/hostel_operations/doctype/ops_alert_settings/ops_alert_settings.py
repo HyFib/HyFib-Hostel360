@@ -82,9 +82,9 @@ class OpsAlertSettings(Document):
 		for row in sorted(self.escalation_levels, key=lambda r: cint(r.level)):
 			if cint(row.after_minutes) < previous:
 				frappe.throw(
-					_("Escalation level {0} starts before the level above it. Later levels should wait longer.").format(
-						row.level
-					)
+					_(
+						"Escalation level {0} starts before the level above it. Later levels should wait longer."
+					).format(row.level)
 				)
 			previous = cint(row.after_minutes)
 
@@ -136,7 +136,8 @@ class OpsAlertSettings(Document):
 		targets = notification.resolve_targets(settings, alert, "test", [])
 		results = notification.send_to_targets(targets, message, settings)
 		return [
-			{"channel": r["channel_type"], "target": r["label"], "ok": r["ok"], "info": r["info"]} for r in results
+			{"channel": r["channel_type"], "target": r["label"], "ok": r["ok"], "info": r["info"]}
+			for r in results
 		]
 
 	@frappe.whitelist()

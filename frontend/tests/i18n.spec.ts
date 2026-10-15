@@ -48,10 +48,14 @@ describe("translations", () => {
 
 	it("are written in Tamil script, not left in English", () => {
 		const untranslated = Object.keys(english).filter(
-			(key) => tamil[key] === english[key] && /[a-z]{4,}/i.test(english[key]) && !/^[A-Z0-9 /().,-]+$/.test(english[key]),
+			(key) =>
+				tamil[key] === english[key] && /[a-z]{4,}/i.test(english[key]) && !/^[A-Z0-9 /().,-]+$/.test(english[key]),
 		);
 		// Brand and product names (Hostel360, SMS, WhatsApp, UPI) are the only allowed exceptions.
-		expect(untranslated.every((key) => /^(app\.name|login\.(sms|whatsapp)|paymentModes\.UPI)$/.test(key)), untranslated.join(", ")).toBe(true);
+		expect(
+			untranslated.every((key) => /^(app\.name|login\.(sms|whatsapp)|paymentModes\.UPI)$/.test(key)),
+			untranslated.join(", "),
+		).toBe(true);
 	});
 
 	it("cover every key the source code uses", () => {
@@ -64,7 +68,8 @@ describe("translations", () => {
 				if (!(match[1] in english)) missing.push(`${match[1]} (${file.split("/src/")[1]})`);
 			}
 			for (const match of text.matchAll(/\btc\(\s*["']([a-zA-Z][\w.]+)["']/g)) {
-				for (const form of ["one", "other"]) if (!(`${match[1]}.${form}` in english)) missing.push(`${match[1]}.${form}`);
+				for (const form of ["one", "other"])
+					if (!(`${match[1]}.${form}` in english)) missing.push(`${match[1]}.${form}`);
 			}
 			for (const match of text.matchAll(/(?:label|title): "([a-z][a-zA-Z]+\.[a-zA-Z.]+)"/g)) {
 				if (!(match[1] in english)) missing.push(`${match[1]} (${file.split("/src/")[1]})`);

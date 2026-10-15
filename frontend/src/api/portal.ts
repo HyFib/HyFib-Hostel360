@@ -47,8 +47,7 @@ export const getPrivacyNotice = () => call<PrivacyNotice>(m("get_privacy_notice"
 export const acceptPrivacyNotice = (version: string) => call<Ok>(m("accept_privacy_notice"), { version });
 
 /** Keep the server's messages and notifications in the language chosen on screen. */
-export const setLanguage = (lang: "en" | "ta") =>
-	call<{ ok: boolean; language: string }>(m("set_language"), { lang });
+export const setLanguage = (lang: "en" | "ta") => call<{ ok: boolean; language: string }>(m("set_language"), { lang });
 
 export const getDashboard = (student?: StudentArg) => call<Dashboard>(m("get_dashboard"), forStudent(student));
 
@@ -134,7 +133,11 @@ export const rateGrievance = (name: string, rating: number, feedback?: string) =
 	call<Ok>(m("rate_grievance"), { name, rating, feedback: feedback || undefined });
 
 /** For a parent, `student` is the ward the grievance is for: the upload is checked against that ward. */
-export function uploadAttachment(file: File, student?: StudentArg, purpose: "grievance" = "grievance"): Promise<UploadResult> {
+export function uploadAttachment(
+	file: File,
+	student?: StudentArg,
+	purpose: "grievance" = "grievance",
+): Promise<UploadResult> {
 	const form = new FormData();
 	form.append("file", file, file.name);
 	form.append("purpose", purpose);

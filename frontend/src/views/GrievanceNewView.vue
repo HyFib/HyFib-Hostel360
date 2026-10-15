@@ -95,14 +95,32 @@ async function submit() {
 		<PageHeader :title="t('grievances.new')" :subtitle="t('grievances.newSubtitle')" :back="{ name: 'grievances' }" />
 
 		<form ref="formRef" class="card" novalidate @submit.prevent="submit">
-			<FormField v-slot="{ id, describedBy, invalid }" :label="t('grievances.category')" :error="errors.category" required>
-				<select :id="id" v-model="form.category" class="input" :aria-describedby="describedBy" :aria-invalid="invalid" required>
+			<FormField
+				v-slot="{ id, describedBy, invalid }"
+				:label="t('grievances.category')"
+				:error="errors.category"
+				required
+			>
+				<select
+					:id="id"
+					v-model="form.category"
+					class="input"
+					:aria-describedby="describedBy"
+					:aria-invalid="invalid"
+					required
+				>
 					<option value="" disabled>{{ t("common.choose") }}</option>
-					<option v-for="category in GRIEVANCE_CATEGORIES" :key="category" :value="category">{{ tv("grievanceCategories", category) }}</option>
+					<option v-for="category in GRIEVANCE_CATEGORIES" :key="category" :value="category">
+						{{ tv("grievanceCategories", category) }}
+					</option>
 				</select>
 			</FormField>
 
-			<div v-if="sensitive" class="mb-4 flex items-start gap-3 rounded-xl border border-danger bg-danger-soft p-3 text-sm text-ink" role="note">
+			<div
+				v-if="sensitive"
+				class="mb-4 flex items-start gap-3 rounded-xl border border-danger bg-danger-soft p-3 text-sm text-ink"
+				role="note"
+			>
 				<ShieldAlert :size="20" class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
 				<div>
 					<p>{{ t("grievances.sensitiveNote") }}</p>
@@ -126,17 +144,49 @@ async function submit() {
 				</div>
 			</div>
 
-			<FormField v-slot="{ id, describedBy, invalid }" :label="t('grievances.subject')" :hint="t('grievances.subjectHint')" :error="errors.subject" required>
-				<input :id="id" v-model="form.subject" class="input" type="text" maxlength="140" :aria-describedby="describedBy" :aria-invalid="invalid" required>
+			<FormField
+				v-slot="{ id, describedBy, invalid }"
+				:label="t('grievances.subject')"
+				:hint="t('grievances.subjectHint')"
+				:error="errors.subject"
+				required
+			>
+				<input
+					:id="id"
+					v-model="form.subject"
+					class="input"
+					type="text"
+					maxlength="140"
+					:aria-describedby="describedBy"
+					:aria-invalid="invalid"
+					required
+				/>
 			</FormField>
 
-			<FormField v-slot="{ id, describedBy, invalid }" :label="t('grievances.description')" :hint="t('grievances.descriptionHint')" :error="errors.description" required>
-				<textarea :id="id" v-model="form.description" class="input" rows="5" maxlength="4000" :aria-describedby="describedBy" :aria-invalid="invalid" required />
+			<FormField
+				v-slot="{ id, describedBy, invalid }"
+				:label="t('grievances.description')"
+				:hint="t('grievances.descriptionHint')"
+				:error="errors.description"
+				required
+			>
+				<textarea
+					:id="id"
+					v-model="form.description"
+					class="input"
+					rows="5"
+					maxlength="4000"
+					:aria-describedby="describedBy"
+					:aria-invalid="invalid"
+					required
+				/>
 			</FormField>
 
 			<FormField v-slot="{ id, describedBy }" :label="t('grievances.priority')" required>
 				<select :id="id" v-model="form.priority" class="input" :aria-describedby="describedBy" :disabled="sensitive">
-					<option v-for="priority in GRIEVANCE_PRIORITIES" :key="priority" :value="priority">{{ tv("priorities", priority) }}</option>
+					<option v-for="priority in GRIEVANCE_PRIORITIES" :key="priority" :value="priority">
+						{{ tv("priorities", priority) }}
+					</option>
 				</select>
 			</FormField>
 
@@ -148,16 +198,24 @@ async function submit() {
 			/>
 
 			<fieldset class="mb-5">
-				<legend class="field-label">{{ t("grievances.attachments") }} <span class="font-normal text-muted">{{ t("common.optional") }}</span></legend>
+				<legend class="field-label">
+					{{ t("grievances.attachments") }} <span class="font-normal text-muted">{{ t("common.optional") }}</span>
+				</legend>
 				<p id="attach-hint" class="mb-2 text-sm text-muted">
 					{{ t("grievances.attachmentHint", { count: MAX_GRIEVANCE_ATTACHMENTS, size: formatBytes(rules.maxBytes) }) }}
 				</p>
 				<ul v-if="attachments.items.length" class="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
 					<li v-for="item in attachments.items" :key="item.id" class="relative">
-						<div class="flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-line bg-surface-2" :class="item.status === 'failed' ? 'border-danger' : ''">
-							<img v-if="item.preview" :src="item.preview" :alt="item.name" class="size-full object-cover">
+						<div
+							class="flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-line bg-surface-2"
+							:class="item.status === 'failed' ? 'border-danger' : ''"
+						>
+							<img v-if="item.preview" :src="item.preview" :alt="item.name" class="size-full object-cover" />
 							<FileText v-else :size="28" class="text-muted" aria-hidden="true" />
-							<span v-if="item.status === 'uploading'" class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 text-white">
+							<span
+								v-if="item.status === 'uploading'"
+								class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 text-white"
+							>
 								<LoaderCircle :size="24" class="motion-safe:animate-spin" aria-hidden="true" />
 								<span class="sr-only">{{ t("grievances.uploading", { name: item.name }) }}</span>
 							</span>
@@ -170,7 +228,9 @@ async function submit() {
 						>
 							<X :size="16" aria-hidden="true" />
 						</button>
-						<p v-if="item.status === 'failed'" class="mt-1 text-xs font-medium text-danger" role="alert">{{ item.error }}</p>
+						<p v-if="item.status === 'failed'" class="mt-1 text-xs font-medium text-danger" role="alert">
+							{{ item.error }}
+						</p>
 					</li>
 				</ul>
 				<ul v-if="fileErrors.length" class="mb-2 space-y-1" role="alert">
@@ -185,7 +245,7 @@ async function submit() {
 					aria-describedby="attach-hint"
 					tabindex="-1"
 					@change="pickFiles"
-				>
+				/>
 				<button
 					v-if="attachments.remaining.value > 0"
 					type="button"
@@ -197,11 +257,21 @@ async function submit() {
 				</button>
 			</fieldset>
 
-			<p v-if="error" class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+			<p
+				v-if="error"
+				class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger"
+				role="alert"
+			>
 				<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 			</p>
 			<button type="submit" class="btn-primary btn-block" :disabled="busy || attachments.uploading.value">
-				{{ busy ? t("common.submitting") : attachments.uploading.value ? t("grievances.uploadingShort") : t("grievances.submit") }}
+				{{
+					busy
+						? t("common.submitting")
+						: attachments.uploading.value
+							? t("grievances.uploadingShort")
+							: t("grievances.submit")
+				}}
 			</button>
 		</form>
 	</div>

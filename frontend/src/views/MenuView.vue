@@ -62,13 +62,22 @@ function shortDay(day: string): string {
 
 <template>
 	<div>
-		<PageHeader :title="t('menu.title')" :subtitle="menu.data.value ? formatDateRange(menu.data.value.week_start, menu.data.value.week_end) : undefined" />
+		<PageHeader
+			:title="t('menu.title')"
+			:subtitle="menu.data.value ? formatDateRange(menu.data.value.week_start, menu.data.value.week_end) : undefined"
+		/>
 
 		<nav class="mb-4 flex flex-wrap gap-2" :aria-label="t('menu.related')">
-			<RouterLink :to="{ name: 'mess-bills' }" class="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-sm font-medium text-ink no-underline">
+			<RouterLink
+				:to="{ name: 'mess-bills' }"
+				class="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-sm font-medium text-ink no-underline"
+			>
 				<UtensilsCrossed :size="16" aria-hidden="true" />{{ t("nav.messBills") }}
 			</RouterLink>
-			<RouterLink :to="{ name: 'mess-reduction' }" class="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-sm font-medium text-ink no-underline">
+			<RouterLink
+				:to="{ name: 'mess-reduction' }"
+				class="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-sm font-medium text-ink no-underline"
+			>
 				<CalendarOff :size="16" aria-hidden="true" />{{ t("nav.messReduction") }}
 			</RouterLink>
 		</nav>
@@ -77,7 +86,9 @@ function shortDay(day: string): string {
 			<button type="button" class="btn-secondary min-h-10 px-3 text-sm" @click="shiftWeek(-1)">
 				<ChevronLeft :size="18" aria-hidden="true" />{{ t("menu.previousWeek") }}
 			</button>
-			<button v-if="!isThisWeek" type="button" class="btn-ghost min-h-10 px-3 text-sm" @click="weekStart = null">{{ t("menu.thisWeek") }}</button>
+			<button v-if="!isThisWeek" type="button" class="btn-ghost min-h-10 px-3 text-sm" @click="weekStart = null">
+				{{ t("menu.thisWeek") }}
+			</button>
 			<button type="button" class="btn-secondary min-h-10 px-3 text-sm" @click="shiftWeek(1)">
 				{{ t("menu.nextWeek") }}<ChevronRight :size="18" aria-hidden="true" />
 			</button>
@@ -91,7 +102,12 @@ function shortDay(day: string): string {
 			:title="t('menu.noMess')"
 			:body="t('menu.noMessHint')"
 		/>
-		<EmptyState v-else-if="!days.length" :icon="Utensils" :title="t('menu.notPublished')" :body="t('menu.notPublishedHint')" />
+		<EmptyState
+			v-else-if="!days.length"
+			:icon="Utensils"
+			:title="t('menu.notPublished')"
+			:body="t('menu.notPublishedHint')"
+		/>
 
 		<template v-else>
 			<div role="tablist" :aria-label="t('menu.daysLabel')" class="mb-4 grid grid-cols-7 gap-1 xs:gap-1.5">
@@ -99,7 +115,11 @@ function shortDay(day: string): string {
 					v-for="(day, index) in days"
 					:id="`menu-tab-${index}`"
 					:key="day.date"
-					:ref="(el) => { if (el) tabs[index] = el as HTMLButtonElement }"
+					:ref="
+						(el) => {
+							if (el) tabs[index] = el as HTMLButtonElement;
+						}
+					"
 					type="button"
 					role="tab"
 					class="flex min-h-14 min-w-0 flex-col items-center justify-center rounded-xl border px-0.5 text-[0.8rem] font-semibold transition-colors xs:text-sm"
@@ -111,7 +131,9 @@ function shortDay(day: string): string {
 					@keydown="onTabKey($event, index)"
 				>
 					<span>{{ shortDay(day.day) }}</span>
-					<span class="text-xs font-medium" :class="index === selectedIndex ? '' : 'text-muted'">{{ day.date.slice(8, 10) }}</span>
+					<span class="text-xs font-medium" :class="index === selectedIndex ? '' : 'text-muted'">{{
+						day.date.slice(8, 10)
+					}}</span>
 					<span v-if="day.is_today || day.date === todayISO" class="sr-only">{{ t("menu.today") }}</span>
 					<span
 						v-if="day.is_today || day.date === todayISO"
@@ -131,7 +153,9 @@ function shortDay(day: string): string {
 			>
 				<h2 class="flex flex-wrap items-center gap-2 text-lg font-semibold text-ink">
 					{{ tv("days", selected.day) }}, {{ formatDate(selected.date) }}
-					<span v-if="selected.is_today || selected.date === todayISO" class="chip tone-info">{{ t("menu.today") }}</span>
+					<span v-if="selected.is_today || selected.date === todayISO" class="chip tone-info">{{
+						t("menu.today")
+					}}</span>
 				</h2>
 				<ul v-if="selected.meals.length" class="list-divided mt-2">
 					<li v-for="meal in selected.meals" :key="meal.meal" class="py-3">

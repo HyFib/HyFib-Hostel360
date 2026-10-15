@@ -6,7 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, nowdate
 
-from hostel360.hostel_mess.permissions import assert_mess_access
+from hostel360.hostel_mess.permissions import assert_doc_mess_access
 from hostel360.hostel_mess.utils import (
 	assert_period_open,
 	get_mess_for_hostel,
@@ -28,7 +28,7 @@ class MessExtraCharge(Document):
 			frappe.throw(
 				_("Select the mess. No mess serves hostel {0}.").format(self.hostel or _("(not allotted)"))
 			)
-		assert_mess_access(self.mess)
+		assert_doc_mess_access(self)
 
 		self.amount = flt(self.amount, 2)
 		if self.amount <= 0:

@@ -127,7 +127,8 @@ class TestOpsIngest(OpsRequestMixin, IntegrationTestCase):
 		self.assertEqual(result["rejected"], 2)
 		self.assertEqual(frappe.db.count("Ops Metric Sample", {"host": host}), 2)
 		self.assertEqual(
-			frappe.db.get_value("Ops Metric Sample", {"host": host, "metric": "cpu_percent"}, "source"), "Host Agent"
+			frappe.db.get_value("Ops Metric Sample", {"host": host, "metric": "cpu_percent"}, "source"),
+			"Host Agent",
 		)
 		self.assertRaises(frappe.ValidationError, self.ingest, {"type": "metrics", "samples": []})
 
@@ -144,12 +145,18 @@ class TestOpsIngest(OpsRequestMixin, IntegrationTestCase):
 		)
 		record = frappe.get_doc("Ops Backup Record", result["record"])
 		self.assertEqual(record.status, "Failed")
-		alert = frappe.db.get_value("Ops Alert", {"open_key": "backup.daily.failed"}, ["severity", "category"], as_dict=True)
+		alert = frappe.db.get_value(
+			"Ops Alert", {"open_key": "backup.daily.failed"}, ["severity", "category"], as_dict=True
+		)
 		self.assertEqual((alert.severity, alert.category), ("Critical", "Backup"))
 
 		self.ingest({"type": "backup", "backup_type": "Daily", "status": "Success", "size_bytes": 1024})
 		self.assertFalse(frappe.db.exists("Ops Alert", {"open_key": "backup.daily.failed"}))
-		self.assertRaises(frappe.ValidationError, self.ingest, {"type": "backup", "backup_type": "Hourly", "status": "Success"})
+		self.assertRaises(
+			frappe.ValidationError,
+			self.ingest,
+			{"type": "backup", "backup_type": "Hourly", "status": "Success"},
+		)
 
 	def test_heartbeat_records_and_resolves_silence_alert(self):
 		host = unique_key("host")
@@ -181,7 +188,9 @@ class TestOpsIngest(OpsRequestMixin, IntegrationTestCase):
 
 	def test_transient_failure_is_retryable_and_not_mistaken_for_a_replay(self):
 		key = unique_key("agent.backup")
-		body = json.dumps({"type": "alert", "key": key, "title": "Backup failed", "severity": "Critical"}).encode()
+		body = json.dumps(
+			{"type": "alert", "key": key, "title": "Backup failed", "severity": "Critical"}
+		).encode()
 		headers = signed_headers(body)
 
 		with patch("hostel360.hostel_operations.alerts.raise_alert", return_value=""):
@@ -232,7 +241,9 @@ class TestOpsIngest(OpsRequestMixin, IntegrationTestCase):
 		bucket = int(frappe.generate_hash(length=8), 16)
 		with (
 			patch.object(ops, "_invalid_signature_bucket", return_value=bucket),
-			patch("hostel360.hostel_operations.alerts.raise_alert", side_effect=["", "ALERT-X"]) as raise_alert,
+			patch(
+				"hostel360.hostel_operations.alerts.raise_alert", side_effect=["", "ALERT-X"]
+			) as raise_alert,
 		):
 			for _ in range(ops.INVALID_SIGNATURE_ALERT_THRESHOLD + 3):
 				self.assertRaises(frappe.AuthenticationError, self.ingest, {}, bad, body)
@@ -252,7 +263,9 @@ class TestOciNotifications(OpsRequestMixin, IntegrationTestCase):
 		self.addCleanup(self.recorder.__exit__, None, None, None)
 		self.addCleanup(_reset_request)
 
-	def notify(self, payload: dict, token: str = TEST_OCI_TOKEN, headers: dict | None = None, extra_query: str = ""):
+	def notify(
+		self, payload: dict, token: str = TEST_OCI_TOKEN, headers: dict | None = None, extra_query: str = ""
+	):
 		self.post(
 			"hostel360.api.ops.oci_notification",
 			json.dumps(payload).encode(),
@@ -353,7 +366,9 @@ class TestOciNotifications(OpsRequestMixin, IntegrationTestCase):
 		self.assertEqual(raised["action"], "raised")
 
 		# An OK that cannot be applied must not be acknowledged either, or the alert pages forever.
-		with patch.object(alerts, "_resolve_alert", side_effect=frappe.QueryTimeoutError("lock wait timeout")):
+		with patch.object(
+			alerts, "_resolve_alert", side_effect=frappe.QueryTimeoutError("lock wait timeout")
+		):
 			self.assertRaises(ops.AlarmNotRecordedError, self.notify, self.alarm("OK", alarm_id))
 		self.assertEqual(frappe.db.get_value("Ops Alert", raised["alert"], "status"), "Open")
 		self.assertEqual(self.notify(self.alarm("OK", alarm_id))["actions"][0]["action"], "resolved")
@@ -429,7 +444,13 @@ class TestAlertActionsAndHealthEndpoints(IntegrationTestCase):
 def _user(email: str, roles: list[str]) -> str:
 	if not frappe.db.exists("User", email):
 		user = frappe.get_doc(
-			{"doctype": "User", "email": email, "first_name": "Ops", "send_welcome_email": 0, "user_type": "System User"}
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": "Ops",
+				"send_welcome_email": 0,
+				"user_type": "System User",
+			}
 		)
 		for role in roles:
 			user.append("roles", {"role": role})

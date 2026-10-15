@@ -9,7 +9,7 @@ from frappe.utils import getdate, nowdate
 
 INSTITUTION_NAME = "Alagappa Chettiar Government College of Engineering and Technology"
 INSTITUTION_SHORT_NAME = "ACGCET"
-INSTITUTION_ADDRESS = "Karaikudi – 630 003, Sivagangai District, Tamil Nadu"
+INSTITUTION_ADDRESS = "Karaikudi – 630 003, Sivagangai District, Tamil Nadu"  # noqa: RUF001 - en dash as printed
 SUPPORT_PHONE = "+91 96060 60596"
 SUPPORT_EMAIL = "support@hyfib.com"
 PRIVACY_NOTICE_VERSION = "1.0"

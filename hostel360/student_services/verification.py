@@ -37,7 +37,15 @@ def lookup_certificate(code: str | None) -> dict:
 	row = frappe.db.get_value(
 		"Bonafide Certificate Request",
 		{"verification_code": code, "status": ["in", CERTIFIED_STATUSES]},
-		["verification_code", "certificate_number", "student_name", "program", "issue_date", "valid_till", "purpose"],
+		[
+			"verification_code",
+			"certificate_number",
+			"student_name",
+			"program",
+			"issue_date",
+			"valid_till",
+			"purpose",
+		],
 		as_dict=True,
 	)
 	# The database compares case-insensitively; codes are case-sensitive.

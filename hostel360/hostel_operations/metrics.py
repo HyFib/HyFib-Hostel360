@@ -43,7 +43,7 @@ def record_metrics(samples: list[dict], source: str, host: str | None = None) ->
 			continue
 		try:
 			value = float(sample.get("value"))
-		except (TypeError, ValueError):
+		except TypeError, ValueError:
 			continue
 		recorded_at = _clamp_time(sample.get("recorded_at"), now)
 		rows.append(
@@ -82,7 +82,9 @@ def record_metrics(samples: list[dict], source: str, host: str | None = None) ->
 	return len(rows)
 
 
-def record_metric(metric: str, value, unit: str = "", source: str = "Health Check", host: str | None = None) -> None:
+def record_metric(
+	metric: str, value, unit: str = "", source: str = "Health Check", host: str | None = None
+) -> None:
 	record_metrics([{"metric": metric, "value": value, "unit": unit}], source=source, host=host)
 
 

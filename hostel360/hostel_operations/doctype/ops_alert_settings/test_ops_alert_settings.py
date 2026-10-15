@@ -54,7 +54,9 @@ class TestOpsAlertSettings(IntegrationTestCase):
 
 	def test_channel_validation(self):
 		settings = configure_settings()
-		settings.append("channels", {"channel_type": "Email", "target": "not-an-email", "min_severity": "Info"})
+		settings.append(
+			"channels", {"channel_type": "Email", "target": "not-an-email", "min_severity": "Info"}
+		)
 		self.assertRaises(frappe.ValidationError, settings.save)
 
 		settings = configure_settings()
@@ -64,7 +66,11 @@ class TestOpsAlertSettings(IntegrationTestCase):
 		settings = configure_settings()
 		settings.append(
 			"channels",
-			{"channel_type": "Microsoft Teams Webhook", "target": "Ops", "secret_url": "http://teams.example.com/hook"},
+			{
+				"channel_type": "Microsoft Teams Webhook",
+				"target": "Ops",
+				"secret_url": "http://teams.example.com/hook",
+			},
 		)
 		self.assertRaises(frappe.ValidationError, settings.save)
 
@@ -74,7 +80,9 @@ class TestOpsAlertSettings(IntegrationTestCase):
 
 	def test_mobile_numbers_are_normalised(self):
 		settings = configure_settings()
-		settings.append("channels", {"channel_type": "SMS", "target": "+91 96060 60596", "min_severity": "Critical"})
+		settings.append(
+			"channels", {"channel_type": "SMS", "target": "+91 96060 60596", "min_severity": "Critical"}
+		)
 		settings.escalation_levels[0].notify_mobiles = "+91 97413 80530\n09606060596"
 		settings.save()
 		self.assertEqual(settings.channels[-1].target, "9606060596")
@@ -153,7 +161,9 @@ class TestOpsAlertSettingsUnderLoad(IntegrationTestCase):
 		configure_settings()
 		form = frappe.get_doc("Ops Alert Settings").as_dict()
 
-		moment = add_to_date(now_datetime(), days=3650, minutes=int(frappe.generate_hash(length=6), 16) % 500_000)
+		moment = add_to_date(
+			now_datetime(), days=3650, minutes=int(frappe.generate_hash(length=6), 16) % 500_000
+		)
 		with patch.object(escalation, "escalate_open_alerts", return_value={}):
 			self.assertEqual(escalation.run_escalations(now=moment), {})
 		with patch.object(health, "CHECKS", ()), DeliveryRecorder():
@@ -199,6 +209,12 @@ def _plain_user() -> str:
 	email = "ops-settings-plain@example.com"
 	if not frappe.db.exists("User", email):
 		frappe.get_doc(
-			{"doctype": "User", "email": email, "first_name": "Plain", "send_welcome_email": 0, "user_type": "System User"}
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": "Plain",
+				"send_welcome_email": 0,
+				"user_type": "System User",
+			}
 		).insert(ignore_permissions=True)
 	return email

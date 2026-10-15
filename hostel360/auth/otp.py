@@ -460,7 +460,7 @@ def _send_time_key() -> bytes:
 def _typical_send_seconds() -> float:
 	try:
 		value = float(frappe.cache.get(_send_time_key()) or DEFAULT_SEND_SECONDS)
-	except (TypeError, ValueError):
+	except TypeError, ValueError:
 		value = DEFAULT_SEND_SECONDS
 	return min(max(value, 0.05), MAX_EQUALISE_SECONDS)
 
@@ -590,6 +590,11 @@ def _normalise_kind(kind: str | None) -> str | None:
 	if value == KIND_STUDENT:
 		return KIND_STUDENT
 	frappe.throw(_("Choose whether you are signing in as a student or a parent."))
+
+
+def normalised_number(mobile: str) -> str:
+	"""The 10-digit form sign-in keys everything on (friendly error when it is not a mobile)."""
+	return _normalise(mobile)
 
 
 def _normalise(mobile: str) -> str:

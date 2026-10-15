@@ -23,6 +23,7 @@ completed automatically. When an alarm cannot be recorded the endpoint answers 5
 delivers it again.
 """
 
+import contextlib
 import hashlib
 import hmac
 import json
@@ -110,10 +111,12 @@ def ingest() -> dict:
 	claim_receipt(signature, payload)
 	try:
 		return handle_ingest(payload)
-	except (frappe.QueryDeadlockError, frappe.QueryTimeoutError):
+	except frappe.QueryDeadlockError, frappe.QueryTimeoutError:
 		# Lock trouble is not the message's fault. The whole request (receipt included) is
 		# rolled back, so the agent's retry is processed rather than refused as a replay.
-		frappe.log_error(title="Hostel360: ingest could not be stored", message=frappe.get_traceback(), defer_insert=True)
+		frappe.log_error(
+			title="Hostel360: ingest could not be stored", message=frappe.get_traceback(), defer_insert=True
+		)
 		frappe.throw(_("The message could not be stored right now; please retry."), IngestUnavailableError)
 
 
@@ -144,9 +147,9 @@ def verify_ingest_signature(body: bytes, timestamp: str, signature: str, now: fl
 	now = time.time() if now is None else now
 	if abs(now - sent_at) > TIMESTAMP_WINDOW_SECONDS:
 		frappe.throw(
-			_("The request timestamp is more than {0} seconds from server time. Check the agent clock.").format(
-				TIMESTAMP_WINDOW_SECONDS
-			),
+			_(
+				"The request timestamp is more than {0} seconds from server time. Check the agent clock."
+			).format(TIMESTAMP_WINDOW_SECONDS),
 			frappe.AuthenticationError,
 		)
 
@@ -183,7 +186,7 @@ def claim_receipt(signature: str, payload: dict) -> None:
 			frappe.db.sql(
 				f"""insert into `tab{RECEIPT_DOCTYPE}`
 					(name, receipt_key, message_type, host, received_at, creation, modified, owner, modified_by)
-				values (%(key)s, %(key)s, %(type)s, %(host)s, %(now)s, %(now)s, %(now)s, 'Administrator', 'Administrator')""",
+				values (%(key)s, %(key)s, %(type)s, %(host)s, %(now)s, %(now)s, %(now)s, 'Administrator', 'Administrator')""",  # noqa: S608 - only the RECEIPT_DOCTYPE constant is interpolated
 				{"key": key, "type": message_type, "host": host, "now": now},
 			)
 		except Exception as exc:
@@ -225,11 +228,10 @@ def _note_invalid_signature() -> None:
 		),
 	)
 	if not name:
-		# Let the next bad request in this window try again.
-		try:
+		# Let the next bad request in this window try again. Best effort: if the cache is down
+		# the flag simply expires with the window.
+		with contextlib.suppress(Exception):
 			frappe.cache.delete(flag)
-		except Exception:
-			pass
 
 
 def _invalid_signature_bucket() -> int:
@@ -300,7 +302,9 @@ def _ingest_metrics(payload: dict) -> dict:
 	if len(samples) > MAX_BATCH:
 		frappe.throw(_("Send at most {0} samples per request.").format(MAX_BATCH), IngestPayloadError)
 	clean = [s for s in samples if isinstance(s, dict)]
-	recorded = record_metrics(clean, source=_source(payload), host=str(payload.get("host") or "")[:140] or None)
+	recorded = record_metrics(
+		clean, source=_source(payload), host=str(payload.get("host") or "")[:140] or None
+	)
 	return {"ok": True, "recorded": recorded, "rejected": len(samples) - recorded}
 
 
@@ -313,7 +317,7 @@ def _ingest_backup(payload: dict) -> dict:
 		frappe.throw(_("status must be Success or Failed."), IngestPayloadError)
 	try:
 		size_bytes = max(float(payload.get("size_bytes") or 0), 0)
-	except (TypeError, ValueError):
+	except TypeError, ValueError:
 		frappe.throw(_("size_bytes must be a number."), IngestPayloadError)
 	doc = frappe.get_doc(
 		{
@@ -397,7 +401,9 @@ def confirm_oci_subscription(url: str) -> bool:
 	try:
 		response = requests.get(url, timeout=5, allow_redirects=False)
 	except requests.RequestException as exc:
-		frappe.log_error(title="Hostel360: OCI subscription confirmation failed", message=exc.__class__.__name__)
+		frappe.log_error(
+			title="Hostel360: OCI subscription confirmation failed", message=exc.__class__.__name__
+		)
 		return False
 	confirmed = 200 <= response.status_code < 300
 	if not confirmed:
@@ -443,7 +449,9 @@ def handle_oci_alarm(payload: dict, force_outage: bool = False) -> dict:
 			continue
 
 		namespace = str(meta.get("namespace") or "")
-		severity = OCI_SEVERITY.get(str(meta.get("severity") or payload.get("severity") or "").upper(), "Warning")
+		severity = OCI_SEVERITY.get(
+			str(meta.get("severity") or payload.get("severity") or "").upper(), "Warning"
+		)
 		dimensions = meta.get("dimensions") if isinstance(meta.get("dimensions"), list) else []
 		name = raise_alert(
 			key,

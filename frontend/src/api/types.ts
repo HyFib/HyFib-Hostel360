@@ -383,12 +383,16 @@ export interface GrievanceSummary {
 }
 
 export interface TimelineEntry {
+	id?: string;
 	on: string;
 	by: string;
 	is_staff?: boolean;
 	/** Written by the person viewing (only then is it shown as "You"). */
 	is_mine?: boolean;
+	/** As stored: what people typed, and system entries in English. */
 	message: string;
+	/** The entry to show, in the reader's language (typed text is left as written). */
+	display_message?: string | null;
 	status_change?: string | null;
 }
 

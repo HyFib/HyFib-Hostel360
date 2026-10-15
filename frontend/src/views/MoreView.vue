@@ -17,8 +17,14 @@ const items = computed(() => itemsFor(session.kind).filter((item) => !item.prima
 		<PageHeader :title="t('nav.more')" />
 		<ul class="card list-divided p-0">
 			<li v-for="item in items" :key="`${item.name}-${item.label}`">
-				<RouterLink :to="{ name: item.name }" class="flex min-h-14 items-center gap-3 px-4 text-ink no-underline hover:bg-surface-2">
-					<span class="inline-flex size-9 items-center justify-center rounded-full bg-brand-soft text-brand-ink" aria-hidden="true">
+				<RouterLink
+					:to="{ name: item.name }"
+					class="flex min-h-14 items-center gap-3 px-4 text-ink no-underline hover:bg-surface-2"
+				>
+					<span
+						class="inline-flex size-9 items-center justify-center rounded-full bg-brand-soft text-brand-ink"
+						aria-hidden="true"
+					>
 						<component :is="item.icon" :size="18" />
 					</span>
 					<span class="flex-1 font-medium">{{ t(item.label) }}</span>

@@ -23,7 +23,12 @@ const list = computed(() => bills.data.value ?? []);
 
 		<SkeletonList v-if="bills.loading.value && !bills.data.value" />
 		<ErrorState v-else-if="bills.error.value" :error="bills.error.value" @retry="bills.reload" />
-		<EmptyState v-else-if="!list.length" :icon="UtensilsCrossed" :title="t('messBills.empty')" :body="t('messBills.emptyHint')" />
+		<EmptyState
+			v-else-if="!list.length"
+			:icon="UtensilsCrossed"
+			:title="t('messBills.empty')"
+			:body="t('messBills.emptyHint')"
+		/>
 
 		<ul v-else class="space-y-3">
 			<li v-for="bill in list" :key="bill.name" class="card">

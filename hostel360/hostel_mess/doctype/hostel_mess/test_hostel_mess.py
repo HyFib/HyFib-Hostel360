@@ -11,17 +11,19 @@ from hostel360.hostel_mess.doctype.mess_menu.mess_menu import get_previous_week_
 from hostel360.hostel_mess.doctype.mess_stock_entry.mess_stock_entry import get_item_details
 from hostel360.hostel_mess.permissions import (
 	MESS_SCOPED_DOCTYPES,
+	assert_doc_mess_access,
 	get_permitted_messes,
 	mess_has_permission,
 	mess_query_conditions,
 )
-from hostel360.hostel_mess.services import get_mess_for_student
+from hostel360.hostel_mess.services import cancel_mess_reduction, get_mess_for_student
 from hostel360.hostel_mess.tasks import send_low_stock_digest
 from hostel360.hostel_mess.testing import (
 	EXTERNAL_DEPENDENCIES,
 	make_hostel,
 	make_item,
 	make_mess,
+	make_reduction,
 	make_stock_entry,
 	make_student,
 	make_user,
@@ -29,7 +31,13 @@ from hostel360.hostel_mess.testing import (
 	unique,
 )
 from hostel360.hostel_mess.utils import get_week_start
-from hostel360.setup.roles import AUDITOR_ROLE, DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE, MESS_STAFF_ROLE
+from hostel360.setup.roles import (
+	AUDITOR_ROLE,
+	DEPUTY_WARDEN_ROLE,
+	MESS_MANAGER_ROLE,
+	MESS_STAFF_ROLE,
+	OFFICE_ROLE,
+)
 
 IGNORE_TEST_RECORD_DEPENDENCIES = EXTERNAL_DEPENDENCIES
 
@@ -207,6 +215,111 @@ class TestMessScoping(IntegrationTestCase):
 		with set_user(manager):
 			menu = self.menu(self.girls_mess).insert()
 		self.assertEqual(menu.mess, self.girls_mess)
+
+	def test_student_records_survive_a_mess_reorganisation(self):
+		"""A hostel moved to a new mess keeps seeing its students' earlier bills, extras and reductions."""
+		moved = make_hostel()
+		shared = frappe.get_doc("Hostel Mess", self.boys_mess)
+		shared.append("hostels", {"hostel": moved})
+		shared.save(ignore_permissions=True)
+
+		student = make_student(moved)
+		absence = (add_days(nowdate(), 10), add_days(nowdate(), 14))
+		reduction = make_reduction(student, *absence, status="Pending")
+		extra = frappe.get_doc(
+			{
+				"doctype": "Mess Extra Charge",
+				"student": student,
+				"charge_date": nowdate(),
+				"charge_type": "Guest Meal",
+				"description": "Parent stayed for lunch",
+				"amount": 120,
+			}
+		).insert(ignore_permissions=True)
+		bill = frappe.get_doc(
+			{
+				"doctype": "Mess Bill",
+				"mess_bill_run": f"{self.boys_mess}-2026-09-01",
+				"mess": self.boys_mess,
+				"student": student,
+				"hostel": moved,
+				"from_date": "2026-09-01",
+				"to_date": "2026-09-30",
+				"status": "Published",
+				"total_amount": 900,
+			}
+		)
+		bill.flags.from_bill_run = True
+		bill.flags.ignore_links = True
+		bill.insert(ignore_permissions=True)
+		records = {
+			"Mess Reduction Application": reduction,
+			"Mess Extra Charge": extra.name,
+			"Mess Bill": bill.name,
+		}
+		for doctype, name in records.items():
+			self.assertEqual(frappe.db.get_value(doctype, name, ["mess", "hostel"]), (self.boys_mess, moved))
+		old_menu = self.menu(self.boys_mess).insert(ignore_permissions=True)
+
+		deputy, office = make_user([DEPUTY_WARDEN_ROLE]), make_user([OFFICE_ROLE])
+		for user in (deputy, office):
+			restrict_to_hostel(user, moved)
+
+		# The moved hostel gets a mess of its own; the shared one goes on serving the boys' hostel.
+		shared.reload()
+		shared.set("hostels", [row for row in shared.hostels if row.hostel != moved])
+		shared.save(ignore_permissions=True)
+		new_mess = make_mess([moved])
+
+		for user in (deputy, office):
+			self.assertEqual(get_permitted_messes(user), {new_mess})
+			with set_user(user):
+				for doctype, name in records.items():
+					listed = frappe.get_list(doctype, filters={"student": student}, pluck="name")
+					self.assertEqual(listed, [name], f"{doctype} for {user}")
+					self.assertTrue(frappe.has_permission(doctype, "read", name), doctype)
+				# Records without a hostel stay with the messes that serve the user's hostels.
+				menus = frappe.get_list("Mess Menu", filters={"mess": self.boys_mess}, pluck="name")
+				self.assertNotIn(old_menu.name, menus)
+				self.assertFalse(frappe.has_permission("Mess Menu", "read", old_menu.name))
+
+		# Keeping the old mess is fine; filing into it or moving to another mess is not.
+		stored = frappe.get_doc("Mess Extra Charge", extra.name)
+		self.assertTrue(mess_has_permission(stored, "write", deputy))
+		stored.mess = self.girls_mess
+		self.assertFalse(mess_has_permission(stored, "write", deputy))
+		stored.mess = new_mess
+		self.assertTrue(mess_has_permission(stored, "write", deputy))
+		fresh = frappe.get_doc({"doctype": "Mess Extra Charge", "student": student, "mess": self.boys_mess})
+		self.assertFalse(mess_has_permission(fresh, "create", deputy))
+		with set_user(deputy), self.assertRaises(frappe.PermissionError):
+			assert_doc_mess_access(fresh)
+		with set_user(deputy):
+			assert_doc_mess_access(frappe.get_doc("Mess Extra Charge", extra.name))
+
+		# Staff of the hostel the old mess still serves do not pick up the moved hostel's records.
+		boys_deputy = make_user([DEPUTY_WARDEN_ROLE])
+		restrict_to_hostel(boys_deputy, self.boys_hostel)
+		with set_user(boys_deputy):
+			for doctype in records:
+				self.assertEqual(frappe.get_list(doctype, filters={"student": student}, pluck="name"), [])
+
+		cancel_mess_reduction(reduction, deputy)
+		self.assertEqual(frappe.db.get_value("Mess Reduction Application", reduction, "status"), "Cancelled")
+
+	def test_hostel_records_scoped_by_hostel_when_no_mess_serves_it(self):
+		hostel = make_hostel()
+		user = make_user([OFFICE_ROLE])
+		restrict_to_hostel(user, hostel)
+		self.assertEqual(mess_query_conditions(user, "Mess Menu"), "1 = 0")
+		condition = mess_query_conditions(user, "Mess Bill")
+		self.assertEqual(condition, f"`tabMess Bill`.`hostel` in ({frappe.db.escape(hostel)})")
+
+		condition = mess_query_conditions(self.staff, "Mess Reduction Application")
+		table = "`tabMess Reduction Application`"
+		self.assertIn(f"{table}.`mess` in ({frappe.db.escape(self.boys_mess)})", condition)
+		self.assertIn(f"{table}.`hostel` in ({frappe.db.escape(self.boys_hostel)})", condition)
+		self.assertNotIn("`hostel`", mess_query_conditions(self.staff, "Mess Bill Run"))
 
 
 class TestMessPermissionRules(IntegrationTestCase):

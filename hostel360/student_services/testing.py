@@ -112,7 +112,9 @@ def make_student(
 	return frappe._dict(name=doc.name, user=user, hostel=hostel, full_name=f"{first_name} Kannan")
 
 
-def make_guardian(student: str, can_approve_leave: int = 1, relation: str = "Father", with_user: bool = True) -> frappe._dict:
+def make_guardian(
+	student: str, can_approve_leave: int = 1, relation: str = "Father", with_user: bool = True
+) -> frappe._dict:
 	guardian = frappe.get_doc(
 		{
 			"doctype": "Hostel Guardian",
@@ -192,7 +194,9 @@ def make_scoped_staff(designation: str, hostel: str, blocks: list[str] | None = 
 
 def make_linked_reduction(leave: str, from_date=None, to_date=None, status: str = "Approved") -> str:
 	"""A Mess Reduction Application raised for a leave, already in ``status``."""
-	values = frappe.db.get_value("Home Visit Leave", leave, ["student", "from_datetime", "to_datetime"], as_dict=True)
+	values = frappe.db.get_value(
+		"Home Visit Leave", leave, ["student", "from_datetime", "to_datetime"], as_dict=True
+	)
 	frappe.flags.hostel360_migration = True
 	try:
 		doc = frappe.get_doc(
@@ -252,6 +256,14 @@ class SentMessages(list):
 
 	def references(self, event: str | None = None) -> list[str]:
 		return [m["reference_name"] for m in self if event is None or m["event"] == event]
+
+	def contexts(self, event: str, user: str | None = None) -> list[dict]:
+		"""Contexts sent for ``event``, only those addressed to ``user`` when one is given."""
+		return [
+			m["context"]
+			for m in self
+			if m["event"] == event and (user is None or any(r.get("user") == user for r in m["recipients"]))
+		]
 
 
 class _RecordingDispatch:

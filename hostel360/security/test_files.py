@@ -6,6 +6,7 @@ import io
 import json
 import os
 import struct
+import time
 import unicodedata
 import zipfile
 from unittest.mock import patch
@@ -13,6 +14,7 @@ from unittest.mock import patch
 import frappe
 from frappe.core.doctype.file.file import File
 from frappe.tests import IntegrationTestCase
+from werkzeug.test import EnvironBuilder
 
 from hostel360.security import clamav, files
 from hostel360.setup.roles import OFFICE_ROLE, STUDENT_ROLE
@@ -396,12 +398,34 @@ class TestGenericUploadEndpoints(IntegrationTestCase):
 		self.staff_user = make_user(OFFICE_ROLE)
 
 	def call(self, path: str, user: str, method: str = "POST", form: dict | None = None, headers=None):
+		"""Run the guard as Frappe would for a request with ``user``'s cookie session."""
+		request = EnvironBuilder(path=path, method=method, headers=headers or {}).get_request()
 		with (
 			self.set_user(user),
-			patch.object(frappe.local, "request", FakeRequest(path, method, headers), create=True),
+			patch.object(frappe.local, "request", request, create=True),
 			patch.object(frappe.local, "form_dict", frappe._dict(form or {}), create=True),
+			# The session's LoginManager: Frappe lets an API key switch only a Guest request.
+			patch.object(frappe.local, "login_manager", frappe._dict(user=user), create=True),
 		):
 			files.block_portal_generic_upload()
+			return frappe.session.user
+
+	def assertUploadRefused(self, *args, **kwargs):
+		with (
+			patch("frappe.handler.upload_file") as handler,
+			self.assertRaises((files.PortalUploadBlocked, frappe.AuthenticationError)) as refused,
+		):
+			self.call(*args, **kwargs)
+		handler.assert_not_called()
+		return refused.exception
+
+	def with_api_key(self, user: str) -> str:
+		doc = frappe.get_doc("User", user)
+		doc.api_key = frappe.generate_hash(length=15)
+		secret = frappe.generate_hash(length=15)
+		doc.api_secret = secret
+		doc.save(ignore_permissions=True)
+		return f"token {doc.api_key}:{secret}"
 
 	def test_portal_users_and_visitors_are_refused(self):
 		paths = (
@@ -451,12 +475,66 @@ class TestGenericUploadEndpoints(IntegrationTestCase):
 		self.call("/api/method/upload_file", self.portal_user, method="OPTIONS")
 		self.call("/hostel", "Guest", method="GET")
 
-	def test_token_requests_are_judged_after_authentication(self):
-		# Frappe resolves the user of a token request after before_request; a bad token is
-		# refused there, and any File it inserts still meets the File-level policy.
-		self.call("/api/method/upload_file", "Guest", headers={"Authorization": "token key:secret"})
+	def test_an_authorization_header_never_exempts_a_portal_session(self):
+		# Frappe ignores these headers (unknown scheme, no colon, unknown token) and the
+		# request goes on as the cookie user, so the guard must judge that user.
+		chunk = {"chunk_index": 0, "total_chunk_count": 2, "chunk_byte_offset": 0, "total_file_size": 999999}
+		for header in ("x y", "token abc", "Bearer bogus", "Basic Zm9v", "nonsense", "a b c"):
+			for path in ("/api/method/upload_file", "/api/v2/method/upload_file"):
+				error = self.assertUploadRefused(
+					path, self.portal_user, form=chunk, headers={"Authorization": header}
+				)
+				self.assertIsInstance(error, files.PortalUploadBlocked, f"{header} {path}")
+		file_doc = json.dumps({"doctype": "File", "file_name": "x.pdf", "content": "JVBERi0="})
 		with self.assertRaises(files.PortalUploadBlocked):
-			self.call("/api/method/upload_file", "Guest", headers={"Authorization": "nonsense"})
+			self.call(
+				"/api/method/frappe.client.insert",
+				self.portal_user,
+				form={"doc": file_doc},
+				headers={"Authorization": "x y"},
+			)
+
+	def test_token_requests_are_judged_by_the_user_they_authenticate(self):
+		staff_token = self.with_api_key(self.staff_user)
+		portal_token = self.with_api_key(self.portal_user)
+
+		# A staff key used without a session runs as that staff user: allowed.
+		self.assertEqual(
+			self.call("/api/method/upload_file", "Guest", headers={"Authorization": staff_token}),
+			self.staff_user,
+		)
+		# A portal user's own key is still a portal user.
+		error = self.assertUploadRefused(
+			"/api/method/upload_file", "Guest", headers={"Authorization": portal_token}
+		)
+		self.assertIsInstance(error, files.PortalUploadBlocked)
+		# Frappe keeps the cookie user when a session sends someone else's key as well.
+		error = self.assertUploadRefused(
+			"/api/method/upload_file", self.portal_user, headers={"Authorization": staff_token}
+		)
+		self.assertIsInstance(error, files.PortalUploadBlocked)
+		# A token that authenticates nobody fails as it would in Frappe's own check.
+		for header in ("token key:secret", "Bearer bogus", "x y"):
+			error = self.assertUploadRefused(
+				"/api/method/upload_file", "Guest", headers={"Authorization": header}
+			)
+			self.assertIsInstance(error, frappe.AuthenticationError, header)
+		# Visitors with no header at all are refused as before.
+		self.assertUploadRefused("/api/method/upload_file", "Guest")
+
+	def test_user_is_resolved_only_for_upload_requests_and_only_once(self):
+		with patch("frappe.auth.validate_auth") as validate:
+			self.call(
+				"/api/method/frappe.client.get_list", self.portal_user, headers={"Authorization": "x y"}
+			)
+			validate.assert_not_called()
+			self.call("/api/method/upload_file", self.staff_user, headers={"Authorization": "x y"})
+			validate.assert_called_once()
+			# Registered as an auth hook it would already run inside validate_auth.
+			validate.reset_mock()
+			with patch.object(frappe.local, "hostel360_resolving_user", True, create=True):
+				self.call("/api/method/upload_file", self.staff_user)
+			validate.assert_not_called()
 
 	def test_chunked_upload_is_refused_before_the_handler_runs(self):
 		# Frappe appends each chunk to a temporary file and returns before any File record
@@ -471,6 +549,34 @@ class TestGenericUploadEndpoints(IntegrationTestCase):
 				form={"chunk_index": 1, "total_chunk_count": 99, "chunk_byte_offset": 0},
 			)
 		handler.assert_not_called()
+
+
+class TestStaleChunkFiles(IntegrationTestCase):
+	"""Clean-up of the temporary files Frappe's chunked upload_file leaves behind."""
+
+	def chunk_file(
+		self, is_private: bool, age_seconds: int = 0, prefix: str = files.CHUNK_FILE_PREFIX
+	) -> str:
+		path = frappe.get_site_path("private" if is_private else "public", "files", f"{prefix}{unique()}.pdf")
+		with open(path, "wb") as fh:
+			fh.write(pdf_bytes())
+		if age_seconds:
+			stamp = time.time() - age_seconds
+			os.utime(path, (stamp, stamp))
+		self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+		return path
+
+	def test_abandoned_chunks_are_removed_and_live_ones_kept(self):
+		stale = [self.chunk_file(False, 2 * 3600), self.chunk_file(True, 2 * 3600)]
+		live = [self.chunk_file(False, 60), self.chunk_file(True)]
+		ordinary = self.chunk_file(False, 2 * 3600, prefix="report-")
+
+		self.assertGreaterEqual(files.delete_stale_chunk_files(), 2)
+		for path in stale:
+			self.assertFalse(os.path.exists(path), path)
+		for path in [*live, ordinary]:
+			self.assertTrue(os.path.exists(path), path)
+		self.assertEqual(files.delete_stale_chunk_files(), 0)
 
 
 class FakeSocket:

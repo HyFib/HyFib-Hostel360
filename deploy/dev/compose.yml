@@ -30,7 +30,11 @@ services:
       - redis-queue-data:/data
 
   bench:
-    image: frappe/build:v16
+    # frappe/build:v16 with Tamil fonts and *.localhost resolution for print PDFs
+    image: h360-dev-bench:16
+    build:
+      context: ../docker
+      dockerfile: ../dev/Containerfile
     entrypoint: ["sleep", "infinity"]
     working_dir: /home/frappe/frappe-bench
     environment:

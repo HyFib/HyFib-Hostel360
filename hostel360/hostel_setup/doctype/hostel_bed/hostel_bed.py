@@ -29,7 +29,12 @@ class HostelBed(Document):
 			# Residents are set by Room Allotment directly in the database, never by a form.
 			before = self.get_doc_before_save()
 			if before:
-				for fieldname in ("current_student", "current_student_name", "current_allotment", "is_active"):
+				for fieldname in (
+					"current_student",
+					"current_student_name",
+					"current_allotment",
+					"is_active",
+				):
 					self.set(fieldname, before.get(fieldname))
 		room = frappe.db.get_value("Hostel Room", self.room, ["hostel", "block", "floor"], as_dict=True)
 		self.hostel, self.block, self.floor = room.hostel, room.block, room.floor
@@ -55,9 +60,9 @@ class HostelBed(Document):
 	def on_trash(self):
 		if not self.flags.from_room_sync:
 			frappe.throw(
-				_("Reduce the capacity of room {0} to remove a bed. Beds with history are kept for the record.").format(
-					frappe.bold(self.room)
-				)
+				_(
+					"Reduce the capacity of room {0} to remove a bed. Beds with history are kept for the record."
+				).format(frappe.bold(self.room))
 			)
 		if self.current_student or self.status == "Occupied":
 			frappe.throw(_("Bed {0} is occupied and cannot be removed.").format(frappe.bold(self.name)))
@@ -72,7 +77,9 @@ def set_bed_status(bed: str, status: str, remarks: str | None = None) -> str:
 	doc = frappe.get_doc("Hostel Bed", bed)
 	doc.check_permission("write")
 	if doc.current_allotment:
-		frappe.throw(_("Bed {0} is occupied. Vacate or transfer the allotment first.").format(frappe.bold(bed)))
+		frappe.throw(
+			_("Bed {0} is occupied. Vacate or transfer the allotment first.").format(frappe.bold(bed))
+		)
 	doc.status = status
 	if remarks:
 		doc.remarks = remarks

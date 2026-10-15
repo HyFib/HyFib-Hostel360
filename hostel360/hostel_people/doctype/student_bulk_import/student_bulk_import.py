@@ -17,10 +17,12 @@ from io import BytesIO
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.permissions import get_user_permissions
 from frappe.utils import getdate, now_datetime, nowdate, validate_email_address
 from frappe.utils.background_jobs import is_job_enqueued
 
 from hostel360.hostel_people.doctype.hostel_student.hostel_student import clean_register_number
+from hostel360.hostel_people.services import block_restrictions, get_staff_scope
 from hostel360.utils.validation import normalize_mobile, validate_pincode
 
 MAX_ROWS = 5000
@@ -39,7 +41,12 @@ COLUMNS = (
 	("program", "Program", False, "Exact name of an Academic Program."),
 	("year_of_study", "Year of Study", False, "1 to 5."),
 	("admission_year", "Admission Year", False, "For example 2026."),
-	("academic_year", "Academic Year", False, "For example 2026-2027. Blank uses the import's academic year."),
+	(
+		"academic_year",
+		"Academic Year",
+		False,
+		"For example 2026-2027. Blank uses the import's academic year.",
+	),
 	("mobile_number", "Mobile Number", True, "10-digit mobile number; used for OTP login."),
 	("email", "Email", False, ""),
 	("address_line1", "Address Line 1", False, ""),
@@ -85,7 +92,17 @@ COLUMN_ALIASES = {
 	"parent_mobile": "guardian_mobile",
 }
 
-GENDERS = {"male": "Male", "m": "Male", "boy": "Male", "female": "Female", "f": "Female", "girl": "Female", "other": "Other", "o": "Other", "transgender": "Other"}
+GENDERS = {
+	"male": "Male",
+	"m": "Male",
+	"boy": "Male",
+	"female": "Female",
+	"f": "Female",
+	"girl": "Female",
+	"other": "Other",
+	"o": "Other",
+	"transgender": "Other",
+}
 RELATIONS = ("Father", "Mother", "Guardian", "Brother", "Sister", "Other")
 BLOOD_GROUPS = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
 YES = {"yes", "y", "1", "true"}
@@ -238,7 +255,9 @@ class StudentBulkImport(Document):
 		except frappe.ValidationError:
 			raise
 		except Exception:
-			frappe.log_error(title="Hostel360: unreadable student import file", message=frappe.get_traceback())
+			frappe.log_error(
+				title="Hostel360: unreadable student import file", message=frappe.get_traceback()
+			)
 			frappe.throw(_("The file could not be read. Save it again as .xlsx or .csv and attach it."))
 
 		raw = [list(row) for row in (raw or []) if row and any(_cell(value) != "" for value in row)]
@@ -260,17 +279,23 @@ class StudentBulkImport(Document):
 			else:
 				ignored.append(str(_cell(title)))
 
-		missing = [label for fieldname, label, required, _help in COLUMNS if required and fieldname not in mapping.values()]
+		missing = [
+			label
+			for fieldname, label, required, _help in COLUMNS
+			if required and fieldname not in mapping.values()
+		]
 		if missing:
 			frappe.throw(
-				_("These required columns are missing: {0}. Download the template to see the expected columns.").format(
-					", ".join(_(m) for m in missing)
-				)
+				_(
+					"These required columns are missing: {0}. Download the template to see the expected columns."
+				).format(", ".join(_(m) for m in missing))
 			)
 
 		data = raw[1:]
 		if len(data) > MAX_ROWS:
-			frappe.throw(_("A file can hold at most {0} students. Split it into smaller files.").format(MAX_ROWS))
+			frappe.throw(
+				_("A file can hold at most {0} students. Split it into smaller files.").format(MAX_ROWS)
+			)
 
 		rows = []
 		for offset, values in enumerate(data):
@@ -294,7 +319,13 @@ class StudentBulkImport(Document):
 			label = f"Row {row['row']} · {result.get('register_number') or '-'}"
 			if result["errors"]:
 				failed += 1
-				failures.append({**_original(row), "errors": "; ".join(result["errors"]), "warnings": "; ".join(result["warnings"])})
+				failures.append(
+					{
+						**_original(row),
+						"errors": "; ".join(result["errors"]),
+						"warnings": "; ".join(result["warnings"]),
+					}
+				)
 				log.append(f"{label} · Failed: {'; '.join(result['errors'])}")
 			elif result["action"] == "Skip":
 				skipped += 1
@@ -305,10 +336,12 @@ class StudentBulkImport(Document):
 					outcome = self.import_row(result)
 					frappe.db.release_savepoint("student_import_row")
 					imported += 1
-					notes = result["warnings"] + outcome.get("notes", [])
+					notes = list(dict.fromkeys(result["warnings"] + outcome.get("notes", [])))
 					log.append(f"{label} · {outcome['action']}" + (f" ({'; '.join(notes)})" if notes else ""))
 					if result["warnings"]:
-						failures.append({**_original(row), "errors": "", "warnings": "; ".join(result["warnings"])})
+						failures.append(
+							{**_original(row), "errors": "", "warnings": "; ".join(result["warnings"])}
+						)
 				except Exception as e:
 					frappe.db.rollback(save_point="student_import_row")
 					failed += 1
@@ -358,9 +391,19 @@ class StudentBulkImport(Document):
 		values = result["values"]
 		notes = []
 
+		allotted = False
+		if result.get("returning"):
+			# A former resident of another hostel: the record becomes this hostel's to update
+			# only once the student has a bed here, so the bed comes first.
+			academic_year = values.get("academic_year") or frappe.db.get_value(
+				"Hostel Student", result["student"], "academic_year"
+			)
+			self.allot_row(result["student"], result, academic_year, notes)
+			allotted = True
+
 		guardian_rows = []
 		for guardian in result["guardians"]:
-			guardian_rows.append((upsert_guardian(guardian), guardian["relation"]))
+			guardian_rows.append((upsert_guardian(guardian, notes), guardian["relation"]))
 
 		if result["student"]:
 			student = frappe.get_doc("Hostel Student", result["student"])
@@ -387,29 +430,20 @@ class StudentBulkImport(Document):
 				continue
 			student.append(
 				"guardians",
-				{"guardian": guardian, "relation": relation, "is_primary": 0 if has_primary else 1, "can_approve_leave": 1},
+				{
+					"guardian": guardian,
+					"relation": relation,
+					"is_primary": 0 if has_primary else 1,
+					"can_approve_leave": 1,
+				},
 			)
 			has_primary = True
 			linked.add(guardian)
 
 		student.save()
 
-		if result.get("bed"):
-			allotment = frappe.get_doc(
-				{
-					"doctype": "Room Allotment",
-					"student": student.name,
-					"bed": result["bed"],
-					"allotment_type": "New",
-					"from_date": result.get("allotment_from_date") or nowdate(),
-					"academic_year": student.academic_year,
-					"remarks": _("Created by bulk import {0}").format(self.name),
-				}
-			)
-			allotment.flags.skip_notifications = True
-			allotment.insert()
-			allotment.submit()
-			notes.append(_("allotted bed {0}").format(result["bed"]))
+		if result.get("bed") and not allotted:
+			self.allot_row(student.name, result, student.academic_year, notes)
 
 		if self.create_portal_users:
 			from hostel360.hostel_people.services import ensure_portal_user
@@ -420,19 +454,47 @@ class StudentBulkImport(Document):
 
 		return {"action": action, "notes": notes}
 
+	def allot_row(self, student: str, result: dict, academic_year: str | None, notes: list) -> None:
+		allotment = frappe.get_doc(
+			{
+				"doctype": "Room Allotment",
+				"student": student,
+				"bed": result["bed"],
+				"allotment_type": "New",
+				"from_date": result.get("allotment_from_date") or nowdate(),
+				"academic_year": academic_year,
+				"remarks": _("Created by bulk import {0}").format(self.name),
+			}
+		)
+		allotment.flags.skip_notifications = True
+		allotment.insert()
+		allotment.submit()
+		notes.append(_("allotted bed {0}").format(result["bed"]))
 
-def upsert_guardian(guardian: dict) -> str:
-	"""Guardians are matched by mobile number; blank details are filled in, nothing is overwritten."""
+
+# Guardian details an import may fill in when the registered guardian lacks them.
+GUARDIAN_FILL_FIELDS = ("relation", "email", "occupation")
+
+
+def upsert_guardian(guardian: dict, notes: list | None = None) -> str:
+	"""Guardians are matched by mobile number; blank details are filled in, nothing is overwritten.
+
+	A guardian who also has a child in a hostel the importing user does not look after is
+	linked as registered: only staff who may edit every ward may change a guardian.
+	"""
 	name = frappe.db.get_value("Hostel Guardian", {"mobile_number": guardian["mobile_number"]}, "name")
 	if name:
 		doc = frappe.get_doc("Hostel Guardian", name)
-		changed = False
-		for fieldname in ("relation", "email", "occupation"):
-			if guardian.get(fieldname) and not doc.get(fieldname):
-				doc.set(fieldname, guardian[fieldname])
-				changed = True
-		if changed:
-			doc.save()
+		missing = guardian_fields_to_fill(doc, guardian)
+		if not missing:
+			return name
+		if not frappe.has_permission("Hostel Guardian", "write", doc=doc):
+			if notes is not None:
+				notes.append(guardian_not_updated_note(guardian.get("label") or _("Guardian")))
+			return name
+		for fieldname in missing:
+			doc.set(fieldname, guardian[fieldname])
+		doc.save()
 		return name
 
 	doc = frappe.get_doc(
@@ -447,6 +509,16 @@ def upsert_guardian(guardian: dict) -> str:
 	)
 	doc.insert()
 	return doc.name
+
+
+def guardian_fields_to_fill(registered, guardian: dict) -> list[str]:
+	return [field for field in GUARDIAN_FILL_FIELDS if guardian.get(field) and not registered.get(field)]
+
+
+def guardian_not_updated_note(label: str) -> str:
+	return _(
+		"{0} linked as registered, without the missing details from the file: they also have a child in a hostel you do not look after"
+	).format(label)
 
 
 class RowChecker:
@@ -469,7 +541,13 @@ class RowChecker:
 			self.hostels[row.name.lower()] = row
 			self.hostels[(row.hostel_name or "").lower()] = row
 		self.can_allot = bool(
-			frappe.has_permission("Room Allotment", "create") and frappe.has_permission("Room Allotment", "submit")
+			frappe.has_permission("Room Allotment", "create")
+			and frappe.has_permission("Room Allotment", "submit")
+		)
+		# Staff limited to some hostels or blocks may not change every registered student or
+		# guardian; for everyone else the per-record checks below would only cost time.
+		self.scoped = bool(
+			get_user_permissions(frappe.session.user).get("Hostel") or block_restrictions(get_staff_scope())
 		)
 		self.seen_register_numbers = {}
 		self.seen_mobiles = {}
@@ -487,7 +565,9 @@ class RowChecker:
 		result = {
 			"row": row["row"],
 			"register_number": None,
-			"full_name": " ".join(filter(None, [str(row.get("first_name") or ""), str(row.get("last_name") or "")])).strip(),
+			"full_name": " ".join(
+				filter(None, [str(row.get("first_name") or ""), str(row.get("last_name") or "")])
+			).strip(),
 			"student": None,
 			"action": "Create",
 			"values": values,
@@ -520,7 +600,7 @@ class RowChecker:
 			existing = frappe.db.get_value(
 				"Hostel Student",
 				register_number,
-				["name", "gender", "current_bed", "current_allotment", "academic_year"],
+				["name", "gender", "current_hostel", "current_bed", "current_allotment", "academic_year"],
 				as_dict=True,
 			)
 		if existing:
@@ -528,8 +608,29 @@ class RowChecker:
 			result["action"] = "Update" if self.doc.update_existing else "Skip"
 			if not self.doc.update_existing:
 				warnings.append(_("Already registered; updating existing students is switched off."))
+			elif self.scoped and not frappe.has_permission("Hostel Student", "write", doc=existing.name):
+				if existing.current_hostel or existing.current_allotment:
+					errors.append(
+						_(
+							"{0} lives in a hostel or block you do not look after. Ask that hostel's office or the Warden to update the record."
+						).format(register_number)
+					)
+				else:
+					# Last lived in another hostel. Allotting a bed here, in the same row, brings
+					# the student to this hostel; the details are updated after that.
+					result["returning"] = True
 
-		for fieldname in ("roll_number", "first_name", "last_name", "address_line1", "address_line2", "city", "district", "state", "emergency_contact_name"):
+		for fieldname in (
+			"roll_number",
+			"first_name",
+			"last_name",
+			"address_line1",
+			"address_line2",
+			"city",
+			"district",
+			"state",
+			"emergency_contact_name",
+		):
 			text = str(row.get(fieldname) or "").strip()
 			if len(text) > 140:
 				errors.append(_("{0} is too long.").format(_(_label(fieldname))))
@@ -566,10 +667,19 @@ class RowChecker:
 		values["email"] = email
 
 		values["date_of_birth"] = self.parse_date(row.get("date_of_birth"), _("Date of Birth"), errors)
-		if values["date_of_birth"] and not 10 <= (getdate(nowdate()).year - values["date_of_birth"].year) <= 70:
-			errors.append(_("Date of Birth {0} does not look right.").format(values["date_of_birth"].strftime("%d-%m-%Y")))
+		if (
+			values["date_of_birth"]
+			and not 10 <= (getdate(nowdate()).year - values["date_of_birth"].year) <= 70
+		):
+			errors.append(
+				_("Date of Birth {0} does not look right.").format(
+					values["date_of_birth"].strftime("%d-%m-%Y")
+				)
+			)
 
-		blood_group = re.sub(r"(VE|POSITIVE|NEGATIVE)$", "", str(row.get("blood_group") or "").upper().replace(" ", ""))
+		blood_group = re.sub(
+			r"(VE|POSITIVE|NEGATIVE)$", "", str(row.get("blood_group") or "").upper().replace(" ", "")
+		)
 		blood_group = blood_group.replace("POS", "+").replace("NEG", "-")
 		if blood_group and blood_group not in BLOOD_GROUPS:
 			errors.append(_("Blood Group {0} is not recognised.").format(row.get("blood_group")))
@@ -606,7 +716,9 @@ class RowChecker:
 			attempt(validate_pincode, pincode)
 		values["pincode"] = pincode
 
-		values["emergency_contact_phone"] = attempt(normalize_mobile, row.get("emergency_contact_phone") or None)
+		values["emergency_contact_phone"] = attempt(
+			normalize_mobile, row.get("emergency_contact_phone") or None
+		)
 
 		mess = str(row.get("mess_enrolled") or "").strip().lower()
 		if mess in YES:
@@ -619,7 +731,7 @@ class RowChecker:
 			values["mess_enrolled"] = None if existing else 1
 
 		for prefix in ("guardian", "guardian2"):
-			guardian = self.check_guardian(row, prefix, errors)
+			guardian = self.check_guardian(row, prefix, errors, warnings)
 			if guardian:
 				if guardian["mobile_number"] in {g["mobile_number"] for g in result["guardians"]}:
 					errors.append(_("Both guardians have the same mobile number."))
@@ -629,9 +741,25 @@ class RowChecker:
 		if not errors and self.doc.allot_rooms and (row.get("hostel") or row.get("room_number")):
 			self.check_allotment(row, result, existing, gender or (existing.gender if existing else None))
 
+		if result.get("returning") and not errors:
+			if not result.get("bed"):
+				errors.append(
+					_(
+						"{0} last lived in another hostel, whose staff or the Warden keep the record. Give a hostel and room with a vacant bed in this row to bring the student to your hostel, or ask them to update it."
+					).format(register_number)
+				)
+			elif gender and gender != existing.gender:
+				# The bed is allotted for the registered gender before the details change.
+				self.forget(result)
+				result["bed"] = None
+				errors.append(
+					_(
+						"Gender {0} differs from the registered {1}. Ask the Warden to correct it first."
+					).format(_(gender), _(existing.gender or "-"))
+				)
 		return result
 
-	def check_guardian(self, row: dict, prefix: str, errors: list) -> dict | None:
+	def check_guardian(self, row: dict, prefix: str, errors: list, warnings: list) -> dict | None:
 		name = " ".join(str(row.get(f"{prefix}_name") or "").split())
 		raw_mobile = row.get(f"{prefix}_mobile")
 		relation_text = str(row.get(f"{prefix}_relation") or "").strip()
@@ -656,13 +784,31 @@ class RowChecker:
 			errors.append(_("{0}: relation {1} is not recognised.").format(label, relation_text))
 		if email and not validate_email_address(email):
 			errors.append(_("{0}: {1} is not a valid e-mail address.").format(label, email))
-		return {
+		guardian = {
+			"label": label,
 			"guardian_name": name,
 			"mobile_number": mobile,
 			"relation": relation or "Guardian",
 			"email": email or None,
 			"occupation": occupation or None,
 		}
+		self.check_registered_guardian(guardian, warnings)
+		return guardian
+
+	def check_registered_guardian(self, guardian: dict, warnings: list) -> None:
+		"""Warn when the file would fill in a registered guardian the user may not change."""
+		if not self.scoped:
+			return
+		registered = frappe.db.get_value(
+			"Hostel Guardian",
+			{"mobile_number": guardian["mobile_number"]},
+			["name", *GUARDIAN_FILL_FIELDS],
+			as_dict=True,
+		)
+		if not registered or not guardian_fields_to_fill(registered, guardian):
+			return
+		if not frappe.has_permission("Hostel Guardian", "write", doc=registered.name):
+			warnings.append(guardian_not_updated_note(guardian["label"]))
 
 	def check_allotment(self, row: dict, result: dict, existing, gender: str | None) -> None:
 		warnings = result["warnings"]
@@ -691,7 +837,10 @@ class RowChecker:
 		room_name = f"{hostel.name}-{room_number}"
 		room = self.room_cache.get(room_name)
 		if room is None:
-			room = frappe.db.get_value("Hostel Room", room_name, ["name", "status", "is_active"], as_dict=True) or {}
+			room = (
+				frappe.db.get_value("Hostel Room", room_name, ["name", "status", "is_active"], as_dict=True)
+				or {}
+			)
 			self.room_cache[room_name] = room
 		if not room:
 			return skip(_("room {0} does not exist in {1}").format(room_number, hostel.hostel_name))
@@ -713,12 +862,17 @@ class RowChecker:
 				filters={"room": room_name, "status": "Vacant", "is_active": 1},
 				fields=["name", "bed_label"],
 			)
-			vacant = sorted((b for b in vacant if b.name not in self.claimed_beds), key=lambda b: (len(b.bed_label), b.bed_label))
+			vacant = sorted(
+				(b for b in vacant if b.name not in self.claimed_beds),
+				key=lambda b: (len(b.bed_label), b.bed_label),
+			)
 			if not vacant:
 				return skip(_("room {0} has no vacant bed").format(room_number))
 			chosen = vacant[0].name
 
-		from_date = self.parse_date(row.get("allotment_from_date"), _("Allotment From Date"), result["errors"])
+		from_date = self.parse_date(
+			row.get("allotment_from_date"), _("Allotment From Date"), result["errors"]
+		)
 		self.claimed_beds.add(chosen)
 		result["bed"] = chosen
 		result["allotment_from_date"] = from_date
@@ -798,7 +952,7 @@ def build_template_workbook(headers: list[str]) -> bytes:
 	sheet.append(headers)
 	bold = Font(bold=True)
 	required_fill = PatternFill("solid", fgColor="FFF4D6")
-	for index, (fieldname, label, required, _help) in enumerate(COLUMNS, start=1):
+	for index, (_fieldname, label, required, _help) in enumerate(COLUMNS, start=1):
 		cell = sheet.cell(row=1, column=index)
 		cell.font = bold
 		cell.alignment = Alignment(wrap_text=True, vertical="center")
@@ -822,7 +976,16 @@ def build_template_workbook(headers: list[str]) -> bytes:
 	add_list("guardian2_relation", list(RELATIONS))
 
 	# Text format keeps leading zeros and stops Excel turning mobile numbers into 9.88E+09.
-	for fieldname in ("register_number", "roll_number", "mobile_number", "guardian_mobile", "guardian2_mobile", "emergency_contact_phone", "pincode", "room_number"):
+	for fieldname in (
+		"register_number",
+		"roll_number",
+		"mobile_number",
+		"guardian_mobile",
+		"guardian2_mobile",
+		"emergency_contact_phone",
+		"pincode",
+		"room_number",
+	):
 		index = [c[0] for c in COLUMNS].index(fieldname) + 1
 		letter = sheet.cell(row=1, column=index).column_letter
 		for row in range(2, 502):
@@ -835,8 +998,14 @@ def build_template_workbook(headers: list[str]) -> bytes:
 	for _fieldname, label, required, help_text in COLUMNS:
 		guide.append([label, "Yes" if required else "", help_text])
 	guide.append([])
-	guide.append(["One student per row. Existing students are matched by register number and guardians by mobile number."])
-	guide.append(["Validate the file in Hostel360 before importing; every problem is listed against its row."])
+	guide.append(
+		[
+			"One student per row. Existing students are matched by register number and guardians by mobile number."
+		]
+	)
+	guide.append(
+		["Validate the file in Hostel360 before importing; every problem is listed against its row."]
+	)
 	guide.column_dimensions["A"].width = 28
 	guide.column_dimensions["B"].width = 10
 	guide.column_dimensions["C"].width = 90
@@ -894,7 +1063,9 @@ def _error_text(error: Exception) -> str:
 
 
 def _original(row: dict) -> dict:
-	return {key: (value.strftime("%d-%m-%Y") if isinstance(value, date) else value) for key, value in row.items()}
+	return {
+		key: (value.strftime("%d-%m-%Y") if isinstance(value, date) else value) for key, value in row.items()
+	}
 
 
 def _preview(result: dict) -> dict:

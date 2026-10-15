@@ -30,13 +30,18 @@ class HostelGuardian(Document):
 			["name", "guardian_name"],
 			as_dict=True,
 		)
-		if duplicate:
-			frappe.throw(
-				_("Mobile number {0} is already registered for guardian {1} ({2}). Link that guardian instead.").format(
-					frappe.bold(self.mobile_number), duplicate.guardian_name, duplicate.name
-				),
-				frappe.UniqueValidationError,
-			)
+		if not duplicate:
+			return
+		if frappe.has_permission("Hostel Guardian", "read", doc=duplicate.name):
+			message = _(
+				"Mobile number {0} is already registered for guardian {1} ({2}). Link that guardian instead."
+			).format(frappe.bold(self.mobile_number), duplicate.guardian_name, duplicate.name)
+		else:
+			# The parent of a student in another hostel: say how to link them without naming them.
+			message = _(
+				"Mobile number {0} is already registered for a guardian. Type it in the Guardian column of the student's Guardians table to link them."
+			).format(frappe.bold(self.mobile_number))
+		frappe.throw(message, frappe.UniqueValidationError)
 
 	def set_validation_status(self):
 		"""A guardian is validated once linked to a validated student (tender 4.1).

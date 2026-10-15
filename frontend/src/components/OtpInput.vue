@@ -115,7 +115,11 @@ defineExpose({ focus: () => focusBox(digits.value.findIndex((d) => !d)), clear }
 		<input
 			v-for="(digit, index) in digits"
 			:key="index"
-			:ref="(el) => { if (el) boxes[index] = el as HTMLInputElement }"
+			:ref="
+				(el) => {
+					if (el) boxes[index] = el as HTMLInputElement;
+				}
+			"
 			:value="digit"
 			class="input h-14 w-full min-w-0 max-w-14 px-0 text-center text-2xl font-semibold tracking-normal"
 			type="text"
@@ -132,6 +136,6 @@ defineExpose({ focus: () => focusBox(digits.value.findIndex((d) => !d)), clear }
 			@keydown="onKeydown(index, $event)"
 			@paste="onPaste(index, $event)"
 			@focus="($event.target as HTMLInputElement).select()"
-		>
+		/>
 	</div>
 </template>
