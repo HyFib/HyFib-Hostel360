@@ -26,15 +26,25 @@ class MessBill(Document):
 			frappe.throw(_("A published mess bill cannot be deleted. Cancel its bill run instead."))
 
 	def onload(self):
-		if self.fee_invoice and frappe.db.table_exists("Hostel Fee Invoice"):
-			invoice = frappe.db.get_value(
-				"Hostel Fee Invoice",
-				self.fee_invoice,
-				["status", "outstanding_amount", "due_date"],
-				as_dict=True,
+		invoice = self.get_current_invoice()
+		if invoice:
+			self.set_onload(
+				"invoice",
+				{
+					"name": invoice.name,
+					"status": invoice.status,
+					"outstanding_amount": invoice.outstanding_amount,
+					"due_date": invoice.due_date,
+				},
 			)
-			if invoice:
-				self.set_onload("invoice", invoice)
+
+	def get_current_invoice(self) -> frappe._dict | None:
+		"""The invoice that stands for this bill now (an office amendment replaces the original)."""
+		from hostel360.hostel_mess.billing import get_bill_invoices, get_current_invoice
+
+		if self.is_new():
+			return None
+		return get_current_invoice(get_bill_invoices([self.name]).get(self.name))
 
 	def get_print_context(self) -> dict:
 		"""Everything the Mess Bill print format needs, gathered defensively."""
@@ -85,10 +95,12 @@ class MessBill(Document):
 				)
 				or frappe._dict()
 			)
+		invoice = self.get_current_invoice()
 		return {
 			"run": run,
 			"extras": extras,
 			"student": student,
 			"institution": get_institution(),
 			"unrounded_total": flt(flt(self.mess_charge) + flt(self.extras_amount), 2),
+			"invoice": invoice.name if invoice else self.fee_invoice,
 		}

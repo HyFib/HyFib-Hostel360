@@ -20,6 +20,7 @@ from hostel360.hostel_fees.utils import (
 	DISPLAY_DATE_FORMAT,
 	get_current_academic_year,
 	get_portal_link,
+	get_student_hostel,
 	get_student_print_details,
 	is_migration,
 	money,
@@ -91,7 +92,9 @@ class HostelFeeInvoice(Document):
 		if not self.posting_date:
 			self.posting_date = nowdate()
 		if not self.hostel:
-			self.hostel = frappe.db.get_value("Hostel Student", self.student, "current_hostel")
+			# A vacated student's invoice keeps the hostel they left, so hostel-scoped staff of
+			# other hostels never see it.
+			self.hostel = get_student_hostel(self.student)
 		if self.fee_structure and not self.academic_year:
 			self.academic_year = frappe.db.get_value(
 				"Hostel Fee Structure", self.fee_structure, "academic_year"
@@ -227,7 +230,7 @@ class HostelFeeInvoice(Document):
 		)
 
 	def before_print(self, settings=None):
-		self.print_student = get_student_print_details(self.student)
+		self.print_student = get_student_print_details(self.student, self.hostel)
 		self.portal_link = get_portal_link("/fees")
 		self.print_payments = frappe.db.sql(
 			"""

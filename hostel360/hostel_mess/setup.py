@@ -1,8 +1,9 @@
 """Default records for the Hostel Mess module. Safe to run on every migrate."""
 
 import frappe
+from frappe.utils import getdate
 
-from hostel360.hostel_mess.utils import DEFAULT_SETTINGS, SETTINGS_DOCTYPE
+from hostel360.hostel_mess.utils import DEFAULT_SETTINGS, SETTINGS_DOCTYPE, get_student_hostel
 
 # item name, local (Tamil) name, item code, category, uom, reorder level, perishable
 STARTER_ITEMS = (
@@ -54,6 +55,8 @@ def install_defaults():
 		return
 	set_settings_defaults()
 	create_starter_items()
+	sync_billed_upto()
+	restore_student_hostels()
 
 
 def set_settings_defaults() -> None:
@@ -86,3 +89,41 @@ def create_starter_items() -> None:
 				"is_active": 1,
 			}
 		).insert(ignore_permissions=True)
+
+
+def sync_billed_upto() -> None:
+	"""Record on each mess the last day covered by its published bill runs.
+
+	Bill runs keep this up to date as they are published and cancelled; this fills it in for
+	runs published before the field existed (or imported directly) and repairs any drift.
+	"""
+	if not frappe.db.has_column("Hostel Mess", "billed_upto"):
+		return
+	published = dict(
+		frappe.db.sql("select mess, max(to_date) from `tabMess Bill Run` where docstatus = 1 group by mess")
+	)
+	for mess, billed_upto in frappe.db.sql("select name, billed_upto from `tabHostel Mess`"):
+		latest = published.get(mess)
+		if (latest and getdate(latest)) != (billed_upto and getdate(billed_upto)):
+			frappe.db.set_value("Hostel Mess", mess, "billed_upto", latest, update_modified=False)
+
+
+def restore_student_hostels() -> None:
+	"""Give records of students who have moved out the hostel they belong to.
+
+	These records once took the hostel from the student's current hostel on every save, which
+	is empty after the student vacates; a record without a hostel is visible to every
+	hostel's staff. Only empty values are filled, so the step is safe to repeat.
+	"""
+	for doctype in ("Mess Reduction Application", "Mess Extra Charge", "Mess Bill"):
+		if not frappe.db.has_column(doctype, "hostel"):
+			continue
+		rows = frappe.get_all(
+			doctype,
+			filters={"hostel": ["is", "not set"], "student": ["is", "set"]},
+			fields=["name", "student"],
+		)
+		for row in rows:
+			hostel = get_student_hostel(row.student)
+			if hostel:
+				frappe.db.set_value(doctype, row.name, "hostel", hostel, update_modified=False)

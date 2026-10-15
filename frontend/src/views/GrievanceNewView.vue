@@ -2,12 +2,19 @@
 import { Camera, CircleAlert, FileText, LoaderCircle, ShieldAlert, X } from "@lucide/vue";
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { MAX_UPLOAD_BYTES } from "@/api/files";
+import { acceptAttribute, uploadRules } from "@/api/files";
 import { raiseGrievance } from "@/api/portal";
 import FormField from "@/components/FormField.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import ToggleSwitch from "@/components/ToggleSwitch.vue";
-import { GRIEVANCE_CATEGORIES, GRIEVANCE_PRIORITIES, MAX_GRIEVANCE_ATTACHMENTS, SENSITIVE_CATEGORY } from "@/constants";
+import {
+	ANTI_RAGGING_HELPLINE,
+	EMERGENCY_NUMBER,
+	GRIEVANCE_CATEGORIES,
+	GRIEVANCE_PRIORITIES,
+	MAX_GRIEVANCE_ATTACHMENTS,
+	SENSITIVE_CATEGORY,
+} from "@/constants";
 import { useAttachments } from "@/composables/useAttachments";
 import { useSubmit } from "@/composables/useSubmit";
 import { t, tv } from "@/i18n";
@@ -18,7 +25,7 @@ import { formatBytes } from "@/utils/format";
 const router = useRouter();
 const { session } = useSession();
 const { busy, error, run } = useSubmit();
-const attachments = useAttachments(MAX_GRIEVANCE_ATTACHMENTS);
+const attachments = useAttachments(MAX_GRIEVANCE_ATTACHMENTS, () => studentArg());
 
 const form = reactive({ category: "", subject: "", description: "", priority: "Medium", is_confidential: false });
 const errors = reactive<Record<string, string>>({});
@@ -27,7 +34,10 @@ const formRef = ref<HTMLFormElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 
 const sensitive = computed(() => form.category === SENSITIVE_CATEGORY);
-const supportPhone = computed(() => session.settings.office_phone || session.settings.support_phone || "");
+// Someone in danger must reach the hostel, never the portal vendor's helpdesk.
+const officePhone = computed(() => session.settings.office_phone || "");
+const tel = (value: string) => `tel:${value.replace(/[^\d+]/g, "")}`;
+const rules = computed(() => uploadRules(session.settings.upload));
 
 watch(sensitive, (value) => {
 	if (value) {
@@ -96,9 +106,23 @@ async function submit() {
 				<ShieldAlert :size="20" class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
 				<div>
 					<p>{{ t("grievances.sensitiveNote") }}</p>
-					<a v-if="supportPhone" :href="`tel:${supportPhone.replace(/\s/g, '')}`" class="mt-1 inline-flex min-h-11 items-center font-semibold">
-						{{ t("grievances.callNow", { phone: supportPhone }) }}
-					</a>
+					<ul class="mt-1" data-test="emergency-numbers">
+						<li v-if="officePhone">
+							<a :href="tel(officePhone)" class="inline-flex min-h-11 items-center font-semibold">
+								{{ t("grievances.callOffice", { phone: officePhone }) }}
+							</a>
+						</li>
+						<li>
+							<a :href="tel(EMERGENCY_NUMBER)" class="inline-flex min-h-11 items-center font-semibold">
+								{{ t("grievances.callEmergency", { phone: EMERGENCY_NUMBER }) }}
+							</a>
+						</li>
+						<li>
+							<a :href="tel(ANTI_RAGGING_HELPLINE)" class="inline-flex min-h-11 items-center font-semibold">
+								{{ t("grievances.callAntiRagging", { phone: ANTI_RAGGING_HELPLINE }) }}
+							</a>
+						</li>
+					</ul>
 				</div>
 			</div>
 
@@ -126,7 +150,7 @@ async function submit() {
 			<fieldset class="mb-5">
 				<legend class="field-label">{{ t("grievances.attachments") }} <span class="font-normal text-muted">{{ t("common.optional") }}</span></legend>
 				<p id="attach-hint" class="mb-2 text-sm text-muted">
-					{{ t("grievances.attachmentHint", { count: MAX_GRIEVANCE_ATTACHMENTS, size: formatBytes(MAX_UPLOAD_BYTES) }) }}
+					{{ t("grievances.attachmentHint", { count: MAX_GRIEVANCE_ATTACHMENTS, size: formatBytes(rules.maxBytes) }) }}
 				</p>
 				<ul v-if="attachments.items.length" class="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
 					<li v-for="item in attachments.items" :key="item.id" class="relative">
@@ -156,7 +180,7 @@ async function submit() {
 					ref="fileInput"
 					type="file"
 					class="sr-only"
-					accept="image/jpeg,image/png,image/webp,application/pdf"
+					:accept="acceptAttribute(rules)"
 					multiple
 					aria-describedby="attach-hint"
 					tabindex="-1"

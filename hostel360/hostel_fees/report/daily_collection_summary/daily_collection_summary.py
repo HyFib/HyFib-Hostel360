@@ -4,10 +4,17 @@
 """Day-end counter summary: receipts per collector and mode, plus receipts cancelled that day.
 
 Used to close the cash counter: the Cash row of each collector is the cash they should hand over.
+
+A receipt counts as collected on its payment date, and a cancellation on the day the receipt was
+cancelled. So today's summary shows a cancellation of yesterday's receipt next to today's
+collections, and re-running a past day still shows what was handed over when that counter
+closed, even if some of its receipts were cancelled later. Test-mode gateway receipts (no money
+received) are left out.
 """
 
 import frappe
 from frappe import _
+from frappe.query_builder.functions import Coalesce, Date
 from frappe.utils import flt, getdate, nowdate
 
 from hostel360.hostel_fees.constants import ONLINE, PAYMENT
@@ -40,7 +47,7 @@ def execute(filters=None):
 				last_receipt=None,
 			),
 		)
-		if receipt.docstatus == 1:
+		if not receipt.cancelled_that_day:
 			group.receipts += 1
 			group.amount = money(group.amount + flt(receipt.amount))
 			group.first_receipt = group.first_receipt or receipt.name
@@ -54,22 +61,46 @@ def execute(filters=None):
 
 
 def get_receipts(day, filters):
+	"""Receipts collected on ``day`` (even if cancelled on a later day) and receipts cancelled on ``day``."""
 	payment = frappe.qb.DocType(PAYMENT)
-	query = (
-		frappe.qb.from_(payment)
-		.select(payment.name, payment.docstatus, payment.mode_of_payment, payment.amount, payment.received_by)
-		.where(payment.docstatus.isin([1, 2]))
-		.where(payment.payment_date == day)
-		.orderby(payment.name)
+	# Receipts cancelled before cancellations were time-stamped fall back to their last change,
+	# which Frappe sets when a document is cancelled.
+	cancelled_on = Coalesce(payment.cancelled_on, payment.modified)
+
+	def query(*conditions):
+		q = (
+			frappe.qb.from_(payment)
+			.select(
+				payment.name,
+				payment.docstatus,
+				payment.mode_of_payment,
+				payment.amount,
+				payment.received_by,
+			)
+			.where(payment.is_test == 0)
+			.orderby(payment.name)
+		)
+		for condition in conditions:
+			q = q.where(condition)
+		if filters.hostel:
+			q = q.where(payment.hostel == filters.hostel)
+		if filters.received_by:
+			q = q.where(payment.received_by == filters.received_by)
+		permitted = get_permitted_hostels(PAYMENT)
+		if permitted:
+			q = q.where(payment.hostel.isin(permitted))
+		return q.run(as_dict=True)
+
+	collected = query(
+		payment.payment_date == day,
+		(payment.docstatus == 1) | ((payment.docstatus == 2) & (Date(cancelled_on) > day)),
 	)
-	if filters.hostel:
-		query = query.where(payment.hostel == filters.hostel)
-	if filters.received_by:
-		query = query.where(payment.received_by == filters.received_by)
-	permitted = get_permitted_hostels(PAYMENT)
-	if permitted:
-		query = query.where(payment.hostel.isin(permitted))
-	return query.run(as_dict=True)
+	cancelled = query(payment.docstatus == 2, Date(cancelled_on) == day)
+	for row in collected:
+		row.cancelled_that_day = False
+	for row in cancelled:
+		row.cancelled_that_day = True
+	return collected + cancelled
 
 
 def get_columns():
@@ -137,6 +168,12 @@ def get_summary(data):
 			"value": sum(row.cancelled_receipts for row in data),
 			"label": _("Cancelled Receipts"),
 			"datatype": "Int",
+			"indicator": "Red",
+		},
+		{
+			"value": money(sum(flt(row.cancelled_amount) for row in data)),
+			"label": _("Cancelled Amount"),
+			"datatype": "Currency",
 			"indicator": "Red",
 		},
 	]

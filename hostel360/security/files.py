@@ -1,7 +1,6 @@
 """Upload security for File records.
 
-``validate_upload`` (File ``before_insert``) runs after Frappe has written the upload to
-disk, so it checks the bytes already in hand:
+The policy:
 
 * extension allow-list: PDF and images for students and parents, plus spreadsheets for
   staff;
@@ -9,10 +8,21 @@ disk, so it checks the bytes already in hand:
   opened as ZIP or OLE containers; CSV must be plain text);
 * size: 5 MB for portal users, 10 MB for staff;
 * portal uploads are always private;
-* file names are cleaned of path parts, control characters, markup and extra dots.
+* file names are cleaned of path parts, control characters, markup and extra dots;
+* students, parents and visitors upload only through the Hostel360 portal endpoint
+  (``hostel360.api.portal.upload_attachment``), which applies its quota and rate limit
+  and keeps every file in the folder the daily clean-up covers.
 
-When the name or the privacy has to change, the file is written again under the new
-name and the first copy is removed, so nothing unsafe is left on disk.
+``HostelFile`` (``override_doctype_class`` for File) applies the policy before Frappe
+writes anything to disk, so a rejected upload never touches the file system.
+``validate_upload`` (File ``before_insert``) is the same policy for sites where the
+override is not active: it runs after Frappe has written the upload and removes the
+bytes again when the upload is refused. With the override active it does nothing.
+
+``block_portal_generic_upload`` (``before_request``) stops portal users and visitors at
+Frappe's generic upload and insert endpoints before the request body is read. That
+matters for ``upload_file``: a chunked call appends to a temporary file and returns
+before any File record exists, so no File hook would ever see it.
 
 ``enqueue_malware_scan`` (File ``after_insert``) queues a ClamAV scan. Infected files are
 deleted with every record that points to the same content and HyFib operations get a
@@ -24,6 +34,7 @@ background jobs (prepared reports, backups, receipts and certificates) are trust
 """
 
 import io
+import json
 import os
 import re
 import unicodedata
@@ -31,6 +42,7 @@ import zipfile
 
 import frappe
 from frappe import _
+from frappe.core.doctype.file.file import File
 from frappe.utils import cint, cstr
 
 from hostel360.security import clamav
@@ -62,25 +74,113 @@ BACKLOG_BATCH = 25
 # (Tamil included) are kept.
 UNSAFE_NAME_CHARS = re.compile(r"[<>:\"/\\|?*%#&;$`'{}\[\]=+!@^~,.]")
 
+# Set on a File by Hostel360 code that inserts a portal user's upload after its own checks.
+PORTAL_UPLOAD_FLAG = "hostel360_portal_upload"
+# Hostel360 endpoints that create File records for portal users themselves (quota, rate
+# limit and folder are theirs). A File inserted while serving one of them is accepted from
+# a portal user without the flag.
+PORTAL_UPLOAD_METHODS = frozenset({"hostel360.api.portal.upload_attachment"})
+
+# Frappe's upload endpoint under every route that reaches it. The v1 router keeps only the
+# part before the first slash of a method path, so ".../upload_file/anything" is the same
+# call; v2 has a fixed route that skips override_whitelisted_methods.
+GENERIC_UPLOAD_PATH = re.compile(r"^/api/(?:v[12]/)?method/(?:frappe\.handler\.)?upload_file(?:/.*)?$")
+FILE_RESOURCE_PATH = re.compile(r"^/api/(?:(?:v1/)?resource|v2/document)/File/?$")
+API_METHOD_PATH = re.compile(r"^/api/(?:v[12]/)?method/([^/]+)")
+UPLOAD_COMMANDS = frozenset({"upload_file", "frappe.handler.upload_file"})
+# Generic document endpoints that can insert a File from a JSON body.
+GENERIC_INSERT_METHODS = frozenset(
+	{
+		"frappe.client.insert",
+		"frappe.client.insert_many",
+		"frappe.client.save",
+		"frappe.desk.form.save.savedocs",
+	}
+)
+
 
 class UploadRejected(frappe.ValidationError):
 	pass
 
 
-# ---------------------------------------------------------------- before_insert
+class PortalUploadBlocked(frappe.PermissionError):
+	"""A student, parent or visitor tried to store a file outside the portal's upload endpoint."""
+
+
+# ---------------------------------------------------------------- File controller
+
+
+class HostelFile(File):
+	"""File with the Hostel360 upload policy applied before Frappe stores the content."""
+
+	def before_insert(self):
+		enforce_upload_policy(self)
+		super().before_insert()
+
+
+def enforce_upload_policy(doc) -> None:
+	"""Check a new File while its content is still in memory.
+
+	Rejected uploads raise before anything is written. Accepted ones leave here with a
+	clean name, decoded content and (for portal users) ``is_private`` set, so Frappe
+	stores them once, in the right place, under the right name.
+	"""
+	if not _should_check(doc):
+		return
+	# validate_upload (the doc_events hook) runs after this and must not check again.
+	doc.flags.hostel360_upload_checked = True
+
+	portal = is_portal_uploader()
+	if portal:
+		_require_portal_channel(doc)
+	if _is_remote(doc):
+		if portal:
+			_reject(doc, _("Please upload the file from your device instead of a link."), "remote_link")
+		return
+
+	content = _pending_content(doc)
+	if content is None:
+		# A File that points at bytes already stored (attaching an existing file).
+		content = _content_bytes(doc)
+	else:
+		doc.content = content
+		doc.decode = False
+
+	doc.file_name = _checked_name(doc, content, portal)
+	if portal:
+		doc.is_private = 1
+
+
+def mark_portal_upload(doc) -> None:
+	"""Accept this File from a portal user (the caller has applied the portal's upload rules)."""
+	doc.flags[PORTAL_UPLOAD_FLAG] = True
+
+
+# ---------------------------------------------------------------- before_insert hook
 
 
 def validate_upload(doc, method=None) -> None:
-	if not _should_check(doc):
+	"""File before_insert hook: the policy for bytes Frappe has already written."""
+	if doc.flags.hostel360_upload_checked or not _should_check(doc):
 		return
 
 	portal = is_portal_uploader()
+	if portal:
+		_require_portal_channel(doc)
 	if _is_remote(doc):
 		if portal:
-			_reject(doc, _("Please upload the file from your device instead of a link."))
+			_reject(doc, _("Please upload the file from your device instead of a link."), "remote_link")
 		return
 
 	content = _content_bytes(doc)
+	name = _checked_name(doc, content, portal)
+	make_private = portal and not cint(doc.is_private)
+	if make_private or name != doc.file_name:
+		_rewrite(doc, content, name, make_private)
+
+
+def _checked_name(doc, content: bytes, portal: bool) -> str:
+	"""The clean file name, after the type, size and content checks (raises when refused)."""
 	name = sanitize_file_name(doc.file_name or os.path.basename(cstr(doc.file_url)))
 	ext = file_extension(name)
 	allowed = PORTAL_EXTENSIONS if portal else STAFF_EXTENSIONS
@@ -118,10 +218,7 @@ def validate_upload(doc, method=None) -> None:
 		)
 	if ext == "xlsx" and xlsx_has_macros(content):
 		_reject(doc, _("Spreadsheets containing macros cannot be uploaded."), "macro")
-
-	make_private = portal and not cint(doc.is_private)
-	if make_private or name != doc.file_name:
-		_rewrite(doc, content, name, make_private)
+	return name
 
 
 def _should_check(doc) -> bool:
@@ -144,8 +241,60 @@ def is_portal_uploader(user: str | None = None) -> bool:
 	return frappe.get_cached_value("User", user, "user_type") != "System User"
 
 
+def _require_portal_channel(doc) -> None:
+	"""Portal users store files only through the portal's own upload endpoint.
+
+	Any API call by a student, parent or visitor that would store a file - Frappe's
+	upload_file, /api/resource/File, frappe.client.insert and the like - is refused unless
+	it is one of ``PORTAL_UPLOAD_METHODS`` (or the File carries the portal flag). Requests
+	outside /api are page views; they do not store what the visitor sends.
+	"""
+	if doc.flags.get(PORTAL_UPLOAD_FLAG):
+		return
+	call = current_api_call()
+	if call is None or call in PORTAL_UPLOAD_METHODS:
+		return
+	_reject(
+		doc,
+		_("Please attach files from the Hostel360 portal."),
+		"generic_upload",
+		exc=PortalUploadBlocked,
+	)
+
+
+def current_api_call() -> str | None:
+	"""What this request calls: a whitelisted method's dotted path, another /api path as it
+	is, or None for requests that are not API calls (and outside requests)."""
+	request = getattr(frappe.local, "request", None)
+	if request is None:
+		return None
+	path = cstr(getattr(request, "path", ""))
+	if path.startswith("/api/"):
+		match = API_METHOD_PATH.match(path)
+		return (match.group(1).strip() if match else "") or path
+	# The deprecated RPC form: POST / with cmd=<method>.
+	return cstr((frappe.form_dict or {}).get("cmd")).strip() or None
+
+
 def _is_remote(doc) -> bool:
 	return cstr(doc.file_url).lower().startswith(("http://", "https://"))
+
+
+def _pending_content(doc) -> bytes | None:
+	"""The bytes a new File is about to store, decoded the way Frappe would decode them."""
+	content = doc.get("content")
+	if not content:
+		return None
+	if doc.get("decode"):
+		from frappe.core.doctype.file.utils import decode_file_content
+
+		try:
+			content = decode_file_content(content)
+		except Exception:
+			_reject(doc, _("The file could not be read. Please choose the file again."), "undecodable")
+	if isinstance(content, str):
+		content = content.encode("utf-8")
+	return bytes(content)
 
 
 def _content_bytes(doc) -> bytes:
@@ -267,7 +416,7 @@ def _rewrite(doc, content: bytes, name: str, make_private: bool) -> None:
 		delete_file(old_url)
 
 
-def _reject(doc, message: str, reason: str = "rejected") -> None:
+def _reject(doc, message: str, reason: str = "rejected", exc=UploadRejected) -> None:
 	from frappe.core.doctype.file.utils import delete_file
 
 	security_log(
@@ -281,8 +430,81 @@ def _reject(doc, message: str, reason: str = "rejected") -> None:
 	if doc.flags.new_file and doc.file_url and not _is_remote(doc):
 		if not frappe.db.exists("File", {"file_url": doc.file_url}):
 			delete_file(doc.file_url)
-		doc.flags.new_file = False
-	frappe.throw(message, UploadRejected, title=_("Upload Not Allowed"))
+		# File.on_rollback would otherwise write its "original content" - the rejected upload
+		# itself - back to the same path when the request is rolled back.
+		for flag in ("new_file", "original_content", "original_path"):
+			doc.flags.pop(flag, None)
+	frappe.throw(message, exc, title=_("Upload Not Allowed"))
+
+
+# ---------------------------------------------------------------- before_request
+
+
+def block_portal_generic_upload() -> None:
+	"""before_request: keep students, parents and visitors off Frappe's generic upload paths.
+
+	Runs before the upload body is read, so a chunked ``upload_file`` call is refused
+	before Frappe appends to a temporary file. Requests that authenticate with an API key
+	or token are not judged here (Frappe resolves that user later); every File they insert
+	still meets the policy above.
+	"""
+	request = getattr(frappe.local, "request", None)
+	if request is None or request.method == "OPTIONS":
+		return
+	# Every request passes through here; the path test is cheap, the user lookup is not.
+	target = generic_upload_target(request)
+	if not target or _authenticates_with_token(request) or not is_portal_uploader():
+		return
+	security_log(
+		"generic_upload_blocked",
+		ip=getattr(frappe.local, "request_ip", None),
+		target=target,
+		user_type="guest" if frappe.session.user in (None, "", "Guest") else "portal",
+	)
+	frappe.throw(
+		_("Files can only be uploaded from the Hostel360 portal."),
+		PortalUploadBlocked,
+		title=_("Upload Not Allowed"),
+	)
+
+
+def generic_upload_target(request) -> str | None:
+	"""Which generic upload or File insert endpoint the request is for, if any."""
+	path = cstr(getattr(request, "path", ""))
+	if GENERIC_UPLOAD_PATH.match(path):
+		return "upload_file"
+	if FILE_RESOURCE_PATH.match(path) and request.method in ("POST", "PUT"):
+		return "file_resource"
+	method = current_api_call()
+	if not method:
+		return None
+	if method in UPLOAD_COMMANDS:
+		return "upload_file"
+	if method in GENERIC_INSERT_METHODS and _form_inserts_file():
+		return method
+	return None
+
+
+def _form_inserts_file() -> bool:
+	form = frappe.form_dict or {}
+	for key in ("doc", "docs"):
+		value = form.get(key)
+		if isinstance(value, str | bytes):
+			try:
+				value = json.loads(value)
+			except ValueError:
+				continue
+		values = value if isinstance(value, list) else [value]
+		if any(isinstance(item, dict) and item.get("doctype") == "File" for item in values):
+			return True
+	return False
+
+
+def _authenticates_with_token(request) -> bool:
+	# Split exactly as frappe.auth.validate_auth does: only "<scheme> <credentials>" is
+	# authenticated (or refused) there; any other header leaves a cookie or Guest request.
+	header = cstr((getattr(request, "headers", None) or {}).get("Authorization"))
+	return len(header.split(" ")) == 2
 
 
 # ---------------------------------------------------------------- after_insert: malware scan

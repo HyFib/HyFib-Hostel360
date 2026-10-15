@@ -1,15 +1,11 @@
 // Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 // For license information, please see license.txt
 
-const H360_SCOPED_DESIGNATIONS = ["Deputy Warden", "Office Staff", "Mess Staff"];
-const H360_DESK_DESIGNATIONS = [
-	"Hostel Administrator",
-	"Warden",
-	"Deputy Warden",
-	"Office Staff",
-	"Mess Manager",
-	"Mess Staff",
-];
+// Fallback until the server answers; the server's DESIGNATION_ROLES is the source of truth.
+const H360_DESIGNATION_RULES = {
+	login: ["Deputy Warden", "Hostel Administrator", "Mess Manager", "Mess Staff", "Office Staff", "Warden"],
+	scoped: ["Deputy Warden", "Mess Staff", "Office Staff"],
+};
 
 frappe.ui.form.on("Hostel Staff", {
 	setup(frm) {
@@ -17,6 +13,13 @@ frappe.ui.form.on("Hostel Staff", {
 			const row = locals[cdt][cdn];
 			return { filters: { hostel: row.hostel || "" } };
 		});
+		frm.h360_rules = H360_DESIGNATION_RULES;
+		frappe
+			.xcall("hostel360.hostel_people.doctype.hostel_staff.hostel_staff.get_designation_rules")
+			.then((rules) => {
+				frm.h360_rules = rules;
+				frm.trigger("toggle_login_fields");
+			});
 	},
 
 	refresh(frm) {
@@ -39,16 +42,6 @@ frappe.ui.form.on("Hostel Staff", {
 						),
 				__("Desk Login")
 			);
-			frm.dashboard.set_headline_alert(
-				frm.doc.is_active
-					? __("Desk login {0} is active. Roles and hostel access follow this record.", [
-							frappe.utils.escape_html(frm.doc.user),
-					  ])
-					: __("Desk login {0} is disabled because this staff member is inactive.", [
-							frappe.utils.escape_html(frm.doc.user),
-					  ]),
-				frm.doc.is_active ? "green" : "orange"
-			);
 		}
 	},
 
@@ -57,19 +50,48 @@ frappe.ui.form.on("Hostel Staff", {
 	},
 
 	toggle_login_fields(frm) {
-		const can_login = H360_DESK_DESIGNATIONS.includes(frm.doc.designation);
-		frm.toggle_display("create_user", can_login || frm.doc.user);
+		const rules = frm.h360_rules || H360_DESIGNATION_RULES;
+		const designation = frm.doc.designation;
+		const can_login = rules.login.includes(designation);
+		const user = frappe.utils.escape_html(frm.doc.user || "");
+
+		frm.toggle_display("create_user", can_login || !!frm.doc.user);
 		frm.set_df_property(
 			"assignments_section",
 			"description",
-			H360_SCOPED_DESIGNATIONS.includes(frm.doc.designation)
-				? __("Required: this designation only sees records of the hostels listed here.")
+			rules.scoped.includes(designation)
+				? __(
+						"Required: this designation only sees records of the hostels listed here. Add a block to limit it to the students of that block."
+				  )
 				: __("For reference. Wardens, administrators and mess managers see all hostels.")
 		);
-		frm.toggle_reqd("email", !!frm.doc.create_user);
+		frm.toggle_reqd("email", !!frm.doc.create_user && can_login);
+
+		frm.dashboard.clear_headline();
+		if (designation && !can_login) {
+			frm.dashboard.set_headline_alert(
+				frm.doc.user
+					? __(
+							"{0} staff do not use the desk. The desk login {1} is disabled when this record is saved.",
+							[__(designation), user]
+					  )
+					: __(
+							"{0} staff are recorded for contact purposes only. They do not get a desk login.",
+							[__(designation)]
+					  ),
+				"blue"
+			);
+		} else if (frm.doc.user && !frm.is_new()) {
+			frm.dashboard.set_headline_alert(
+				frm.doc.is_active
+					? __("Desk login {0} is active. Roles and hostel access follow this record.", [user])
+					: __("Desk login {0} is disabled because this staff member is inactive.", [user]),
+				frm.doc.is_active ? "green" : "orange"
+			);
+		}
 	},
 
 	create_user(frm) {
-		frm.toggle_reqd("email", !!frm.doc.create_user);
+		frm.trigger("toggle_login_fields");
 	},
 });

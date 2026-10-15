@@ -9,9 +9,12 @@
   "mess",
   "posting_date",
   "required_by",
+  "mess_menu",
   "column_break_main",
   "status",
   "supplier",
+  "menu_section",
+  "menu_preview",
   "items_section",
   "items",
   "totals_section",
@@ -19,6 +22,7 @@
   "column_break_totals",
   "total_estimated_amount",
   "approval_section",
+  "requested_by",
   "approved_by",
   "approved_on",
   "column_break_approval",
@@ -67,6 +71,14 @@
    "label": "Required By"
   },
   {
+   "description": "The week's menu this indent is for. The approver can compare the quantities with the planned meals.",
+   "fieldname": "mess_menu",
+   "fieldtype": "Link",
+   "label": "For Menu",
+   "options": "Mess Menu",
+   "search_index": 1
+  },
+  {
    "fieldname": "column_break_main",
    "fieldtype": "Column Break"
   },
@@ -90,6 +102,19 @@
    "fieldtype": "Link",
    "label": "Supplier",
    "options": "Mess Supplier"
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "eval:doc.mess_menu",
+   "depends_on": "eval:doc.mess_menu",
+   "fieldname": "menu_section",
+   "fieldtype": "Section Break",
+   "label": "Planned Meals"
+  },
+  {
+   "fieldname": "menu_preview",
+   "fieldtype": "HTML",
+   "label": "Menu Preview"
   },
   {
    "fieldname": "items_section",
@@ -131,6 +156,16 @@
    "fieldname": "approval_section",
    "fieldtype": "Section Break",
    "label": "Approval"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Who submitted the indent for approval. They cannot approve or reject it themselves.",
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
   },
   {
    "allow_on_submit": 1,
@@ -210,7 +245,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Mess",
  "name": "Mess Indent",
@@ -260,21 +295,18 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Deputy Warden",
-   "share": 1
+   "role": "Deputy Warden"
   },
   {
    "read": 1,
    "role": "Hostel Office Staff"
   },
   {
-   "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Institution Auditor",
-   "share": 1
+   "role": "Institution Auditor"
   },
   {
    "amend": 1,

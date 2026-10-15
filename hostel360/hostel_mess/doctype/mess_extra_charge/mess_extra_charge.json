@@ -51,13 +51,14 @@
    "read_only": 1
   },
   {
-   "fetch_from": "student.current_hostel",
+   "description": "The student's hostel when the record was made; kept after the student moves out.",
    "fieldname": "hostel",
    "fieldtype": "Link",
    "in_standard_filter": 1,
    "label": "Hostel",
    "options": "Hostel",
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "description": "Defaults to the mess serving the student's hostel.",
@@ -130,7 +131,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Mess",
  "name": "Mess Extra Charge",
@@ -180,21 +181,18 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Deputy Warden",
-   "share": 1
+   "role": "Deputy Warden"
   },
   {
    "read": 1,
    "role": "Hostel Office Staff"
   },
   {
-   "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Institution Auditor",
-   "share": 1
+   "role": "Institution Auditor"
   },
   {
    "create": 1,

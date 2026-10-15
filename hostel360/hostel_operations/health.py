@@ -21,12 +21,15 @@ from frappe.utils import add_to_date, cint, get_datetime, now_datetime
 
 from hostel360.hostel_operations.constants import (
 	BACKUP_DOCTYPE,
+	CERT_IN_REPORTING_HOURS,
+	CERT_IN_WARNING_HOURS,
 	CRITICAL,
 	METRIC_DOCTYPE,
+	SECURITY_INCIDENT_DOCTYPE,
 	SETTINGS_DOCTYPE,
 	WARNING,
 )
-from hostel360.hostel_operations.settings import get_settings, threshold
+from hostel360.hostel_operations.settings import get_levels, get_settings, parse_emails, parse_mobiles, threshold
 
 OK = "ok"
 WARN = "warning"
@@ -40,6 +43,10 @@ FAILED_JOBS_CACHE_KEY = "hostel360:ops:failed_jobs_total"
 TLS_CACHE_PREFIX = "hostel360:ops:tls:"
 TLS_CACHE_SECONDS = 3600
 RUN_LOCK_KEY = "hostel360:ops:health:lock"
+REPORT_CATCH_UP_KEY = "hostel360:ops:health:report-catch-up"
+REPORT_CATCH_UP_SECONDS = 3600
+# From this day of the month an unsent report is critical: the deadline is the 6th.
+REPORT_CRITICAL_FROM_DAY = 4
 RUN_LOCK_SECONDS = 240
 HTTP_TIMEOUT_SECONDS = 5
 BACKUP_TYPES = ("Daily", "Weekly", "Monthly", "Snapshot")
@@ -533,6 +540,130 @@ def check_agents(ctx) -> list[CheckResult]:
 	return results
 
 
+def check_escalation_contacts(ctx) -> CheckResult:
+	"""Every level of the escalation matrix must be able to reach someone."""
+	levels = get_levels(ctx.settings)
+	missing = [row for row in levels if not parse_emails(row.notify_emails) and not parse_mobiles(row.notify_mobiles)]
+	if not levels:
+		message = "The escalation matrix in Ops Alert Settings is empty: alerts reach only the channel list."
+	elif missing:
+		message = "No e-mail address or mobile number for escalation " + ", ".join(
+			f"level {cint(row.level)} ({row.label or '-'})" for row in missing
+		) + ": alerts that reach it are not delivered to anyone at that level."
+	else:
+		message = f"All {len(levels)} escalation levels have contacts."
+	return CheckResult(
+		"config.escalation.contacts",
+		"Escalation contacts",
+		"Other",
+		WARN if missing or not levels else OK,
+		message,
+		title="Escalation matrix has levels without contacts",
+	)
+
+
+def check_monthly_report(ctx) -> CheckResult | None:
+	"""Last month's performance report must reach the institution by the 6th (TR 13).
+
+	Outside read-only mode this also retries the delivery, at most once an hour, so a report
+	held back on the 1st (no recipients yet, mail trouble) goes out once the cause is fixed.
+	"""
+	from hostel360.hostel_operations import reports
+
+	if ctx.settings.get("environment") == "Development":
+		return None
+	status = reports.delivery_status(ctx.now)
+	if not status["applicable"]:
+		return None
+	if not status["sent_on"] and not ctx.read_only and _once_per(REPORT_CATCH_UP_KEY, REPORT_CATCH_UP_SECONDS):
+		try:
+			reports.catch_up_monthly_report(ctx.now)
+		except Exception:
+			frappe.log_error(title="Hostel360: monthly report catch-up failed", message=frappe.get_traceback())
+		status = reports.delivery_status(ctx.now)
+
+	month = status["month"]
+	if status["sent_on"]:
+		return CheckResult(
+			"reports.monthly.unsent",
+			"Monthly performance report",
+			"SLA",
+			OK,
+			f"The report for {month} was sent on {status['sent_on']}.",
+		)
+	late = status["day"] >= REPORT_CRITICAL_FROM_DAY
+	return CheckResult(
+		"reports.monthly.unsent",
+		"Monthly performance report",
+		"SLA",
+		CRIT if late else WARN,
+		f"The performance report for {month} has not been sent to the institution yet; it is due by the "
+		f"{reports.DELIVERY_DEADLINE_DAY}th. Check Report Recipients in Ops Alert Settings and the outgoing e-mail account.",
+		title=f"Monthly performance report for {month} not sent",
+	)
+
+
+def check_security_incidents(ctx) -> list[CheckResult]:
+	"""Warn four hours after a reportable incident was detected, and page at six, while a
+	report to CERT-In or the institution is still outstanding."""
+	if not _table_exists(SECURITY_INCIDENT_DOCTYPE):
+		return []
+	incidents = frappe.get_all(
+		SECURITY_INCIDENT_DOCTYPE,
+		filters={"status": "Open", "cert_in_reportable": 1},
+		fields=[
+			"name",
+			"title",
+			"detected_on",
+			"reported_to_certin_on",
+			"reported_to_institution_on",
+			"reporting_sla_breached",
+		],
+		order_by="detected_on asc",
+		limit=200,
+	)
+	results = []
+	for incident in incidents:
+		pending = []
+		if not incident.reported_to_certin_on:
+			pending.append("CERT-In")
+		if not incident.reported_to_institution_on:
+			pending.append("the institution")
+		if not pending:
+			continue
+		detected = get_datetime(incident.detected_on)
+		deadline = add_to_date(detected, hours=CERT_IN_REPORTING_HOURS)
+		hours = (ctx.now - detected).total_seconds() / 3600
+		due = deadline.strftime("%d-%m-%Y %H:%M")
+		if hours >= CERT_IN_REPORTING_HOURS:
+			status = CRIT
+			title = f"CERT-In reporting deadline missed for {incident.name}"
+			message = f"{incident.name} ({incident.title}) was due to be reported to {' and '.join(pending)} by {due}."
+			if not ctx.read_only and not incident.reporting_sla_breached:
+				frappe.db.set_value(
+					SECURITY_INCIDENT_DOCTYPE, incident.name, "reporting_sla_breached", 1, update_modified=False
+				)
+		elif hours >= CERT_IN_WARNING_HOURS:
+			status = WARN
+			title = f"CERT-In report due by {due} for {incident.name}"
+			message = f"Report {incident.name} ({incident.title}) to {' and '.join(pending)} by {due}."
+		else:
+			status = OK
+			title = ""
+			message = f"{incident.name}: report to {' and '.join(pending)} by {due}."
+		results.append(
+			CheckResult(
+				f"security.incident.{incident.name}.reporting",
+				f"Security incident {incident.name}",
+				"Security",
+				status,
+				message,
+				title=title,
+			)
+		)
+	return results
+
+
 CHECKS = (
 	check_database,
 	check_redis_cache,
@@ -547,6 +678,9 @@ CHECKS = (
 	check_backups,
 	check_tls,
 	check_agents,
+	check_escalation_contacts,
+	check_monthly_report,
+	check_security_incidents,
 )
 
 
@@ -621,7 +755,8 @@ def _run_and_apply(now=None) -> dict:
 			resolve_alert(result.key, notes=f"Recovered: {result.message}", source="Health Check")
 		_commit()
 
-	frappe.db.set_single_value(SETTINGS_DOCTYPE, "last_health_check_on", now)
+	# update_modified=False: run bookkeeping must not make an open settings form stale.
+	frappe.db.set_single_value(SETTINGS_DOCTYPE, "last_health_check_on", now, update_modified=False)
 	heartbeat = None
 	if all(r.status != CRIT for r in results if r.core):
 		heartbeat = send_heartbeat(settings, now)
@@ -656,13 +791,21 @@ def send_heartbeat(settings, now) -> bool | None:
 		frappe.log_error(title="Hostel360: heartbeat ping failed", message=exc.__class__.__name__)
 		return False
 	if ok:
-		frappe.db.set_single_value(SETTINGS_DOCTYPE, "last_heartbeat_sent_on", now)
+		frappe.db.set_single_value(SETTINGS_DOCTYPE, "last_heartbeat_sent_on", now, update_modified=False)
 	return ok
 
 
 def overall_status(results: list[CheckResult]) -> str:
 	worst = max((STATUS_RANK.get(r.status, 0) for r in results), default=0)
 	return {0: OK, 1: WARN, 2: CRIT}[worst]
+
+
+def _once_per(key: str, seconds: int) -> bool:
+	"""True for the first caller in each ``seconds`` window (always True without Redis)."""
+	try:
+		return bool(frappe.cache.set(frappe.cache.make_key(key), 1, nx=True, ex=seconds))
+	except Exception:
+		return True
 
 
 def _acquire_lock() -> bool:

@@ -8,6 +8,7 @@ frappe.ui.form.on("Hostel Grievance", {
 
 	refresh(frm) {
 		if (frm.is_new()) return;
+		h360_grievance.guard_confidentiality(frm);
 		h360_grievance.show_alerts(frm);
 		h360_grievance.add_actions(frm);
 	},
@@ -15,6 +16,14 @@ frappe.ui.form.on("Hostel Grievance", {
 
 const h360_grievance = {
 	OPEN: ["Open", "In Progress", "Escalated", "Reopened"],
+	CONFIDENTIAL_ROLES: ["Hostel Warden", "Hostel Administrator", "System Manager"],
+
+	guard_confidentiality(frm) {
+		// The server refuses the change too; this only saves the user a failed save.
+		if (frappe.user.has_role(this.CONFIDENTIAL_ROLES)) return;
+		frm.toggle_enable("is_confidential", !frm.doc.is_confidential);
+		frm.toggle_enable("category", frm.doc.category !== "Ragging or Harassment");
+	},
 
 	show_alerts(frm) {
 		const doc = frm.doc;

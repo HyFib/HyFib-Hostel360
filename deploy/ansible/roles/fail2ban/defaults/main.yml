@@ -1,4 +1,6 @@
 h360_data_dir: /srv/hostel360
+# Extra addresses fail2ban never bans, on top of the campus egress addresses
+# (h360_campus_egress_cidrs, roles/preflight) and the stack's internal container network.
 h360_fail2ban_ignoreip: []
 h360_fail2ban_bantime: 1h
 h360_fail2ban_findtime: 10m

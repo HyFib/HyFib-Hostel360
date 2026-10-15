@@ -74,6 +74,9 @@ def get_boot(user: str | None) -> dict:
 		"institution_name": branding.get("institution_name"),
 		"institution_short_name": branding.get("institution_short_name"),
 		"logo": branding.get("logo"),
+		# The Help page is reachable before sign-in; it must be able to show the hostel office.
+		"office_phone": branding.get("office_phone"),
+		"office_email": branding.get("office_email"),
 		"support_phone": branding.get("support_phone"),
 		"support_email": branding.get("support_email"),
 		"is_logged_in": bool(user),

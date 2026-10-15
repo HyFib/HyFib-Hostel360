@@ -53,11 +53,38 @@ def get_institution_short_name() -> str:
 	return get_hostel_setting("institution_short_name") or get_hostel_setting("institution_name") or ""
 
 
+def get_site_base_url() -> str:
+	"""Public base URL of the site (Hostel Settings' portal URL, else the site URL)."""
+	return (get_hostel_setting("portal_url") or get_url()).rstrip("/")
+
+
 def get_portal_link(path: str = "") -> str:
 	"""Absolute link into the student/parent portal, for messages and receipts."""
-	base = (get_hostel_setting("portal_url") or get_url()).rstrip("/")
+	base = get_site_base_url()
 	path = path if path.startswith("/") else f"/{path}"
 	return f"{base}/hostel{path}" if path != "/" else f"{base}/hostel"
+
+
+def get_student_hostel(student: str | None) -> str | None:
+	"""The hostel a student's fee records belong to: the current one, else the last one lived in.
+
+	Hostel-scoped staff see fee records through their ``hostel`` field, so a student who has
+	vacated keeps the hostel they left instead of becoming visible to every hostel.
+	"""
+	if not student:
+		return None
+	try:
+		from hostel360.hostel_people.services import get_student_hostel as people_student_hostel
+	except ImportError:
+		people_student_hostel = None
+	if people_student_hostel:
+		return people_student_hostel(student) or None
+
+	fields = ["current_hostel"]
+	if frappe.get_meta("Hostel Student").has_field("last_hostel"):
+		fields.append("last_hostel")
+	values = frappe.db.get_value("Hostel Student", student, fields, as_dict=True) or {}
+	return values.get("current_hostel") or values.get("last_hostel") or None
 
 
 def persist_now() -> None:
@@ -88,8 +115,12 @@ def get_permitted_hostels(doctype: str | None = None, user: str | None = None) -
 	return hostels or None
 
 
-def get_student_print_details(student: str) -> frappe._dict:
-	"""Student particulars shown on receipts, invoices and the fee structure."""
+def get_student_print_details(student: str, hostel: str | None = None) -> frappe._dict:
+	"""Student particulars shown on receipts, invoices and the fee structure.
+
+	``hostel`` is the document's own hostel. It is the one shown, because the student may have
+	moved or vacated since the document was issued.
+	"""
 	details = frappe.db.get_value(
 		"Hostel Student",
 		student,
@@ -104,14 +135,15 @@ def get_student_print_details(student: str) -> frappe._dict:
 		],
 		as_dict=True,
 	) or frappe._dict(name=student)
+	shown_hostel = hostel or details.get("current_hostel") or get_student_hostel(student)
 	details.hostel_name = (
-		frappe.db.get_value("Hostel", details.current_hostel, "hostel_name")
-		if details.get("current_hostel")
-		else None
-	) or details.get("current_hostel")
+		frappe.db.get_value("Hostel", shown_hostel, "hostel_name") if shown_hostel else None
+	) or shown_hostel
+	# The room is only meaningful while the student still lives in the hostel shown.
+	in_shown_hostel = details.get("current_hostel") and details.current_hostel == shown_hostel
 	details.room = (
-		frappe.db.get_value("Hostel Room", details.current_room, "room_number")
-		if details.get("current_room")
+		(frappe.db.get_value("Hostel Room", details.current_room, "room_number") or details.current_room)
+		if in_shown_hostel and details.get("current_room")
 		else None
-	) or details.get("current_room")
+	)
 	return details

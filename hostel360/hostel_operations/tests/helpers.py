@@ -183,3 +183,90 @@ def age_alert(name: str, minutes: int) -> None:
 
 	first_seen = add_to_date(now_datetime(), minutes=-minutes)
 	frappe.db.set_value("Ops Alert", name, {"first_seen": first_seen}, update_modified=False)
+
+
+# Independent alert transactions ------------------------------------------------
+# In production raise_alert/resolve_alert commit on a connection of their own; tests run
+# them inline so everything is rolled back with the test. The helpers below exercise the
+# production path and clean up what it committed.
+
+
+class IndependentAlerts:
+	"""Run alerting on its own connection for the duration of the block, then delete every
+	Ops Alert (with its comments and versions) committed for ``keys`` during the block."""
+
+	def __init__(self, *keys: str):
+		self.keys = list(keys)
+		self.started = None
+		self.existing: set[str] = set()
+
+	def __enter__(self):
+		self.started = now_datetime()
+		self.existing = {row[0] for row in committed_rows("select name from `tabOps Alert`")}
+		frappe.flags.hostel360_independent_alerts = True
+		return self
+
+	def __exit__(self, *exc):
+		frappe.flags.hostel360_independent_alerts = False
+		names = [
+			row[0]
+			for row in committed_rows(
+				"select name from `tabOps Alert` where alert_key in %(keys)s", {"keys": tuple(self.keys or [""])}
+			)
+			if row[0] not in self.existing
+		]
+		delete_committed_alerts(names)
+		delete_committed_error_logs(self.keys, self.started)
+		return False
+
+	def committed(self, key: str) -> list[dict]:
+		return committed_rows(
+			"select name, status, occurrence_count, open_key from `tabOps Alert` where alert_key = %(key)s",
+			{"key": key},
+			as_dict=True,
+		)
+
+
+def committed_rows(query: str, values=None, as_dict=False):
+	"""Read through a fresh connection: what other processes see, not this test's transaction."""
+	from hostel360.hostel_operations import transaction
+
+	db = transaction.open_connection()
+	try:
+		return db.sql(query, values or {}, as_dict=as_dict)
+	finally:
+		db.close()
+
+
+def delete_committed_alerts(names: list[str]) -> None:
+	if not names:
+		return
+	from hostel360.hostel_operations import transaction
+
+	db = transaction.open_connection()
+	try:
+		values = {"names": tuple(names)}
+		db.sql("delete from `tabComment` where reference_doctype='Ops Alert' and reference_name in %(names)s", values)
+		db.sql("delete from `tabVersion` where ref_doctype='Ops Alert' and docname in %(names)s", values)
+		db.sql("delete from `tabOps Alert` where name in %(names)s", values)
+		db.commit()
+	finally:
+		db.close()
+
+
+def delete_committed_error_logs(keys: list[str], since) -> None:
+	"""Remove the Error Log rows that failure-path tests commit through the alert connection."""
+	from hostel360.hostel_operations import transaction
+
+	if not keys:
+		return
+	db = transaction.open_connection()
+	try:
+		for key in keys:
+			db.sql(
+				"delete from `tabError Log` where creation >= %(since)s and error like %(pattern)s",
+				{"since": since, "pattern": f"%Alert key: {key}%"},
+			)
+		db.commit()
+	finally:
+		db.close()

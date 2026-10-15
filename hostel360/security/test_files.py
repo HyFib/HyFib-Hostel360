@@ -3,6 +3,7 @@
 
 import glob
 import io
+import json
 import os
 import struct
 import unicodedata
@@ -10,6 +11,7 @@ import zipfile
 from unittest.mock import patch
 
 import frappe
+from frappe.core.doctype.file.file import File
 from frappe.tests import IntegrationTestCase
 
 from hostel360.security import clamav, files
@@ -122,7 +124,23 @@ class TestFileNames(IntegrationTestCase):
 		self.assertEqual(files.detect_kind(b"PK\x03\x04" + b"\0" * 30), "zip")
 
 
-class TestUploadValidation(IntegrationTestCase):
+class FakeRequest:
+	"""Just enough of a werkzeug request for the upload checks."""
+
+	def __init__(self, path: str, method: str = "POST", headers: dict | None = None):
+		self.path = path
+		self.method = method
+		self.headers = headers or {}
+		# Frappe builds absolute URLs from the request host when there is one.
+		self.host = None
+
+
+PORTAL_UPLOAD_PATH = "/api/method/hostel360.api.portal.upload_attachment"
+
+
+class UploadPolicyCases:
+	"""Policy cases run against both enforcement points (see the two test classes below)."""
+
 	def setUp(self):
 		super().setUp()
 		patcher = patch.dict(frappe.flags, {"hostel360_enforce_upload_policy": True})
@@ -131,9 +149,14 @@ class TestUploadValidation(IntegrationTestCase):
 		self.portal_user = make_user(STUDENT_ROLE)
 		self.staff_user = make_user(OFFICE_ROLE)
 
-	def upload(self, file_name: str, content: bytes, user: str | None = None, **values):
+	def new_file(self, values: dict):
+		return frappe.get_doc(values)
+
+	def upload(self, file_name: str, content: bytes, user: str | None = None, portal_channel=True, **values):
 		with self.set_user(user or self.portal_user):
-			doc = frappe.get_doc({"doctype": "File", "file_name": file_name, "content": content, **values})
+			doc = self.new_file({"doctype": "File", "file_name": file_name, "content": content, **values})
+			if portal_channel:
+				files.mark_portal_upload(doc)
 			doc.insert(ignore_permissions=True)
 		return doc
 
@@ -158,12 +181,29 @@ class TestUploadValidation(IntegrationTestCase):
 			self.upload(f"photo-{stem}.png", b"MZ\x90\x00" + unique().encode() * 20, is_private=1)
 		self.assertEqual(files_on_disk(stem), [])
 
-		# Frappe parses every PDF for JavaScript before this module runs, so a fake PDF is
-		# refused there; either way nothing may be left on disk.
+		# Frappe parses every PDF for JavaScript when it writes it, so depending on which check
+		# runs first a fake PDF is refused there or here; either way nothing may be left on disk.
 		pdf_stem = unique()
 		with self.assertRaises(Exception):
 			self.upload(f"receipt-{pdf_stem}.pdf", b"MZ\x90\x00" + unique().encode() * 20, is_private=1)
 		self.assertEqual(files_on_disk(pdf_stem), [])
+
+	def test_rejected_upload_stays_gone_when_the_request_rolls_back(self):
+		stem = unique()
+		with self.set_user(self.staff_user):
+			doc = self.new_file(
+				{
+					"doctype": "File",
+					"file_name": f"tool-{stem}.png",
+					"content": b"MZ\x90\x00" + unique().encode() * 20,
+					"is_private": 1,
+				}
+			)
+			with self.assertRaises(files.UploadRejected):
+				doc.insert(ignore_permissions=True)
+		# What Frappe runs for this File when the failed request's transaction rolls back.
+		doc.on_rollback()
+		self.assertEqual(files_on_disk(stem), [])
 
 	def test_blocked_extensions(self):
 		for name, content in (
@@ -217,7 +257,7 @@ class TestUploadValidation(IntegrationTestCase):
 
 	def test_system_written_files_are_not_policed(self):
 		with patch.dict(frappe.flags, {"hostel360_enforce_upload_policy": False}):
-			doc = frappe.get_doc(
+			doc = self.new_file(
 				{
 					"doctype": "File",
 					"file_name": f"report-{unique()}.json",
@@ -226,6 +266,211 @@ class TestUploadValidation(IntegrationTestCase):
 				}
 			).insert(ignore_permissions=True)
 		self.assertTrue(doc.name)
+
+	def test_portal_files_only_through_the_portal_endpoint(self):
+		# /api/resource/File, frappe.client.insert and the like all end in a File insert
+		# without the portal's quota, rate limit or clean-up folder.
+		stem = unique()
+		for path in (
+			"/api/resource/File",
+			"/api/v2/document/File",
+			"/api/method/frappe.client.insert",
+			"/api/v2/method/frappe.desk.form.save.savedocs",
+			"/api/method/upload_file",
+		):
+			with (
+				patch.object(frappe.local, "request", FakeRequest(path), create=True),
+				self.assertRaises(files.PortalUploadBlocked, msg=path),
+			):
+				self.upload(f"direct-{stem}.pdf", pdf_bytes(), portal_channel=False, is_private=1)
+		self.assertEqual(files_on_disk(stem), [])
+
+		with (
+			patch.object(frappe.local, "request", FakeRequest("/api/method/upload_file"), create=True),
+			self.set_user("Guest"),
+			self.assertRaises(files.PortalUploadBlocked),
+		):
+			doc = self.new_file(
+				{"doctype": "File", "file_name": f"guest-{stem}.pdf", "content": pdf_bytes(), "is_private": 1}
+			)
+			doc.insert(ignore_permissions=True)
+		self.assertEqual(files_on_disk(stem), [])
+
+		# Staff uploads through the desk are not affected.
+		with patch.object(frappe.local, "request", FakeRequest("/api/method/upload_file"), create=True):
+			staff_doc = self.upload(
+				f"desk-{unique()}.pdf", pdf_bytes(), user=self.staff_user, portal_channel=False, is_private=1
+			)
+		self.assertTrue(staff_doc.name)
+
+	def test_portal_endpoint_and_flagged_files_are_accepted(self):
+		for path in (PORTAL_UPLOAD_PATH, "/api/v2/method/hostel360.api.portal.upload_attachment"):
+			with patch.object(frappe.local, "request", FakeRequest(path), create=True):
+				doc = self.upload(
+					f"grievance-{unique()}.png", image_bytes("PNG"), portal_channel=False, is_private=1
+				)
+			self.assertTrue(doc.name)
+
+		# Hostel360 code that applies the portal's rules itself marks the File.
+		with patch.object(frappe.local, "request", FakeRequest("/api/resource/File"), create=True):
+			self.assertTrue(self.upload(f"flagged-{unique()}.png", image_bytes("PNG"), is_private=1).name)
+
+		# Page requests are not API calls and store nothing a visitor sends.
+		with patch.object(frappe.local, "request", FakeRequest("/hostel", "GET"), create=True):
+			doc = self.upload(f"page-{unique()}.png", image_bytes("PNG"), portal_channel=False, is_private=1)
+		self.assertTrue(doc.name)
+
+
+class TestUploadValidation(UploadPolicyCases, IntegrationTestCase):
+	"""The policy as the File ``before_insert`` hook applies it (bytes already written)."""
+
+
+class TestUploadValidationBeforeWrite(UploadPolicyCases, IntegrationTestCase):
+	"""The same policy applied by the File controller override, before Frappe writes the bytes."""
+
+	def new_file(self, values: dict):
+		return files.HostelFile(values)
+
+	def test_rejected_upload_is_never_written(self):
+		for name, content in (
+			(f"tool-{unique()}.exe", b"MZ\x90\x00"),
+			(f"photo-{unique()}.png", b"MZ\x90\x00" + unique().encode() * 20),
+			(f"big-{unique()}.pdf", pdf_bytes(5 * MB + 1)),
+		):
+			with (
+				patch.object(files.HostelFile, "save_file", autospec=True) as save_file,
+				self.assertRaises(files.UploadRejected, msg=name),
+			):
+				self.upload(name, content, is_private=1)
+			save_file.assert_not_called()
+
+		with (
+			patch.object(frappe.local, "request", FakeRequest("/api/resource/File"), create=True),
+			patch.object(files.HostelFile, "save_file", autospec=True) as save_file,
+			self.assertRaises(files.PortalUploadBlocked),
+		):
+			self.upload(f"direct-{unique()}.pdf", pdf_bytes(), portal_channel=False)
+		save_file.assert_not_called()
+
+	def test_accepted_upload_is_written_once_under_its_clean_name(self):
+		stem = unique()
+		with patch.object(
+			files.HostelFile, "save_file", autospec=True, side_effect=File.save_file
+		) as save_file:
+			doc = self.upload(f"../{stem}<b>.PDF", pdf_bytes(), is_private=0)
+		save_file.assert_called_once()
+		self.assertEqual(doc.file_name, f"{stem}_b.pdf")
+		self.assertEqual(doc.is_private, 1)
+		self.assertEqual(len(files_on_disk(stem)), 1)
+
+	def test_base64_content_is_checked_after_decoding(self):
+		import base64
+
+		content = image_bytes("PNG")
+		doc = self.upload(
+			f"photo-{unique()}.png", base64.b64encode(content).decode(), decode=True, is_private=1
+		)
+		with open(doc.get_full_path(), "rb") as fh:
+			self.assertEqual(fh.read(), content)
+
+		with self.assertRaises(files.UploadRejected):
+			self.upload(
+				f"fake-{unique()}.png",
+				base64.b64encode(b"MZ\x90\x00" * 10).decode(),
+				decode=True,
+				is_private=1,
+			)
+
+	def test_hook_does_not_check_twice(self):
+		with patch("hostel360.security.files._checked_name", wraps=files._checked_name) as checked:
+			self.upload(f"once-{unique()}.pdf", pdf_bytes(), is_private=1)
+		self.assertEqual(checked.call_count, 1)
+
+
+class TestGenericUploadEndpoints(IntegrationTestCase):
+	"""before_request guard for Frappe's own upload and insert endpoints."""
+
+	def setUp(self):
+		super().setUp()
+		self.portal_user = make_user(STUDENT_ROLE)
+		self.staff_user = make_user(OFFICE_ROLE)
+
+	def call(self, path: str, user: str, method: str = "POST", form: dict | None = None, headers=None):
+		with (
+			self.set_user(user),
+			patch.object(frappe.local, "request", FakeRequest(path, method, headers), create=True),
+			patch.object(frappe.local, "form_dict", frappe._dict(form or {}), create=True),
+		):
+			files.block_portal_generic_upload()
+
+	def test_portal_users_and_visitors_are_refused(self):
+		paths = (
+			"/api/method/upload_file",
+			"/api/method/upload_file/anything",
+			"/api/v1/method/upload_file",
+			"/api/v2/method/upload_file",
+			"/api/method/frappe.handler.upload_file",
+			"/api/v2/method/frappe.handler.upload_file",
+			"/api/resource/File",
+			"/api/v1/resource/File",
+			"/api/v2/document/File",
+		)
+		for user in (self.portal_user, "Guest"):
+			for path in paths:
+				with self.assertRaises(files.PortalUploadBlocked, msg=f"{user} {path}"):
+					self.call(path, user)
+
+		# The deprecated "POST / with cmd" form reaches the same handler.
+		with self.assertRaises(files.PortalUploadBlocked):
+			self.call("/", self.portal_user, form={"cmd": "upload_file"})
+
+	def test_generic_inserts_of_files_are_refused(self):
+		file_doc = json.dumps({"doctype": "File", "file_name": "x.pdf", "content": "JVBERi0="})
+		for method in ("frappe.client.insert", "frappe.client.save", "frappe.desk.form.save.savedocs"):
+			with self.assertRaises(files.PortalUploadBlocked, msg=method):
+				self.call(f"/api/method/{method}", self.portal_user, form={"doc": file_doc})
+		with self.assertRaises(files.PortalUploadBlocked):
+			self.call(
+				"/api/method/frappe.client.insert_many",
+				self.portal_user,
+				form={"docs": json.dumps([{"doctype": "ToDo"}, json.loads(file_doc)])},
+			)
+		# Other documents are none of this guard's business.
+		self.call(
+			"/api/method/frappe.client.insert",
+			self.portal_user,
+			form={"doc": json.dumps({"doctype": "ToDo"})},
+		)
+
+	def test_portal_endpoint_staff_and_reads_are_left_alone(self):
+		self.call(PORTAL_UPLOAD_PATH, self.portal_user)
+		self.call("/api/v2/method/hostel360.api.portal.upload_attachment", self.portal_user)
+		self.call("/api/method/upload_file", self.staff_user)
+		self.call("/api/resource/File", self.staff_user)
+		self.call("/api/resource/File", self.portal_user, method="GET")
+		self.call("/api/method/upload_file", self.portal_user, method="OPTIONS")
+		self.call("/hostel", "Guest", method="GET")
+
+	def test_token_requests_are_judged_after_authentication(self):
+		# Frappe resolves the user of a token request after before_request; a bad token is
+		# refused there, and any File it inserts still meets the File-level policy.
+		self.call("/api/method/upload_file", "Guest", headers={"Authorization": "token key:secret"})
+		with self.assertRaises(files.PortalUploadBlocked):
+			self.call("/api/method/upload_file", "Guest", headers={"Authorization": "nonsense"})
+
+	def test_chunked_upload_is_refused_before_the_handler_runs(self):
+		# Frappe appends each chunk to a temporary file and returns before any File record
+		# exists, so the refusal has to come before frappe.handler.upload_file is reached.
+		with (
+			patch("frappe.handler.upload_file") as handler,
+			self.assertRaises(files.PortalUploadBlocked),
+		):
+			self.call(
+				"/api/method/upload_file",
+				self.portal_user,
+				form={"chunk_index": 1, "total_chunk_count": 99, "chunk_byte_offset": 0},
+			)
+		handler.assert_not_called()
 
 
 class FakeSocket:

@@ -5,7 +5,14 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
-from hostel360.hostel_fees.constants import LIVE_TX_STATUSES, PAYMENT, TX_REFUNDED, TX_SUCCESS
+from hostel360.hostel_fees.constants import (
+	CLOSED_TX_STATUSES,
+	LIVE_TX_STATUSES,
+	PAYMENT,
+	TX_EXPIRED,
+	TX_REFUNDED,
+	TX_SUCCESS,
+)
 from hostel360.setup.roles import ADMIN_ROLE, OFFICE_ROLE
 
 
@@ -39,18 +46,22 @@ class HostelPaymentTransaction(Document):
 		payment: DF.Link | None
 		payment_method: DF.Data | None
 		reconciled_on: DF.Datetime | None
+		refunded_amount: DF.Currency
 		remarks: DF.SmallText | None
 		status: DF.Literal["Initiated", "Pending", "Success", "Failed", "Expired", "Refunded"]
 		student: DF.Link
 		student_name: DF.Data | None
 		test_mode: DF.Check
+		verification_failed: DF.Check
 	# end: auto-generated types
 
 	def validate(self):
 		if not self.currency:
 			self.currency = "INR"
 		if not self.hostel:
-			self.hostel = frappe.db.get_value("Hostel Student", self.student, "current_hostel")
+			from hostel360.hostel_fees.utils import get_student_hostel
+
+			self.hostel = get_student_hostel(self.student)
 
 	def on_trash(self):
 		frappe.throw(_("Payment transactions are part of the audit trail and cannot be deleted."))
@@ -58,19 +69,46 @@ class HostelPaymentTransaction(Document):
 	@frappe.whitelist(methods=["POST"])
 	def check_with_gateway(self) -> dict:
 		"""Staff action: ask the gateway what happened to this payment now, instead of waiting for
-		the next reconciliation run."""
+		the next reconciliation run. Works on closed transactions too, because their order may
+		still have been paid; it needs only the gateway's keys, not online payments enabled."""
 		frappe.only_for([ADMIN_ROLE, OFFICE_ROLE, "System Manager"])
-		if self.status not in LIVE_TX_STATUSES:
+		if self.status not in LIVE_TX_STATUSES + CLOSED_TX_STATUSES or (
+			self.status in CLOSED_TX_STATUSES and self.payment
+		):
 			return {
 				"status": self.status,
 				"message": _("This transaction is already {0}.").format(_(self.status)),
 			}
 
-		from hostel360.hostel_fees.gateways import get_gateway
-		from hostel360.hostel_fees.transactions import settle_with_gateway
+		from hostel360.hostel_fees.gateways import get_settlement_gateway
+		from hostel360.hostel_fees.transactions import sync_with_gateway
 
-		status = settle_with_gateway(self.name, get_gateway(), "desk")
-		return {"status": status, "payment": frappe.db.get_value(self.doctype, self.name, "payment")}
+		status = sync_with_gateway(self.name, get_settlement_gateway(self.gateway), "desk")
+		result = {"status": status, "payment": frappe.db.get_value(self.doctype, self.name, "payment")}
+		if status == self.status and status in CLOSED_TX_STATUSES:
+			result["message"] = _("The gateway shows no new completed payment for this transaction.")
+		return result
+
+	@frappe.whitelist(methods=["POST"])
+	def close_as_expired(self, reason: str) -> dict:
+		"""Close an open transaction the gateway can no longer read (for example a test-mode order
+		after switching to live keys), after checking the gateway dashboard."""
+		frappe.only_for([ADMIN_ROLE, "System Manager"])
+		reason = (reason or "").strip()
+		if not reason:
+			frappe.throw(_("Enter why the transaction is being closed."))
+		if self.status not in LIVE_TX_STATUSES:
+			frappe.throw(_("Only open (Initiated or Pending) transactions can be closed."))
+
+		from hostel360.hostel_fees.transactions import mark_failed
+
+		status = mark_failed(
+			self.name,
+			_("Closed by {0}: {1}").format(frappe.session.user, reason),
+			status=TX_EXPIRED,
+		)
+		self.add_comment("Info", _("Closed as expired: {0}").format(frappe.utils.escape_html(reason)))
+		return {"status": status}
 
 	@frappe.whitelist(methods=["POST"])
 	def mark_refunded(self, remarks: str) -> dict:

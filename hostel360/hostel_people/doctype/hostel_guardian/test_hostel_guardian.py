@@ -47,3 +47,7 @@ class TestHostelGuardian(IntegrationTestCase):
 		)
 		self.assertEqual((row.guardian_name, row.mobile_number), ("New Name", new_mobile))
 		self.assertEqual([w["name"] for w in guardian.get_wards()], [student.name])
+
+	def test_guardian_link_is_indexed(self):
+		# Parent sign-in and the parent portal look up a guardian's wards on every request.
+		self.assertTrue(frappe.db.has_index("tabHostel Student Guardian", "guardian_index"))

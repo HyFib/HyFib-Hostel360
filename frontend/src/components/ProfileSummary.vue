@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** Read-only details held by the hostel office (name, programme, room, guardians). */
 import type { Profile } from "@/api/types";
-import { t } from "@/i18n";
+import { t, tv } from "@/i18n";
 import { formatDate } from "@/utils/format";
 
 defineProps<{ profile: Profile }>();
@@ -67,7 +67,7 @@ defineProps<{ profile: Profile }>();
 				<li v-for="guardian in profile.guardians" :key="guardian.guardian" class="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
 					<span>
 						<span class="font-medium text-ink">{{ guardian.guardian_name }}</span>
-						<span v-if="guardian.relation" class="text-muted"> · {{ guardian.relation }}</span>
+						<span v-if="guardian.relation" class="text-muted"> · {{ tv("relations", guardian.relation) }}</span>
 					</span>
 					<span class="flex items-center gap-2 text-muted">
 						{{ guardian.mobile_masked }}

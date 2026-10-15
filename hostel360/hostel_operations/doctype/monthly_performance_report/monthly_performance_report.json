@@ -18,6 +18,8 @@
   "uptime_percent",
   "downtime_minutes",
   "uptime_source",
+  "unmonitored_minutes",
+  "monitoring_coverage_percent",
   "column_break_availability",
   "incidents",
   "critical_alerts",
@@ -132,13 +134,29 @@
    "fieldname": "downtime_minutes",
    "fieldtype": "Int",
    "label": "Downtime (Minutes)",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Minutes counted as unavailable: measured outages plus unmonitored minutes."
   },
   {
    "fieldname": "uptime_source",
    "fieldtype": "Data",
    "label": "Measured By",
    "read_only": 1
+  },
+  {
+   "fieldname": "unmonitored_minutes",
+   "fieldtype": "Int",
+   "label": "Unmonitored (Minutes)",
+   "read_only": 1,
+   "description": "Minutes in which nothing measured availability. They are counted as downtime and included in Downtime (Minutes)."
+  },
+  {
+   "fieldname": "monitoring_coverage_percent",
+   "fieldtype": "Percent",
+   "label": "Monitoring Coverage (%)",
+   "read_only": 1,
+   "precision": "2",
+   "description": "Share of the month's minutes for which availability was measured."
   },
   {
    "fieldname": "column_break_availability",
@@ -367,7 +385,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-15 16:50:00.000000",
+ "modified": "2026-10-15 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Operations",
  "name": "Monthly Performance Report",

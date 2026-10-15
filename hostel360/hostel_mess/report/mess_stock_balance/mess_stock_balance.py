@@ -5,6 +5,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
+from hostel360.hostel_mess.permissions import assert_mess_access
 from hostel360.hostel_mess.stock import get_stock_levels
 
 
@@ -12,6 +13,7 @@ def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	if not filters.mess:
 		frappe.throw(_("Select a mess."))
+	assert_mess_access(filters.mess, doctype="Mess Stock Ledger Entry")
 	as_on = getdate(filters.as_on_date or nowdate())
 
 	levels = get_stock_levels(filters.mess, as_of=as_on, include_inactive=True)

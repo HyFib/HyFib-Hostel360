@@ -33,19 +33,19 @@ export const routes: RouteRecordRaw[] = [
 		path: "/fees",
 		name: "fees",
 		component: () => import("@/views/FeesView.vue"),
-		meta: { requiresValidated: true, title: "fees.title" },
+		meta: { requiresValidated: true, dues: true, title: "fees.title" },
 	},
 	{
 		path: "/fees/pay/:invoice?",
 		name: "pay",
 		component: () => import("@/views/PayView.vue"),
-		meta: { requiresValidated: true, title: "pay.title" },
+		meta: { requiresValidated: true, dues: true, title: "pay.title" },
 	},
 	{
 		path: "/receipts",
 		name: "receipts",
 		component: () => import("@/views/ReceiptsView.vue"),
-		meta: { requiresValidated: true, title: "receipts.title" },
+		meta: { requiresValidated: true, dues: true, title: "receipts.title" },
 	},
 	{
 		path: "/menu",

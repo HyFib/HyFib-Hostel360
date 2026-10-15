@@ -12,12 +12,16 @@ from hostel360.student_services import services
 from hostel360.student_services.page.approvals import approvals
 from hostel360.student_services.testing import (
 	leave_data,
+	make_block_deputy,
+	make_block_room,
 	make_hostel,
 	make_student,
 	make_user,
+	put_in_room,
 	scope_to_hostel,
 	set_hostel_settings,
 )
+from hostel360.student_services.utils import people_service
 
 
 class TestApprovals(IntegrationTestCase):
@@ -112,3 +116,28 @@ class TestApprovals(IntegrationTestCase):
 		self.assertEqual(approvals.act_on_grievance(name, "resolve", "Motor repaired")["status"], "Resolved")
 		frappe.set_user("Administrator")
 		self.assertNotIn(name, self.names(self.inbox_as(self.deputy), "grievances"))
+
+	def test_block_deputy_sees_and_decides_only_their_blocks(self):
+		if not people_service("staff_covers_student"):
+			self.skipTest("Hostel People does not provide block scoping on this site")
+		east, west = make_block_room(self.hostel), make_block_room(self.hostel)
+		put_in_room(self.student.name, east.room)
+		westerner = make_student(self.hostel)
+		put_in_room(westerner.name, west.room)
+		west_leave = services.apply_leave(westerner.name, leave_data(), "Student", westerner.user)
+		west_certificate = services.request_bonafide(westerner.name, "Visa", None)
+		east_deputy = make_block_deputy(self.hostel, [east.block])
+
+		inbox = self.inbox_as(east_deputy)
+		self.assertIn(self.leave, self.names(inbox, "leaves"))
+		self.assertNotIn(west_leave, self.names(inbox, "leaves"))
+		self.assertIn(self.certificate, self.names(inbox, "certificates"))
+		self.assertNotIn(west_certificate, self.names(inbox, "certificates"))
+		# The deputy of the whole hostel still sees both blocks
+		self.assertIn(west_leave, self.names(self.inbox_as(self.deputy), "leaves"))
+
+		frappe.set_user(east_deputy)
+		with self.assertRaises(frappe.PermissionError):
+			approvals.decide("Bonafide Certificate Request", west_certificate, "approve")
+		self.assertEqual(approvals.decide("Home Visit Leave", self.leave, "approve")["status"], "Approved")
+

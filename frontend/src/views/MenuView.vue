@@ -10,9 +10,9 @@ import SkeletonList from "@/components/SkeletonList.vue";
 import { useResource } from "@/composables/useResource";
 import { t, tv } from "@/i18n";
 import { studentArg, useSession } from "@/stores/session";
-import { formatDate, formatDateRange, parseDate, toISODate } from "@/utils/format";
+import { formatDate, formatDateRange, parseDate, siteNow, toISODate } from "@/utils/format";
 
-const { session } = useSession();
+const { session, siteTimeZone } = useSession();
 const weekStart = ref<string | null>(null);
 const menu = useResource(() => getMenu(weekStart.value, studentArg()), {
 	watch: [weekStart, () => session.activeStudent],
@@ -21,7 +21,8 @@ const menu = useResource(() => getMenu(weekStart.value, studentArg()), {
 const days = computed(() => menu.data.value?.days ?? []);
 const selectedIndex = ref(0);
 const tabs = ref<HTMLButtonElement[]>([]);
-const todayISO = toISODate(new Date());
+// The server marks today (is_today); this is the fallback, on the hostel's clock.
+const todayISO = toISODate(siteNow(siteTimeZone.value));
 
 watch(days, (list) => {
 	const today = list.findIndex((day) => day.is_today || day.date === todayISO);
@@ -32,10 +33,10 @@ const selected = computed(() => days.value[selectedIndex.value] ?? null);
 const isThisWeek = computed(() => weekStart.value === null);
 
 function shiftWeek(offset: number) {
-	const base = parseDate(menu.data.value?.week_start) ?? new Date();
+	const base = parseDate(menu.data.value?.week_start) ?? siteNow(siteTimeZone.value);
 	base.setDate(base.getDate() + offset * 7);
 	const next = toISODate(base);
-	const current = new Date();
+	const current = siteNow(siteTimeZone.value);
 	const mondayOffset = (current.getDay() + 6) % 7;
 	current.setDate(current.getDate() - mondayOffset);
 	weekStart.value = next === toISODate(current) ? null : next;

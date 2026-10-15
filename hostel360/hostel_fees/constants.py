@@ -35,6 +35,8 @@ TX_FAILED = "Failed"
 TX_EXPIRED = "Expired"
 TX_REFUNDED = "Refunded"
 LIVE_TX_STATUSES = (TX_INITIATED, TX_PENDING)
+# Closed locally, though the gateway order may still be paid afterwards
+CLOSED_TX_STATUSES = (TX_FAILED, TX_EXPIRED)
 
 CURRENCY = "INR"
 

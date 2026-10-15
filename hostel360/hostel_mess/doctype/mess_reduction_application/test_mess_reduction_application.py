@@ -46,6 +46,16 @@ class TestMessReductionApplication(IntegrationTestCase):
 		self.student_user = make_user([STUDENT_ROLE], user_type="Website User")
 		self.student = make_student(self.hostel, user=self.student_user)
 		self.deputy = make_user([DEPUTY_WARDEN_ROLE])
+		# Deputy wardens are assigned to hostels; Hostel Staff records this as a User Permission.
+		frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": self.deputy,
+				"allow": "Hostel",
+				"for_value": self.hostel,
+				"apply_to_all_doctypes": 1,
+			}
+		).insert(ignore_permissions=True)
 		self.mess_manager = make_user([MESS_MANAGER_ROLE])
 
 		notify = patch(f"{DOCTYPE_MODULE}.send_notification")
@@ -141,6 +151,29 @@ class TestMessReductionApplication(IntegrationTestCase):
 
 		with self.assertRaisesRegex(frappe.ValidationError, "already approved"):
 			decide_mess_reduction(name, False, "Changed mind", self.deputy)
+
+	def test_deputy_decides_only_for_students_they_look_after(self):
+		name = self.apply(in_days(2), in_days(5))
+		with patch("hostel360.hostel_people.services.staff_covers_student", return_value=False) as covers:
+			with self.assertRaises(frappe.PermissionError):
+				decide_mess_reduction(name, True, None, self.deputy)
+			with self.assertRaises(frappe.PermissionError):
+				cancel_mess_reduction(name, self.deputy)
+		covers.assert_called_with(self.deputy, self.student)
+		self.assertEqual(frappe.db.get_value("Mess Reduction Application", name, "status"), "Pending")
+
+		other_hostel_deputy = make_user([DEPUTY_WARDEN_ROLE])
+		frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": other_hostel_deputy,
+				"allow": "Hostel",
+				"for_value": make_hostel(),
+				"apply_to_all_doctypes": 1,
+			}
+		).insert(ignore_permissions=True)
+		with self.assertRaises(frappe.PermissionError):
+			decide_mess_reduction(name, True, None, other_hostel_deputy)
 
 	def test_configured_approver_role(self):
 		set_mess_settings(reduction_approver="Mess Manager")

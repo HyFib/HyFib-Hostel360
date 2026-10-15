@@ -7,11 +7,14 @@ import frappe
 from frappe import _
 from frappe.utils import add_months, cint, flt, get_first_day, get_last_day, getdate, nowdate
 
+from hostel360.hostel_mess.permissions import assert_mess_access
+
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	if not filters.mess:
 		frappe.throw(_("Select a mess."))
+	assert_mess_access(filters.mess, doctype="Mess Bill Run")
 	from_date = getdate(filters.from_date or add_months(get_first_day(nowdate()), -11))
 	to_date = getdate(filters.to_date or get_last_day(nowdate()))
 	if from_date > to_date:

@@ -13,7 +13,14 @@ from hostel360.hostel_people.doctype.student_bulk_import.student_bulk_import imp
 	COLUMNS,
 	build_template_workbook,
 )
-from hostel360.hostel_people.testing import beds_of, make_hostel, make_room, random_mobile, unique_code
+from hostel360.hostel_people.testing import (
+	beds_of,
+	make_hostel,
+	make_room,
+	make_staff,
+	random_mobile,
+	unique_code,
+)
 
 HEADER = [label + (" *" if required else "") for _fieldname, label, required, _help in COLUMNS]
 
@@ -197,3 +204,19 @@ class TestStudentBulkImport(IntegrationTestCase):
 		self.assertEqual(kwargs["import_name"], doc.name)
 		self.assertTrue(kwargs["job_id"].endswith(doc.name))
 		self.assertTrue(enqueue.call_args.args[0].endswith("student_bulk_import.run_import"))
+
+	def test_scoped_staff_only_see_their_own_imports(self):
+		# The attached spreadsheet carries students' and guardians' personal data.
+		other_hostel = make_hostel("Male").name
+		mine = make_staff("Office Staff", [self.hostel.name]).user
+		theirs = make_staff("Deputy Warden", [other_hostel]).user
+		warden = make_staff("Warden", []).user
+
+		with self.set_user(mine):
+			doc = make_import([student_row()])
+			self.assertTrue(frappe.has_permission("Student Bulk Import", "read", doc=doc.name))
+		with self.set_user(theirs):
+			self.assertFalse(frappe.has_permission("Student Bulk Import", "read", doc=doc.name))
+			self.assertNotIn(doc.name, frappe.get_list("Student Bulk Import", pluck="name"))
+		with self.set_user(warden):
+			self.assertTrue(frappe.has_permission("Student Bulk Import", "read", doc=doc.name))

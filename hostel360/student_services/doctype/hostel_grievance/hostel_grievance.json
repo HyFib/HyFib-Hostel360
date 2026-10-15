@@ -329,7 +329,7 @@
  "icon": "message-square",
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Student Services",
  "name": "Hostel Grievance",
@@ -344,8 +344,7 @@
    "export": 1,
    "print": 1,
    "report": 1,
-   "email": 1,
-   "share": 1
+   "email": 1
   },
   {
    "role": "Hostel Warden",
@@ -355,8 +354,7 @@
    "export": 1,
    "print": 1,
    "report": 1,
-   "email": 1,
-   "share": 1
+   "email": 1
   },
   {
    "role": "Deputy Warden",
@@ -366,8 +364,7 @@
    "export": 1,
    "print": 1,
    "report": 1,
-   "email": 1,
-   "share": 1
+   "email": 1
   },
   {
    "role": "Hostel Office Staff",
@@ -377,8 +374,7 @@
    "export": 1,
    "print": 1,
    "report": 1,
-   "email": 1,
-   "share": 1
+   "email": 1
   },
   {
    "role": "Mess Manager",

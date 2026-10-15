@@ -10,7 +10,7 @@ import { studentArg, useSession } from "@/stores/session";
 import { showToast } from "@/stores/toast";
 
 const router = useRouter();
-const { isParent, activeWard, reductionMinDays } = useSession();
+const { isParent, activeWard, reductionMinDays, messDayCutoffHour, siteTimeZone } = useSession();
 const { busy, error, run } = useSubmit();
 
 async function submit(input: LeaveInput) {
@@ -29,6 +29,13 @@ async function submit(input: LeaveInput) {
 			:subtitle="isParent && activeWard ? t('leave.onBehalf', { name: activeWard.full_name }) : t('leave.newSubtitle')"
 			:back="{ name: 'leave' }"
 		/>
-		<LeaveForm :busy="busy" :server-error="error" :reduction-min-days="reductionMinDays" @submit="submit" />
+		<LeaveForm
+			:busy="busy"
+			:server-error="error"
+			:reduction-min-days="reductionMinDays"
+			:cutoff-hour="messDayCutoffHour"
+			:time-zone="siteTimeZone"
+			@submit="submit"
+		/>
 	</div>
 </template>

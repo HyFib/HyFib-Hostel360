@@ -6,19 +6,25 @@ ops API) reports a problem with ``raise_alert``. A stable ``key`` identifies the
 occurrences only bump its counters, so a check failing every five minutes produces one
 alert, not hundreds.
 
-``raise_alert`` and ``resolve_alert`` never raise. They are called from payment webhooks,
-scheduler jobs and error handlers, and an alerting fault must not turn into a second
-failure for the caller; problems are written to the Error Log instead.
+``raise_alert`` and ``resolve_alert`` write the alert in a short transaction of their own
+(see ``transaction.independent``), serialised per key by a database named lock. The alert is
+therefore recorded even when the caller's request fails afterwards, and a collision between
+two callers raising the same key can never roll back either caller's own work. Neither
+function raises: an alerting fault must not turn into a second failure for the caller, so
+problems are written to the Error Log instead.
 """
 
 import hashlib
 import json
+import random
+import time
+from functools import partial
 
 import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
-from hostel360.hostel_operations import notification
+from hostel360.hostel_operations import notification, transaction
 from hostel360.hostel_operations.constants import (
 	ACTIVE_STATUSES,
 	ALERT_DOCTYPE,
@@ -40,6 +46,14 @@ MAX_TITLE_LENGTH = 140
 MAX_DESCRIPTION_LENGTH = 10_000
 MAX_DETAILS_LENGTH = 60_000
 SAVEPOINT = "h360_ops_alert"
+RETRY_SAVEPOINT = "h360_ops_alert_retry"
+# Deadlocks and "record has changed since last read" are retried on the independent
+# connection, where nothing but the alert itself is lost by rolling back.
+MAX_ATTEMPTS = 4
+
+
+class AlertNotRecorded(Exception):
+	"""The alert transaction gave up (lock not obtained, or repeated deadlocks)."""
 
 
 def raise_alert(
@@ -56,30 +70,21 @@ def raise_alert(
 
 	Returns the Ops Alert name, or an empty string if the alert could not be recorded.
 	"""
-	messages = _message_count()
-	try:
-		return _raise_alert(key, title, severity, category, source, description, details, is_outage)
-	except Exception:
-		_forget_messages(messages)
-		_log_failure("Hostel360: could not raise ops alert", key)
-		return ""
+	work = partial(_raise_alert, key, title, severity, category, source, description, details, is_outage)
+	return _execute(work, key, "Hostel360: could not raise ops alert", default="")
 
 
 def resolve_alert(key, notes="", source=None) -> bool:
 	"""Resolve the open alert with ``key``. Returns True when an alert was resolved."""
-	messages = _message_count()
-	try:
-		return _resolve_alert(key, notes, source)
-	except Exception:
-		_forget_messages(messages)
-		_log_failure("Hostel360: could not resolve ops alert", key)
-		return False
+	work = partial(_resolve_alert, key, notes, source)
+	return _execute(work, key, "Hostel360: could not resolve ops alert", default=False)
 
 
 def acknowledge_alert(name: str, user: str | None = None) -> None:
 	"""Mark an alert as being worked on; stops the hourly reminders for critical alerts."""
 	user = user or frappe.session.user
 	frappe.db.get_value(ALERT_DOCTYPE, name, "name", for_update=True)
+	transaction.mark_alert_rows_written_inline()
 	alert = frappe.get_doc(ALERT_DOCTYPE, name)
 	if alert.status == STATUS_ACKNOWLEDGED:
 		return
@@ -97,15 +102,19 @@ def acknowledge_alert(name: str, user: str | None = None) -> None:
 def resolve_alert_by_name(name: str, notes: str = "", user: str | None = None) -> None:
 	"""Resolve a specific alert from the desk or the ops API."""
 	frappe.db.get_value(ALERT_DOCTYPE, name, "name", for_update=True)
+	transaction.mark_alert_rows_written_inline()
 	alert = frappe.get_doc(ALERT_DOCTYPE, name)
 	if alert.status == STATUS_RESOLVED:
 		return
-	_close(alert, notes, via=None, user=user or frappe.session.user)
+	plan = _close(alert, notes, via=None, user=user or frappe.session.user)
+	# A desk action: the recovery notice goes out once this request has committed.
+	_dispatch_all(_deliveries(alert.name, plan), committed=False)
 
 
 def suppress_alert(name: str, notes: str = "", user: str | None = None) -> None:
 	"""Silence a noisy alert: occurrences keep counting, nobody is notified, until resolved."""
 	frappe.db.get_value(ALERT_DOCTYPE, name, "name", for_update=True)
+	transaction.mark_alert_rows_written_inline()
 	alert = frappe.get_doc(ALERT_DOCTYPE, name)
 	if alert.status not in ACTIVE_STATUSES:
 		frappe.throw(_("Only open or acknowledged alerts can be suppressed."))
@@ -146,7 +155,104 @@ def _details_json(details) -> str | None:
 	return text
 
 
-def _raise_alert(key, title, severity, category, source, description, details, is_outage) -> str:
+def _execute(work, key, failure_title: str, default):
+	"""Run ``work`` in an independent transaction, falling back to the caller's own.
+
+	``work`` returns ``(result, deliveries)``; deliveries are dispatched only once the alert
+	row has been committed (or, inline, once the caller commits).
+	"""
+	messages = _message_count()
+	if transaction.use_independent_transactions():
+		try:
+			with transaction.independent() as db:
+				try:
+					return _run_independent(work, key, db)
+				except Exception:
+					_forget_messages(messages)
+					db.rollback()
+					_log_failure(failure_title, key)
+					db.commit()
+					return default
+		except transaction.IndependentConnectionUnavailable:
+			# No second connection to be had (connection limit, for example): writing the
+			# alert in the caller's transaction is still better than losing it.
+			pass
+		except Exception:
+			_forget_messages(messages)
+			_log_failure(failure_title, key)
+			return default
+
+	try:
+		return _run_inline(work)
+	except frappe.QueryDeadlockError:
+		# InnoDB has rolled back the caller's whole transaction. Returning normally would let
+		# the caller carry on and commit only the part of its work that comes after this call.
+		_forget_messages(messages)
+		_log_failure(failure_title, key, defer=True)
+		raise
+	except Exception:
+		_forget_messages(messages)
+		_log_failure(failure_title, key)
+		return default
+
+
+def _run_independent(work, key, db):
+	lock = transaction.lock_name(normalise_key(key), db)
+	for attempt in range(1, MAX_ATTEMPTS + 1):
+		# The named lock is taken before anything is read, so the transaction's snapshot is
+		# taken after the previous writer of this key has committed.
+		if not transaction.acquire_named_lock(lock):
+			raise AlertNotRecorded(f"timed out waiting for the lock on {key}")
+		try:
+			result, deliveries = work()
+			db.commit()
+		except frappe.QueryDeadlockError:
+			db.rollback()
+			if attempt == MAX_ATTEMPTS:
+				raise AlertNotRecorded(f"gave up after {attempt} deadlocks") from None
+			time.sleep(random.uniform(0.05, 0.2) * attempt)
+			continue
+		except Exception:
+			db.rollback()
+			raise
+		finally:
+			transaction.release_named_lock(lock)
+		break
+
+	_dispatch_all(deliveries, committed=True)
+	# Direct deliveries leave a comment on the alert (and e-mail queue rows) behind.
+	db.commit()
+	return result
+
+
+def _run_inline(work):
+	frappe.db.savepoint(SAVEPOINT)
+	try:
+		result, deliveries = work()
+	except frappe.QueryDeadlockError:
+		# The server has already discarded the transaction, savepoint included.
+		raise
+	except Exception:
+		frappe.db.rollback(save_point=SAVEPOINT)
+		raise
+	transaction.mark_alert_rows_written_inline()
+	_dispatch_all(deliveries, committed=False)
+	return result
+
+
+def _deliveries(name: str, plan) -> list[tuple]:
+	return [(name, plan.event, plan.levels)] if plan else []
+
+
+def _dispatch_all(deliveries: list[tuple], committed: bool) -> None:
+	for name, event, levels in deliveries:
+		try:
+			notification.dispatch(name, event, levels, committed=committed)
+		except Exception:
+			_log_failure("Hostel360: could not send ops alert notification", name)
+
+
+def _raise_alert(key, title, severity, category, source, description, details, is_outage) -> tuple:
 	key = normalise_key(key)
 	severity, category, source = _clean(severity, category, source)
 	title = (" ".join(str(title or key).split()))[:MAX_TITLE_LENGTH]
@@ -154,38 +260,30 @@ def _raise_alert(key, title, severity, category, source, description, details, i
 	details_text = _details_json(details)
 	is_outage = 1 if is_outage else 0
 	now = now_datetime()
+	args = (key, title, severity, category, source, description, details_text, is_outage, now)
 
-	frappe.db.savepoint(SAVEPOINT)
+	frappe.db.savepoint(RETRY_SAVEPOINT)
 	messages = _message_count()
 	try:
-		try:
-			name, plan = _record(key, title, severity, category, source, description, details_text, is_outage, now)
-		except (frappe.UniqueValidationError, frappe.DuplicateEntryError):
-			# Another worker opened the same key between our lookup and insert; the
-			# second attempt finds and updates that alert. The duplicate-key message is
-			# not meant for whoever triggered the alert.
-			_forget_messages(messages)
-			frappe.db.rollback(save_point=SAVEPOINT)
-			frappe.db.savepoint(SAVEPOINT)
-			name, plan = _record(key, title, severity, category, source, description, details_text, is_outage, now)
-	except Exception:
-		frappe.db.rollback(save_point=SAVEPOINT)
-		raise
-
-	if plan:
-		try:
-			notification.dispatch(name, plan.event, plan.levels)
-		except Exception:
-			_log_failure("Hostel360: could not send ops alert notification", key)
-	return name
+		# A plain read: a locking read of a key that does not exist yet takes a gap lock,
+		# and two such gap locks followed by two inserts are a guaranteed deadlock.
+		name, plan = _record(*args, locking=False)
+	except (frappe.UniqueValidationError, frappe.DuplicateEntryError):
+		# Someone opened the same key between our lookup and our insert (only possible for
+		# alerts written inline, or created by hand on the desk). The locking read sees
+		# their committed row. The duplicate-key message is not meant for the caller.
+		_forget_messages(messages)
+		frappe.db.rollback(save_point=RETRY_SAVEPOINT)
+		name, plan = _record(*args, locking=True)
+	return name, _deliveries(name, plan)
 
 
-def _record(key, title, severity, category, source, description, details_text, is_outage, now):
+def _record(key, title, severity, category, source, description, details_text, is_outage, now, locking=False):
 	"""Insert or update the alert row; returns (name, notification plan or None)."""
 	settings = get_settings()
 	notify = notification.notifications_enabled(settings)
 
-	existing = frappe.db.get_value(ALERT_DOCTYPE, {"open_key": key}, "name", for_update=True)
+	existing = frappe.db.get_value(ALERT_DOCTYPE, {"open_key": key}, "name", for_update=locking)
 	if existing:
 		return existing, _add_occurrence(
 			existing, settings, notify, title, severity, description, details_text, is_outage, now
@@ -328,22 +426,23 @@ def _reopen(name, settings, notify, title, severity, description, details_text, 
 	return plan
 
 
-def _resolve_alert(key, notes, source) -> bool:
+def _resolve_alert(key, notes, source) -> tuple:
 	key = normalise_key(key)
-	frappe.db.savepoint(SAVEPOINT)
-	try:
-		name = frappe.db.get_value(ALERT_DOCTYPE, {"open_key": key}, "name", for_update=True)
-		if not name:
-			return False
-		alert = frappe.get_doc(ALERT_DOCTYPE, name)
-		_close(alert, notes, via=source if source in SOURCES else None, user=None)
-	except Exception:
-		frappe.db.rollback(save_point=SAVEPOINT)
-		raise
-	return True
+	# Look the key up with a plain read and lock only the row found: a locking read of a
+	# missing key would take a gap lock that blocks unrelated alerts being opened.
+	name = frappe.db.get_value(ALERT_DOCTYPE, {"open_key": key}, "name")
+	if not name:
+		return False, []
+	if frappe.db.get_value(ALERT_DOCTYPE, name, "open_key", for_update=True) != key:
+		# Resolved by someone else in the meantime.
+		return False, []
+	alert = frappe.get_doc(ALERT_DOCTYPE, name)
+	plan = _close(alert, notes, via=source if source in SOURCES else None, user=None)
+	return True, _deliveries(alert.name, plan)
 
 
-def _close(alert, notes, via, user) -> None:
+def _close(alert, notes, via, user):
+	"""Resolve ``alert``; returns the recovery notification plan (or None) for the caller to send."""
 	now = now_datetime()
 	alert.status = STATUS_RESOLVED
 	alert.resolved_on = now
@@ -355,19 +454,21 @@ def _close(alert, notes, via, user) -> None:
 	alert.save()
 
 	settings = get_settings()
-	if alert.last_notified_on and alert.last_notified_event != "resolved" and notification.notifications_enabled(settings):
-		state = notification.get_alert_state(alert.name)
-		plan = notification.Plan("resolved", sorted(notification.parse_levels(state.notified_levels)))
-		frappe.db.set_value(
-			ALERT_DOCTYPE,
-			alert.name,
-			{"last_notified_on": now, "last_notified_event": "resolved"},
-			update_modified=False,
-		)
-		try:
-			notification.dispatch(alert.name, plan.event, plan.levels)
-		except Exception:
-			_log_failure("Hostel360: could not send recovery notification", alert.alert_key)
+	if not (
+		alert.last_notified_on
+		and alert.last_notified_event != "resolved"
+		and notification.notifications_enabled(settings)
+	):
+		return None
+	state = notification.get_alert_state(alert.name)
+	plan = notification.Plan("resolved", sorted(notification.parse_levels(state.notified_levels)))
+	frappe.db.set_value(
+		ALERT_DOCTYPE,
+		alert.name,
+		{"last_notified_on": now, "last_notified_event": "resolved"},
+		update_modified=False,
+	)
+	return plan
 
 
 def _message_count() -> int:
@@ -381,9 +482,9 @@ def _forget_messages(count: int) -> None:
 		del log[count:]
 
 
-def _log_failure(title: str, key) -> None:
+def _log_failure(title: str, key, defer: bool = False) -> None:
 	try:
-		frappe.log_error(title=title, message=f"Alert key: {key}\n\n{frappe.get_traceback()}")
+		frappe.log_error(title=title, message=f"Alert key: {key}\n\n{frappe.get_traceback()}", defer_insert=defer)
 	except Exception:
 		# Logging must never be the thing that breaks the caller.
 		frappe.logger("hostel360").exception(title)

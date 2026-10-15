@@ -169,6 +169,76 @@ class TestOpsIngest(OpsRequestMixin, IntegrationTestCase):
 		body = b"{" + b" " * (ops.MAX_BODY_BYTES + 10) + b"}"
 		self.assertRaises(ops.PayloadTooLargeError, self.ingest, {}, signed_headers(body), body)
 
+	def as_request(self, call, *args):
+		"""Run ``call`` the way Frappe runs a request: an exception rolls back its writes."""
+		savepoint = "ingest_" + frappe.generate_hash(length=8)
+		frappe.db.savepoint(savepoint)
+		try:
+			return call(*args)
+		except Exception:
+			frappe.db.rollback(save_point=savepoint)
+			raise
+
+	def test_transient_failure_is_retryable_and_not_mistaken_for_a_replay(self):
+		key = unique_key("agent.backup")
+		body = json.dumps({"type": "alert", "key": key, "title": "Backup failed", "severity": "Critical"}).encode()
+		headers = signed_headers(body)
+
+		with patch("hostel360.hostel_operations.alerts.raise_alert", return_value=""):
+			with self.assertRaises(ops.IngestUnavailableError) as failure:
+				self.as_request(self.ingest, {}, headers, body)
+		# 503 tells the agent to keep the message and try again (417 made it drop it).
+		self.assertEqual(failure.exception.http_status_code, 503)
+		self.assertFalse(frappe.db.exists("Ops Ingest Receipt", "sig:" + headers["X-H360-Signature"]))
+
+		# The agent retries with the same signature; the failed attempt left nothing behind.
+		result = self.as_request(self.ingest, {}, headers, body)
+		self.assertTrue(frappe.db.exists("Ops Alert", result["alert"]))
+		# Only now is a repeat a replay of a committed request.
+		self.assertRaises(ops.ReplayedRequestError, self.ingest, {}, headers, body)
+
+	def test_database_lock_trouble_answers_503(self):
+		with patch.object(ops, "_ingest_backup", side_effect=frappe.QueryTimeoutError("lock wait")):
+			with self.assertRaises(ops.IngestUnavailableError):
+				self.ingest({"type": "backup", "backup_type": "Daily", "status": "Success"})
+
+	def test_payload_errors_are_permanent(self):
+		for payload in (
+			{"type": "reboot"},
+			{"type": "alert"},
+			{"type": "metrics", "samples": []},
+			{"type": "backup", "backup_type": "Hourly", "status": "Success"},
+			{"type": "backup", "backup_type": "Daily", "status": "Success", "size_bytes": "lots"},
+			{"type": "heartbeat", "message_id": "x"},
+		):
+			# A distinct body per request: an identical signed request would be a replay.
+			payload = {**payload, "nonce": frappe.generate_hash(length=10)}
+			with self.assertRaises(ops.IngestPayloadError, msg=str(payload)) as raised:
+				self.ingest(payload)
+			self.assertEqual(raised.exception.http_status_code, 422)
+
+	def test_message_id_recognises_a_resigned_retry(self):
+		host = unique_key("host")
+		payload = {"type": "heartbeat", "host": host, "message_id": "msg-" + frappe.generate_hash(length=20)}
+		body = json.dumps(payload).encode()
+		self.assertTrue(self.ingest({}, signed_headers(body, timestamp=int(time.time()) - 60), body)["ok"])
+		# Same message re-signed later (from the agent's spool): delivered already.
+		self.assertRaises(ops.ReplayedRequestError, self.ingest, {}, signed_headers(body), body)
+		self.assertEqual(frappe.db.count("Ops Metric Sample", {"host": host, "metric": "agent_heartbeat"}), 1)
+
+	def test_invalid_signature_alert_is_retried_when_it_could_not_be_raised(self):
+		body = json.dumps({"type": "heartbeat", "host": "h360-prod"}).encode()
+		bad = signed_headers(body, secret="not-the-secret")
+		bucket = int(frappe.generate_hash(length=8), 16)
+		with (
+			patch.object(ops, "_invalid_signature_bucket", return_value=bucket),
+			patch("hostel360.hostel_operations.alerts.raise_alert", side_effect=["", "ALERT-X"]) as raise_alert,
+		):
+			for _ in range(ops.INVALID_SIGNATURE_ALERT_THRESHOLD + 3):
+				self.assertRaises(frappe.AuthenticationError, self.ingest, {}, bad, body)
+		# The 20th request failed to record it, the 21st succeeded, and then it stopped.
+		self.assertEqual(raise_alert.call_count, 2)
+
 
 class TestOciNotifications(OpsRequestMixin, IntegrationTestCase):
 	@classmethod
@@ -268,6 +338,27 @@ class TestOciNotifications(OpsRequestMixin, IntegrationTestCase):
 		self.assertEqual(cleared["actions"][0]["action"], "resolved")
 		self.assertEqual(frappe.db.get_value("Ops Alert", alert.name, "status"), "Resolved")
 		self.assertEqual(frappe.db.get_value("Ops Alert", alert.name, "resolved_via"), "OCI Monitoring")
+
+	def test_alarm_that_cannot_be_recorded_is_answered_503(self):
+		from hostel360.hostel_operations import alerts
+
+		alarm_id = f"ocid1.alarm.oc1.ap-hyderabad-1.{frappe.generate_hash(length=12)}"
+		with patch.object(alerts, "_raise_alert", side_effect=frappe.QueryTimeoutError("lock wait timeout")):
+			with self.assertRaises(ops.AlarmNotRecordedError) as failure:
+				self.notify(self.alarm("FIRING", alarm_id, namespace="oci_lbaas"))
+		self.assertEqual(failure.exception.http_status_code, 503, "OCI redelivers only after a 5xx")
+
+		# Redelivered later: recorded normally.
+		raised = self.notify(self.alarm("FIRING", alarm_id, namespace="oci_lbaas"))["actions"][0]
+		self.assertEqual(raised["action"], "raised")
+
+		# An OK that cannot be applied must not be acknowledged either, or the alert pages forever.
+		with patch.object(alerts, "_resolve_alert", side_effect=frappe.QueryTimeoutError("lock wait timeout")):
+			self.assertRaises(ops.AlarmNotRecordedError, self.notify, self.alarm("OK", alarm_id))
+		self.assertEqual(frappe.db.get_value("Ops Alert", raised["alert"], "status"), "Open")
+		self.assertEqual(self.notify(self.alarm("OK", alarm_id))["actions"][0]["action"], "resolved")
+		# An OK for an alarm with nothing open is fine.
+		self.assertEqual(self.notify(self.alarm("OK", alarm_id))["actions"][0]["action"], "resolved")
 
 	def test_load_balancer_alarm_is_an_outage(self):
 		alarm_id = f"ocid1.alarm.oc1.ap-hyderabad-1.{frappe.generate_hash(length=12)}"

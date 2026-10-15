@@ -248,5 +248,13 @@ class TestCommandHelpers(UnitTestCase):
 
 		self.assertEqual(
 			sorted(c.name for c in commands),
-			["h360-demo-data", "h360-export", "h360-migrate", "h360-setup", "h360-verify-export"],
+			[
+				"h360-demo-data",
+				"h360-export",
+				"h360-migrate",
+				"h360-purge-institution-data",
+				"h360-setup",
+				"h360-verify-deletion-certificate",
+				"h360-verify-export",
+			],
 		)

@@ -6,17 +6,23 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, add_to_date, cint, flt, get_datetime, now_datetime, time_diff_in_hours
 
-from hostel360.setup.roles import MESS_MANAGER_ROLE, STAFF_ROLES
+from hostel360.setup.roles import GRIEVANCE_HANDLER_ROLES, MESS_MANAGER_ROLE
 from hostel360.student_services import notifications
+from hostel360.student_services.permissions import can_see_confidential
 from hostel360.student_services.utils import (
+	assert_unchanged,
 	get_role_users,
 	get_senior_wardens,
 	get_setting,
 	get_student,
 	get_warden_approvers,
 	in_migration,
+	is_grievance_handler,
 	is_staff_user,
+	load_for_action,
+	recheck_scope,
 	stars_to_rating,
+	student_hostel,
 	user_display_name,
 )
 
@@ -31,15 +37,42 @@ REOPEN_WINDOW_DAYS = 7
 MAX_ESCALATION_LEVEL = 3
 MAX_MESSAGE_LENGTH = 5000
 
+# Taken from the student when the grievance is raised; never edited after.
+IDENTITY_FIELDS = ("student", "hostel", "room", "raised_by_user")
+# Changed only by the actions (assign, update, resolve, close, reopen, rate, escalate), which
+# save through save_changes(). An ordinary save may still correct the subject, description,
+# category and priority.
+WORKFLOW_FIELDS = (
+	"status",
+	"assigned_to",
+	"assigned_on",
+	"sla_due_by",
+	"escalation_level",
+	"escalated_on",
+	"sla_breached",
+	"reopen_count",
+	"resolution",
+	"resolved_by",
+	"resolved_on",
+	"resolution_hours",
+	"closed_on",
+	"student_rating",
+	"student_feedback",
+	"updates",
+)
+
 
 class HostelGrievance(Document):
 	def validate(self):
 		if self.is_new():
 			self.set_student_details()
+		else:
+			self.validate_protected_fields()
 		self.apply_category_rules()
 		self.subject = (self.subject or "").strip()
 		if self.is_new():
 			self.set_initial_state()
+		recheck_scope(self)
 
 	def after_insert(self):
 		self.notify_received()
@@ -48,9 +81,38 @@ class HostelGrievance(Document):
 		student = get_student(self.student)
 		self.student_name = student.full_name
 		if not (in_migration() and self.hostel):
-			self.hostel = student.current_hostel
+			# A student who has left can still complain; the grievance stays with their last hostel.
+			self.hostel = student_hostel(student)
 			self.room = student.get("current_room")
 		self.raised_by_user = self.raised_by_user or frappe.session.user
+
+	def validate_protected_fields(self):
+		if in_migration():
+			return
+		assert_unchanged(self, IDENTITY_FIELDS, _("{0} cannot be changed on a grievance that has been raised."))
+		if not self.flags.via_controller:
+			assert_unchanged(
+				self,
+				WORKFLOW_FIELDS,
+				_("{0} can only be changed with the Assign, Add Update, Resolve and Close actions."),
+			)
+		self.validate_confidentiality_kept()
+
+	def validate_confidentiality_kept(self):
+		"""Only those who may see confidential grievances may make one visible to other staff."""
+		if can_see_confidential():
+			return
+		before = self.get_doc_before_save()
+		if not before:
+			return
+		if (cint(before.is_confidential) and not cint(self.is_confidential)) or (
+			before.category == RAGGING_CATEGORY and self.category != RAGGING_CATEGORY
+		):
+			frappe.throw(
+				_("Only the Warden or a Hostel Administrator can remove the confidentiality of a grievance."),
+				frappe.PermissionError,
+				title=_("Not Allowed"),
+			)
 
 	def apply_category_rules(self):
 		# Ragging and harassment complaints are handled by the Warden in confidence (UGC regulations).
@@ -61,6 +123,9 @@ class HostelGrievance(Document):
 	def set_initial_state(self):
 		if in_migration() and self.status:
 			return
+		# A new grievance has no handling history, whatever the request said.
+		for fieldname in WORKFLOW_FIELDS:
+			self.set(fieldname, [] if fieldname == "updates" else None)
 		self.status = "Open"
 		self.escalation_level = 0
 		self.sla_due_by = self.compute_sla_due_by()
@@ -107,7 +172,11 @@ class HostelGrievance(Document):
 
 	def save_changes(self):
 		self.flags.ignore_permissions = True
-		self.save()
+		self.flags.via_controller = True
+		try:
+			self.save()
+		finally:
+			self.flags.via_controller = False
 
 	def public_updates(self) -> list[dict]:
 		timeline = []
@@ -130,10 +199,13 @@ class HostelGrievance(Document):
 	# ------------------------------------------------------------------ staff actions
 
 	def check_staff_action(self, user: str):
-		"""Staff with write access, or the staff member the grievance is assigned to."""
+		"""Staff with write access, or the grievance handler it is assigned to."""
 		if not is_staff_user(user):
 			frappe.throw(_("Only hostel staff can do this."), frappe.PermissionError)
-		if self.assigned_to == user or self.has_permission("write", user=user):
+		if self.assigned_to == user and is_grievance_handler(user):
+			return
+		# Not self.has_permission(): an earlier action on this object leaves ignore_permissions set.
+		if frappe.has_permission(self.doctype, "write", doc=self, user=user):
 			return
 		frappe.throw(_("You are not permitted to update this grievance."), frappe.PermissionError)
 
@@ -143,8 +215,12 @@ class HostelGrievance(Document):
 			frappe.throw(_("A {0} grievance cannot be assigned.").format(_(self.status).lower()))
 		if not frappe.db.get_value("User", {"name": assignee, "enabled": 1, "user_type": "System User"}):
 			frappe.throw(_("{0} is not an active staff user.").format(assignee))
-		if not is_staff_user(assignee):
-			frappe.throw(_("{0} does not have a hostel staff role.").format(user_display_name(assignee)))
+		if not is_grievance_handler(assignee):
+			frappe.throw(
+				_("{0} cannot handle grievances (only hostel and mess staff can).").format(
+					user_display_name(assignee)
+				)
+			)
 
 		self.assigned_to = assignee
 		self.assigned_on = now_datetime()
@@ -292,7 +368,7 @@ class HostelGrievance(Document):
 	def get_escalation_recipients(self, level: int) -> list[str]:
 		users = set(get_senior_wardens())
 		if level <= 1 and not self.is_confidential:
-			users.update(get_warden_approvers(self.hostel))
+			users.update(get_warden_approvers(self.hostel, self.student))
 		if self.assigned_to:
 			users.add(self.assigned_to)
 		return sorted(users)
@@ -303,7 +379,7 @@ class HostelGrievance(Document):
 			return [self.assigned_to]
 		if self.is_confidential:
 			return get_senior_wardens()
-		users = set(get_warden_approvers(self.hostel))
+		users = set(get_warden_approvers(self.hostel, self.student))
 		if self.category == MESS_CATEGORY:
 			users.update(get_role_users({MESS_MANAGER_ROLE}))
 		return sorted(users)
@@ -321,22 +397,31 @@ class HostelGrievance(Document):
 			)
 
 	# ------------------------------------------------------------------ desk actions
+	# The form sends its own copy of the grievance with these calls; each action works on the
+	# stored record (whose assignee and confidentiality decide who may act) and then refreshes
+	# the form's copy from it.
 
 	@frappe.whitelist(methods=["POST"])
 	def assign(self, user: str, note: str | None = None):
-		self.assign_to_user(user, frappe.session.user, note)
+		load_for_action(self).assign_to_user(user, frappe.session.user, note)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def add_update(self, message: str, is_internal: int = 0, status: str | None = None):
-		self.add_staff_update(message, frappe.session.user, is_internal=cint(is_internal), status=status)
+		load_for_action(self).add_staff_update(
+			message, frappe.session.user, is_internal=cint(is_internal), status=status
+		)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def resolve(self, resolution: str):
-		self.resolve_by(resolution, frappe.session.user)
+		load_for_action(self).resolve_by(resolution, frappe.session.user)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def close(self, remarks: str | None = None):
-		self.close_by(frappe.session.user, remarks)
+		load_for_action(self).close_by(frappe.session.user, remarks)
+		self.reload()
 
 
 def clean_message(message: str | None) -> str:
@@ -351,8 +436,13 @@ def clean_message(message: str | None) -> str:
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def staff_user_query(doctype, txt, searchfield, start, page_len, filters):
-	"""Assignee picker: enabled desk users who hold a hostel staff role."""
+	"""Assignee picker: enabled desk users who may handle grievances."""
 	from frappe.query_builder import DocType
+
+	# Only those who can assign grievances need the list of staff logins; students and parents
+	# are signed-in users too.
+	if not is_grievance_handler(frappe.session.user):
+		frappe.throw(_("Only hostel staff can do this."), frappe.PermissionError)
 
 	user, has_role = DocType("User"), DocType("Has Role")
 	like = f"%{txt}%"
@@ -365,7 +455,7 @@ def staff_user_query(doctype, txt, searchfield, start, page_len, filters):
 		.where(user.enabled == 1)
 		.where(user.user_type == "System User")
 		.where(user.name.notin(["Administrator", "Guest"]))
-		.where(has_role.role.isin(list(STAFF_ROLES)))
+		.where(has_role.role.isin(sorted(GRIEVANCE_HANDLER_ROLES)))
 		.where((user.name.like(like)) | (user.full_name.like(like)))
 		.orderby(user.full_name)
 		.limit(page_len)

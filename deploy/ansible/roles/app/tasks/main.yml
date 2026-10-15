@@ -219,3 +219,16 @@
     enabled: true
     state: started
     daemon_reload: true
+
+# The WAF and fail2ban exemptions come straight from the inventory; the OTP per-address
+# limit lives in the site (Messaging Settings > Trusted Networks), so the same campus
+# addresses are written there once the site exists. Before h360-site-init has created the
+# site this does nothing; h360-site-init applies them when it creates it.
+- name: Keep the OTP trusted networks in step with the campus egress addresses
+  ansible.builtin.command: /usr/local/sbin/h360-site-init --trusted-networks
+  register: h360_trusted_networks
+  changed_when: "'trusted networks updated' in h360_trusted_networks.stdout"
+  retries: 10
+  delay: 15
+  until: h360_trusted_networks.rc == 0
+  when: not ansible_check_mode

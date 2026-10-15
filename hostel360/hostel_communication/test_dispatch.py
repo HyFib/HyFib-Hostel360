@@ -3,16 +3,19 @@
 
 import json
 import random
+import sys
 from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, get_datetime, now_datetime
+from rq.timeouts import JobTimeoutException
 
 from hostel360.hostel_communication import dispatch
 from hostel360.hostel_communication import events as ev
+from hostel360.hostel_communication.providers import base
 from hostel360.hostel_communication.providers.base import DeliveryResult
-from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, STUDENT_ROLE, WARDEN_ROLE
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE, STUDENT_ROLE, WARDEN_ROLE
 
 FEE_CONTEXT = {
 	"student_name": "Meena S",
@@ -403,6 +406,207 @@ class TestOtpAndDirectMessages(DispatchTestCase):
 		self.assertFalse(dispatch.send_direct("Email", "ops@portal.hostel360.invalid", "x", "y"))
 
 
+class TestDeliveryTransactions(DispatchTestCase):
+	"""A delivery job keeps what it has sent, and never swallows its own timeout."""
+
+	def in_background_job(self):
+		patchers = (
+			patch.object(frappe, "in_test", False),
+			patch.object(frappe.local, "job", frappe._dict(method=dispatch.DELIVER_METHOD), create=True),
+			patch.object(frappe.db, "commit"),
+		)
+		mocks = [p.start() for p in patchers]
+		for p in patchers:
+			self.addCleanup(p.stop)
+		return mocks[-1]
+
+	def test_each_recipient_is_committed(self):
+		commit = self.in_background_job()
+		self.deliver([{"mobile": random_mobile()} for _i in range(3)], channels=["SMS"])
+		self.assertEqual(commit.call_count, 3)
+		self.assertEqual(len(self.logs()), 3)
+
+	def test_nothing_is_committed_outside_a_delivery_job(self):
+		with patch.object(frappe, "in_test", False), patch.object(frappe.db, "commit") as commit:
+			self.deliver([{"mobile": random_mobile()}], channels=["SMS"])
+			# Called from some other job, the transaction is that job's.
+			with patch.object(frappe.local, "job", frappe._dict(method="some.other.job"), create=True):
+				self.deliver([{"mobile": random_mobile()}], channels=["SMS"])
+		commit.assert_not_called()
+
+	def test_job_timeout_stops_the_batch_after_saving_progress(self):
+		commit = self.in_background_job()
+		calls = []
+
+		def deliver_to(job, recipient):
+			calls.append(recipient)
+			if len(calls) == 2:
+				raise JobTimeoutException("Task exceeded maximum timeout value (300 seconds)")
+
+		with (
+			patch.object(dispatch._Delivery, "deliver_to", autospec=True, side_effect=deliver_to),
+			self.assertRaises(JobTimeoutException),
+		):
+			self.deliver([{"mobile": random_mobile()} for _i in range(4)], channels=["SMS"])
+		self.assertEqual(len(calls), 2)
+		self.assertEqual(commit.call_count, 2)
+
+	def test_other_errors_are_logged_and_the_batch_continues(self):
+		calls = []
+
+		def deliver_to(job, recipient):
+			calls.append(recipient)
+			if len(calls) == 1:
+				raise RuntimeError("template engine exploded")
+
+		with (
+			patch.object(dispatch._Delivery, "deliver_to", autospec=True, side_effect=deliver_to),
+			patch("frappe.log_error") as log_error,
+		):
+			self.deliver([{"mobile": random_mobile()} for _i in range(3)], channels=["SMS"])
+		self.assertEqual(len(calls), 3)
+		log_error.assert_called_once()
+
+	def test_retry_and_log_writing_do_not_swallow_timeouts(self):
+		self.settings.test_mode = 0
+		failure = DeliveryResult.failed("MSG91", "HTTP 503: busy", retryable=True)
+		with patch("hostel360.hostel_communication.providers.sms.send_sms", return_value=failure):
+			self.deliver([{"mobile": random_mobile()}], channels=["SMS"])
+		(log,) = self.logs()
+		with (
+			patch(
+				"hostel360.hostel_communication.dispatch._send_rendered",
+				side_effect=JobTimeoutException("timeout"),
+			),
+			self.assertRaises(JobTimeoutException),
+		):
+			dispatch.retry_message(log.name)
+
+		with (
+			patch("frappe.model.document.Document.insert", side_effect=JobTimeoutException("timeout")),
+			self.assertRaises(JobTimeoutException),
+		):
+			dispatch._finish_log(
+				dispatch._new_log("SMS", ev.FEE_REMINDER, random_mobile(), None, None, None, None),
+				DeliveryResult.sent("MSG91", "x"),
+			)
+
+
+class TestPayloadPurge(DispatchTestCase):
+	def setUp(self):
+		super().setUp()
+		self.settings.test_mode = 0
+
+	def failed_log(self) -> str:
+		failure = DeliveryResult.failed("MSG91", "HTTP 503: busy", retryable=True)
+		with patch("hostel360.hostel_communication.providers.sms.send_sms", return_value=failure):
+			self.deliver([{"mobile": random_mobile()}], channels=["SMS"])
+		return self.logs()[-1].name
+
+	def test_only_messages_that_will_not_be_retried_lose_their_payload(self):
+		waiting = self.failed_log()
+		too_old = self.failed_log()
+		used_up = self.failed_log()
+		delivered = self.failed_log()
+		frappe.db.set_value(
+			"Message Log", too_old, "creation", add_to_date(now_datetime(), hours=-72), update_modified=False
+		)
+		frappe.db.set_value("Message Log", used_up, "attempts", dispatch.MAX_ATTEMPTS)
+		frappe.db.set_value("Message Log", delivered, "status", "Sent")
+
+		dispatch._purge_stale_payloads(add_to_date(now_datetime(), hours=-dispatch.RETRY_WINDOW_HOURS))
+
+		rows = {
+			row.name: row
+			for row in frappe.get_all(
+				"Message Log",
+				filters={"name": ("in", [waiting, too_old, used_up, delivered])},
+				fields=["name", "payload", "next_retry_on"],
+			)
+		}
+		self.assertIsNotNone(rows[waiting].payload)
+		self.assertIsNotNone(rows[waiting].next_retry_on)
+		for name in (too_old, used_up, delivered):
+			self.assertIsNone(rows[name].payload, name)
+			self.assertIsNone(rows[name].next_retry_on, name)
+
+	def test_purge_reads_candidates_through_the_retry_index(self):
+		# The candidates come from a plain read filtered on the indexed next_retry_on column;
+		# the update then touches only those rows, by name.
+		self.failed_log()
+		with patch("frappe.db.sql", wraps=frappe.db.sql) as sql:
+			dispatch._purge_stale_payloads(add_to_date(now_datetime(), hours=-dispatch.RETRY_WINDOW_HOURS))
+		statements = [str(call.args[0]) for call in sql.call_args_list]
+		updates = [q for q in statements if q.lstrip().upper().startswith("UPDATE")]
+		selects = [q for q in statements if q.lstrip().upper().startswith("SELECT")]
+		self.assertTrue(any("next_retry_on" in q and "FOR UPDATE" not in q.upper() for q in selects))
+		self.assertTrue(all("`name` IN" in q for q in updates))
+
+
+class TestOtpCircuitBreaker(DispatchTestCase):
+	"""Sign-in codes stop calling a provider that keeps failing, and recover on their own."""
+
+	def setUp(self):
+		super().setUp()
+		self.settings.test_mode = 0
+		self.provider = "MSG91"
+		self.clear_provider_state()
+		self.addCleanup(self.clear_provider_state)
+
+	def clear_provider_state(self):
+		frappe.cache.delete(
+			base._failure_key(self.provider), base._breaker_key(self.provider), base._probe_key(self.provider)
+		)
+
+	def break_provider(self):
+		failure = DeliveryResult.failed(self.provider, "ReadTimeout", retryable=True)
+		with patch("hostel360.hostel_communication.providers.base.raise_provider_alert"):
+			for _failure in range(base._threshold()):
+				base.record_outcome(failure)
+
+	def test_timeout_reaches_the_provider(self):
+		with patch(
+			"hostel360.hostel_communication.providers.sms.send_sms",
+			return_value=DeliveryResult.sent(self.provider, "req-1"),
+		) as send_sms:
+			self.assertTrue(dispatch.send_otp_message(random_mobile(), "482913", "SMS", timeout=(2, 3)))
+		self.assertEqual(send_sms.call_args.kwargs["timeout"], (2, 3))
+
+	def test_open_breaker_lets_one_probe_through_then_skips(self):
+		self.break_provider()
+		failure = DeliveryResult.failed(self.provider, "ReadTimeout", retryable=True)
+		with (
+			patch("hostel360.hostel_communication.providers.sms.send_sms", return_value=failure) as send_sms,
+			patch("hostel360.hostel_communication.providers.base.raise_provider_alert"),
+		):
+			self.assertFalse(dispatch.send_otp_message(random_mobile(), "482913", "SMS"))
+			self.assertEqual(send_sms.call_count, 1)  # the probe
+			skipped = random_mobile()
+			self.assertFalse(dispatch.send_otp_message(skipped, "482913", "SMS"))
+			self.assertEqual(send_sms.call_count, 1)
+		log = frappe.get_all(
+			"Message Log",
+			filters={"event": ev.OTP_LOGIN, "recipient": f"{skipped[:2]}xxxxxx{skipped[-2:]}"},
+			fields=["status", "error"],
+		)[0]
+		self.assertEqual(log.status, "Failed")
+		self.assertIn("Not sent", log.error)
+
+	def test_a_successful_send_closes_the_breaker(self):
+		self.break_provider()
+		self.assertTrue(base.provider_paused(self.provider) is False)  # the probe slot
+		self.assertTrue(base.provider_paused(self.provider))
+		base.record_outcome(DeliveryResult.sent(self.provider, "bg-1"))
+		self.assertFalse(base.provider_paused(self.provider))
+
+	def test_configuration_errors_do_not_open_the_breaker(self):
+		failure = DeliveryResult.failed(self.provider, "Set the MSG91 Flow template ID")
+		with patch("hostel360.hostel_communication.providers.base.raise_provider_alert"):
+			for _failure in range(base._threshold() * 2):
+				base.record_outcome(failure)
+		self.assertFalse(base.provider_paused(self.provider))
+
+
 class TestRecipients(IntegrationTestCase):
 	def test_recipients_for_users(self):
 		user = make_user(WARDEN_ROLE)
@@ -444,12 +648,62 @@ class TestRecipients(IntegrationTestCase):
 
 		users = {r["user"] for r in dispatch.recipients_for_approvers(DEPUTY_WARDEN_ROLE, hostels[0])}
 		self.assertIn(scoped_here, users)
-		self.assertIn(unrestricted, users)
 		self.assertIn(warden, users)
 		self.assertNotIn(scoped_elsewhere, users)
+		# A deputy warden with no hostel assigned is a misconfiguration, not "every hostel".
+		self.assertNotIn(unrestricted, users)
+
+		# Roles that are not hostel-scoped (mess managers) act for every hostel.
+		mess_manager = make_user(MESS_MANAGER_ROLE)
+		users = {r["user"] for r in dispatch.recipients_for_approvers(MESS_MANAGER_ROLE, hostels[0])}
+		self.assertIn(mess_manager, users)
 
 		everyone = {r["user"] for r in dispatch.recipients_for_approvers(DEPUTY_WARDEN_ROLE)}
 		self.assertTrue({scoped_here, scoped_elsewhere, unrestricted, warden} <= everyone)
+
+	def test_recipients_for_approvers_follow_block_scope(self):
+		block_deputy = make_user(DEPUTY_WARDEN_ROLE)
+		other_deputy = make_user(DEPUTY_WARDEN_ROLE)
+		warden = make_user(WARDEN_ROLE)
+		with patch(
+			"hostel360.hostel_people.services.get_scoped_staff_users", return_value=[block_deputy]
+		) as scoped:
+			users = {
+				r["user"] for r in dispatch.recipients_for_approvers(DEPUTY_WARDEN_ROLE, "H1", block="H1-A")
+			}
+		scoped.assert_called_once_with(DEPUTY_WARDEN_ROLE, "H1", "H1-A")
+		self.assertIn(block_deputy, users)
+		self.assertIn(warden, users)
+		self.assertNotIn(other_deputy, users)
+
+		# A student stands for their hostel (the last one once they have left) and block.
+		with (
+			patch("hostel360.hostel_people.services.get_student_hostel", return_value="H2"),
+			patch("hostel360.hostel_people.services.get_student_block", return_value="H2-B"),
+			patch("hostel360.hostel_people.services.get_scoped_staff_users", return_value=[]) as scoped,
+		):
+			dispatch.recipients_for_approvers(DEPUTY_WARDEN_ROLE, student="STU-1")
+		scoped.assert_called_once_with(DEPUTY_WARDEN_ROLE, "H2", "H2-B")
+
+	def test_recipients_for_approvers_fall_back_to_hostel_permissions(self):
+		if not frappe.db.exists("DocType", "Hostel"):
+			self.skipTest("Hostel Setup is not installed on this site")
+		code = f"T{frappe.generate_hash(length=5).upper()}"
+		frappe.get_doc(
+			{"doctype": "Hostel", "hostel_name": f"Test Hostel {code}", "hostel_code": code, "gender": "Male"}
+		).insert(ignore_permissions=True)
+		scoped_here = make_user(DEPUTY_WARDEN_ROLE)
+		frappe.get_doc(
+			{"doctype": "User Permission", "user": scoped_here, "allow": "Hostel", "for_value": code}
+		).insert(ignore_permissions=True)
+		elsewhere = make_user(DEPUTY_WARDEN_ROLE)
+		frappe.get_doc(
+			{"doctype": "User Permission", "user": elsewhere, "allow": "Hostel", "for_value": "NOT-" + code}
+		).insert(ignore_permissions=True, ignore_links=True)
+		with patch.dict(sys.modules, {"hostel360.hostel_people.services": None}):
+			users = {r["user"] for r in dispatch.recipients_for_approvers(DEPUTY_WARDEN_ROLE, code)}
+		self.assertIn(scoped_here, users)
+		self.assertNotIn(elsewhere, users)
 
 	def test_recipients_for_student_and_guardians(self):
 		if not frappe.db.exists("DocType", "Hostel Student"):

@@ -1,17 +1,45 @@
 <script setup lang="ts">
-/** Leave application form with client-side checks that mirror the server's rules. */
-import { CircleAlert } from "@lucide/vue";
+/**
+ * Leave application form with client-side checks that mirror the server's rules.
+ *
+ * Times are the hostel's wall-clock time (India), as the server reads them; "now" is the
+ * hostel's clock, not the phone's, so a parent abroad is held to the same rule. Mess
+ * reduction is offered by the server's count of full mess days missed (the noon rule), not by
+ * calendar days, so the form never promises a reduction the server will not grant.
+ */
+import { CircleAlert, Globe } from "@lucide/vue";
 import { computed, nextTick, reactive, ref } from "vue";
 import type { LeaveInput } from "@/api/types";
 import { t, tc } from "@/i18n";
-import { fromDatetimeLocal, inclusiveDays, normalizeMobile, parseDate, toDatetimeLocal } from "@/utils/format";
+import {
+	deviceOffSiteTime,
+	formatTime,
+	fromDatetimeLocal,
+	inclusiveDays,
+	messDaysAway,
+	normalizeMobile,
+	parseDate,
+	SITE_TIME_ZONE,
+	siteNow,
+	toDatetimeLocal,
+} from "@/utils/format";
 import FormField from "./FormField.vue";
 import ToggleSwitch from "./ToggleSwitch.vue";
 
 const props = withDefaults(
-	defineProps<{ busy?: boolean; serverError?: string; reductionMinDays?: number; now?: () => Date }>(),
-	{ reductionMinDays: 3, now: () => new Date() },
+	defineProps<{
+		busy?: boolean;
+		serverError?: string;
+		reductionMinDays?: number;
+		/** Hour before which leaving (or at/after which returning) still counts that mess day. */
+		cutoffHour?: number;
+		timeZone?: string;
+		/** The hostel's current time (tests pass a fixed clock). */
+		now?: () => Date;
+	}>(),
+	{ reductionMinDays: 3, cutoffHour: 12, timeZone: SITE_TIME_ZONE, now: undefined },
 );
+const clock = (): Date => (props.now ? props.now() : siteNow(props.timeZone));
 const emit = defineEmits<{ submit: [input: LeaveInput] }>();
 
 /** Small allowance so a form opened a few minutes ago is not rejected for "past" times. */
@@ -29,9 +57,18 @@ const errors = reactive<Record<string, string>>({});
 const root = ref<HTMLFormElement | null>(null);
 const summary = ref("");
 
-const minFrom = computed(() => toDatetimeLocal(props.now()));
+const minFrom = computed(() => toDatetimeLocal(clock()));
 const days = computed(() => inclusiveDays(form.from_datetime, form.to_datetime));
-const longEnough = computed(() => days.value >= props.reductionMinDays);
+const messDays = computed(() => messDaysAway(form.from_datetime, form.to_datetime, props.cutoffHour));
+const longEnough = computed(() => messDays.value >= props.reductionMinDays);
+const cutoffLabel = computed(() => formatTime(new Date(2000, 0, 1, props.cutoffHour, 0, 0)));
+const reductionHint = computed(() => {
+	const rule = { days: props.reductionMinDays, cutoff: cutoffLabel.value, count: messDays.value };
+	if (!days.value) return t("leave.messReductionHint", rule);
+	return longEnough.value ? tc("leave.messReductionCovers", messDays.value, rule) : tc("leave.messReductionTooShort", messDays.value, rule);
+});
+/** The phone's clock is not India time: say which clock the times are in. */
+const showSiteTimeHint = computed(() => !props.now && deviceOffSiteTime(props.timeZone));
 
 function validate(): boolean {
 	for (const key of Object.keys(errors)) delete errors[key];
@@ -39,7 +76,7 @@ function validate(): boolean {
 	const to = parseDate(form.to_datetime);
 
 	if (!from) errors.from_datetime = t("validation.required", { field: t("leave.from") });
-	else if (from.getTime() < props.now().getTime() - PAST_GRACE_MS) errors.from_datetime = t("leave.leaveInPast");
+	else if (from.getTime() < clock().getTime() - PAST_GRACE_MS) errors.from_datetime = t("leave.leaveInPast");
 
 	if (!to) errors.to_datetime = t("validation.required", { field: t("leave.to") });
 	else if (from && to.getTime() <= from.getTime()) errors.to_datetime = t("leave.returnBeforeLeave");
@@ -110,6 +147,9 @@ defineExpose({ errors, form });
 				>
 			</FormField>
 		</div>
+		<p v-if="showSiteTimeHint" class="-mt-2 mb-3 flex items-start gap-1.5 text-sm text-muted" data-test="site-time-hint">
+			<Globe :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("leave.siteTimeHint") }}
+		</p>
 		<p v-if="days" class="-mt-2 mb-4 text-sm text-muted" aria-live="polite">{{ tc("common.days", days) }}</p>
 
 		<FormField v-slot="{ id, describedBy, invalid }" :label="t('leave.destination')" :hint="t('leave.destinationHint')" :error="errors.destination" required>
@@ -139,7 +179,7 @@ defineExpose({ errors, form });
 		<ToggleSwitch
 			v-model="form.apply_mess_reduction"
 			:label="t('leave.messReduction')"
-			:hint="longEnough || !days ? t('leave.messReductionHint', { days: reductionMinDays }) : t('leave.messReductionTooShort', { days: reductionMinDays })"
+			:hint="reductionHint"
 			:disabled="Boolean(days) && !longEnough"
 		/>
 

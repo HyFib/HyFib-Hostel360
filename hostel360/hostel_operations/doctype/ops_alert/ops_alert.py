@@ -64,6 +64,10 @@ class OpsAlert(Document):
 			self.details = json.dumps({"text": self.details}, indent=1)
 
 	def after_insert(self):
+		from hostel360.hostel_operations import transaction
+
+		# This transaction now holds the alert naming-series lock; see transaction.py.
+		transaction.mark_alert_rows_written_inline()
 		if self.flags.raised_by_service:
 			return
 		# Raised by hand from the desk: page people exactly as for an automatic alert.

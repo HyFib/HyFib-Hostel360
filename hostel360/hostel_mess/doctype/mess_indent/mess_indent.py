@@ -5,8 +5,9 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.model.mapper import get_mapped_doc
-from frappe.utils import flt, getdate, now_datetime, nowdate
+from frappe.utils import flt, format_date, getdate, now_datetime, nowdate
 
+from hostel360.hostel_mess.permissions import assert_mess_access
 from hostel360.hostel_mess.stock import (
 	QTY_PRECISION,
 	VALUE_PRECISION,
@@ -14,24 +15,48 @@ from hostel360.hostel_mess.stock import (
 	get_stock_levels,
 	suggest_reorder_qty,
 )
+from hostel360.hostel_mess.utils import MEAL_ORDER, get_mess_settings, get_week_start
 from hostel360.setup.roles import ADMIN_ROLES, MESS_MANAGER_ROLE, WARDEN_ROLE
 from hostel360.utils.context import has_any_role
+from hostel360.utils.jinja import format_inr
 
 INDENT_APPROVER_ROLES = frozenset(ADMIN_ROLES | {MESS_MANAGER_ROLE, WARDEN_ROLE})
 INDENT_ORDER_ROLES = frozenset(ADMIN_ROLES | {MESS_MANAGER_ROLE})
+# Roles that may decide an indent they raised themselves, and indents above the configured limit.
+INDENT_SENIOR_APPROVER_ROLES = frozenset(ADMIN_ROLES | {WARDEN_ROLE})
 
 
 class MessIndent(Document):
 	def validate(self):
+		assert_mess_access(self.mess, doctype=self.doctype)
 		if self.docstatus == 0:
 			self.status = "Draft"
 		if self.required_by and getdate(self.required_by) < getdate(self.posting_date):
 			frappe.throw(_("Required By cannot be before the indent date."))
+		self.set_menu()
 		self.validate_items()
 		self.set_stock_and_estimates()
 
 	def on_submit(self):
-		self.db_set("status", "Pending Approval")
+		self.db_set({"status": "Pending Approval", "requested_by": frappe.session.user})
+
+	def set_menu(self):
+		"""Tie the indent to the menu of the week it is for (the week of Required By)."""
+		if self.docstatus != 0:
+			return
+		if self.mess_menu:
+			menu_mess = frappe.db.get_value("Mess Menu", self.mess_menu, "mess")
+			if menu_mess != self.mess:
+				frappe.throw(
+					_("Menu {0} belongs to {1}, not to {2}.").format(
+						frappe.bold(self.mess_menu), menu_mess, frappe.bold(self.mess)
+					)
+				)
+			return
+		week_start = get_week_start(self.required_by or self.posting_date)
+		self.mess_menu = frappe.db.get_value(
+			"Mess Menu", {"mess": self.mess, "week_start_date": week_start}, "name"
+		)
 
 	def before_update_after_submit(self):
 		if not self.flags.status_update:
@@ -131,12 +156,63 @@ class MessIndent(Document):
 			frappe.throw(_("You are not permitted to approve indents."), frappe.PermissionError)
 		if self.docstatus != 1 or self.status != "Pending Approval":
 			frappe.throw(_("This indent is not awaiting approval."))
+		assert_mess_access(self.mess, doctype=self.doctype)
+		if has_any_role(INDENT_SENIOR_APPROVER_ROLES):
+			return
+		# Separation of duties: the person who raises an indent does not also approve it.
+		if frappe.session.user in {self.owner, self.requested_by}:
+			frappe.throw(
+				_("You raised this indent, so someone else must approve or reject it."),
+				frappe.PermissionError,
+				title=_("Not Permitted"),
+			)
+		limit = flt(get_mess_settings().indent_warden_approval_above)
+		if limit and flt(self.total_estimated_amount) > limit:
+			frappe.throw(
+				_(
+					"Indents estimated above {0} must be approved by a Hostel Warden or Hostel Administrator."
+				).format(format_inr(limit)),
+				frappe.PermissionError,
+				title=_("Warden Approval Needed"),
+			)
+
+	@frappe.whitelist()
+	def get_menu_preview(self) -> dict | None:
+		"""The planned meals of the linked menu, for the approver to compare quantities with."""
+		if not self.mess_menu:
+			return None
+		menu = frappe.get_doc("Mess Menu", self.mess_menu)
+		menu.check_permission("read")
+		days = {}
+		for row in menu.items:
+			days.setdefault(str(getdate(row.menu_date)), []).append(row)
+		return {
+			"menu": menu.name,
+			"status": menu.status,
+			"week": _("{0} to {1}").format(
+				format_date(menu.week_start_date), format_date(menu.week_end_date)
+			),
+			"days": [
+				{
+					"date": date,
+					"label": format_date(date, "EEE d MMM"),
+					"meals": [
+						{"meal": row.meal, "dishes": row.dishes, "is_special": row.is_special}
+						for row in sorted(
+							rows, key=lambda r: MEAL_ORDER.index(r.meal) if r.meal in MEAL_ORDER else 9
+						)
+					],
+				}
+				for date, rows in sorted(days.items())
+			],
+		}
 
 
 @frappe.whitelist()
 def get_items_below_reorder_level(mess: str) -> list[dict]:
 	"""Items at or below their reorder level, with a suggested quantity to indent."""
 	frappe.has_permission("Mess Indent", "create", throw=True)
+	assert_mess_access(mess, doctype="Mess Indent")
 	rows = []
 	for level in get_stock_levels(mess):
 		if not level.below_reorder or not level.is_active:

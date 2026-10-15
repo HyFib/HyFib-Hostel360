@@ -20,8 +20,19 @@
 				frm.dashboard.set_headline(__("Test mode transaction: no real money was collected."), "blue");
 			}
 
+			if (frm.doc.refunded_amount) {
+				frm.dashboard.set_headline(
+					__("The gateway reports {0} refunded on this payment.", [format_currency(frm.doc.refunded_amount)]),
+					"orange"
+				);
+			}
+
 			const staff = frappe.user.has_role(["Hostel Administrator", "Hostel Office Staff", "System Manager"]);
-			if (["Initiated", "Pending"].includes(frm.doc.status) && staff) {
+			const open = ["Initiated", "Pending"].includes(frm.doc.status);
+			// A closed order can still be paid afterwards (a late bank authorisation, a retry in a
+			// checkout left open), so staff can ask the gateway about it too.
+			const closed_unpaid = ["Failed", "Expired"].includes(frm.doc.status) && !frm.doc.payment;
+			if ((open || closed_unpaid) && staff) {
 				frm.add_custom_button(__("Check with Gateway"), () =>
 					frm.call({ doc: frm.doc, method: "check_with_gateway", freeze: true }).then((r) => {
 						const result = r.message || {};
@@ -43,6 +54,28 @@
 			}
 
 			const admin = frappe.user.has_role(["Hostel Administrator", "System Manager"]);
+			if (open && admin) {
+				frm.add_custom_button(
+					__("Close as Expired"),
+					() =>
+						frappe.prompt(
+							{
+								fieldname: "reason",
+								fieldtype: "Small Text",
+								label: __("Why is this transaction being closed?"),
+								description: __("Check the gateway dashboard first: close it only if no money was taken."),
+								reqd: 1,
+							},
+							(values) =>
+								frm
+									.call({ doc: frm.doc, method: "close_as_expired", args: values, freeze: true })
+									.then(() => frm.reload_doc()),
+							__("Close as Expired"),
+							__("Close")
+						),
+					__("Actions")
+				);
+			}
 			if (frm.doc.status === "Success" && admin) {
 				frm.add_custom_button(
 					__("Mark as Refunded"),

@@ -2,8 +2,11 @@
 
 Produced at 07:00 on the 1st for the previous month, submitted, rendered with the
 "Monthly Performance Report" print format and e-mailed as a PDF to the institution
-officials in Ops Alert Settings and the HyFib helpdesk. Generation is idempotent per month:
-re-running it never creates a second report and never e-mails a report twice.
+officials in Ops Alert Settings (or, failing that, the hostel office e-mail) with a copy to
+the HyFib helpdesk. Generation is idempotent per month: re-running it never creates a second
+report and never e-mails a report twice. A report is only marked sent once it has gone to
+someone at the institution; until then the health checks retry it and raise an alert as the
+6th, the contractual deadline, approaches.
 
 Figures come from other modules (students, payments, messaging) through defensive queries,
 so a module that is not installed yet simply reports zero instead of breaking the report.
@@ -30,6 +33,7 @@ from hostel360.hostel_operations.constants import (
 	BACKUP_DOCTYPE,
 	CRITICAL,
 	REPORT_DOCTYPE,
+	WARNING,
 )
 from hostel360.hostel_operations.settings import get_settings, level_one_emails, parse_emails
 from hostel360.setup.roles import OPERATIONS_ROLE, PORTAL_ROLES
@@ -39,6 +43,9 @@ UPTIME_TARGET = 99.9
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 MAX_INCIDENT_ROWS = 50
 BACKUP_TYPES = ("Daily", "Weekly", "Monthly", "Snapshot")
+NO_RECIPIENTS_ALERT_KEY = "reports.monthly.no_recipients"
+# TR 13: the report reaches the institution by the 6th of the following month.
+DELIVERY_DEADLINE_DAY = 6
 
 
 def previous_month(today=None) -> str:
@@ -132,6 +139,8 @@ def collect_figures(start, end, from_date, to_date) -> dict:
 	uptime = _safe("uptime", lambda: metrics.compute_uptime(start, end), {})
 	figures["uptime_percent"] = uptime.get("uptime_percent")
 	figures["downtime_minutes"] = cint(uptime.get("downtime_minutes"))
+	figures["unmonitored_minutes"] = cint(uptime.get("unmonitored_minutes"))
+	figures["monitoring_coverage_percent"] = flt(uptime.get("coverage_percent"), 2)
 	figures["uptime_source"] = uptime.get("source") or ""
 
 	incidents = _safe("incidents", lambda: _critical_alerts(start, end), [])
@@ -312,6 +321,12 @@ def build_summary(doc) -> str:
 				cint(doc.incidents),
 			)
 		)
+		if cint(doc.get("unmonitored_minutes")):
+			parts.append(
+				_(
+					"{0} of those minutes had no availability measurement (monitoring covered {1}% of the month) and are counted as downtime."
+				).format(cint(doc.unmonitored_minutes), flt(doc.get("monitoring_coverage_percent"), 2))
+			)
 	else:
 		parts.append(
 			_("No availability measurements were recorded this month; {0} critical incidents were logged.").format(
@@ -363,9 +378,24 @@ def build_summary(doc) -> str:
 # Delivery -----------------------------------------------------------------
 
 
-def report_recipients() -> list[str]:
-	settings = get_settings()
+def institution_recipients(settings=None) -> list[str]:
+	"""Institution officials: Report Recipients, else the hostel office e-mail address."""
+	settings = settings or get_settings()
 	recipients = parse_emails(settings.get("report_recipients"))
+	if not recipients and frappe.db.exists("DocType", "Hostel Settings"):
+		try:
+			recipients = parse_emails(frappe.db.get_single_value("Hostel Settings", "office_email"))
+		except Exception:
+			recipients = []
+	return recipients
+
+
+def report_recipients() -> list[str]:
+	"""Everyone the report goes to; empty when nobody at the institution would receive it."""
+	settings = get_settings()
+	recipients = institution_recipients(settings)
+	if not recipients:
+		return []
 	for email in level_one_emails(settings):
 		if email not in recipients:
 			recipients.append(email)
@@ -384,14 +414,23 @@ def render_pdf(name: str) -> tuple[bytes, str]:
 
 
 def send_report(name: str) -> bool:
+	"""E-mail the report; returns False (and leaves it unsent) when nobody at the institution would get it."""
+	from hostel360.hostel_operations.alerts import raise_alert, resolve_alert
+
 	doc = frappe.get_doc(REPORT_DOCTYPE, name)
 	recipients = report_recipients()
 	if not recipients:
-		frappe.log_error(
-			title="Hostel360: monthly report has no recipients",
-			message=_("Add institution officials to Report Recipients in Ops Alert Settings."),
-			reference_doctype=REPORT_DOCTYPE,
-			reference_name=name,
+		# A copy to the HyFib helpdesk alone is not delivery to the institution (TR 13), so
+		# the report stays unsent and is retried once someone fills in the recipients.
+		raise_alert(
+			NO_RECIPIENTS_ALERT_KEY,
+			"Monthly performance report has no institution recipients",
+			WARNING,
+			"SLA",
+			description=_(
+				"{0} could not be sent: add the institution officials to Report Recipients in Ops Alert Settings "
+				"(or set the office e-mail in Hostel Settings). It is sent automatically once they are added."
+			).format(name),
 		)
 		return False
 
@@ -409,7 +448,41 @@ def send_report(name: str) -> bool:
 		add_unsubscribe_link=0,
 	)
 	doc.db_set({"sent_on": now_datetime(), "sent_to": "\n".join(recipients)}, update_modified=False)
+	resolve_alert(NO_RECIPIENTS_ALERT_KEY, notes=_("{0} was sent to {1}.").format(name, ", ".join(recipients)))
 	return True
+
+
+def delivery_status(now=None) -> dict:
+	"""Where the previous month's report stands: ``{month, name, sent_on, due_day, applicable}``.
+
+	Not applicable before the 07:00 run on the 1st, or when the installation was not yet
+	measuring anything during that month (nothing to report on).
+	"""
+	from hostel360.hostel_operations.metrics import monitoring_started_at
+
+	now = get_datetime(now) if now else now_datetime()
+	month = previous_month(now)
+	_from_date, _to_date, _start, end = month_bounds(month)
+	row = frappe.db.get_value(REPORT_DOCTYPE, {"month": month, "docstatus": 1}, ["name", "sent_on"], as_dict=True)
+	started = monitoring_started_at()
+	applicable = bool(row) or bool(started and started < end)
+	if now.day == 1 and now.hour < 8:
+		applicable = False
+	return {
+		"month": month,
+		"name": row.name if row else None,
+		"sent_on": row.sent_on if row else None,
+		"applicable": applicable,
+		"day": now.day,
+	}
+
+
+def catch_up_monthly_report(now=None) -> str | None:
+	"""Generate and send last month's report if the 1st's run did not get it out."""
+	status = delivery_status(now)
+	if not status["applicable"] or status["sent_on"]:
+		return None
+	return generate_monthly_performance_report(month=status["month"], send=True)
 
 
 def _email_body(doc, month_label: str) -> str:
@@ -420,6 +493,8 @@ def _email_body(doc, month_label: str) -> str:
 		if doc.uptime_percent is not None and doc.get("uptime_source") != "No availability data"
 		else _("not measured")
 	)
+	if cint(doc.get("unmonitored_minutes")) and doc.uptime_percent is not None:
+		uptime += " " + _("({0} unmonitored minutes counted as downtime)").format(cint(doc.unmonitored_minutes))
 	return (
 		f"<p>{escape_html(_('Dear Sir / Madam,'))}</p>"
 		f"<p>{escape_html(_('Please find attached the Hostel360 server performance report for {0}.').format(month_label))}</p>"

@@ -5,7 +5,10 @@ findtime = {{ h360_fail2ban_findtime }}
 maxretry = 5
 backend = auto
 banaction = ufw
-ignoreip = 127.0.0.1/8 ::1{% for cidr in h360_fail2ban_ignoreip %} {{ cidr }}{% endfor %}
+# Never banned: the host itself, the stack's internal container network (print PDFs load
+# images through the WAF from there), and the campus egress addresses that hundreds of
+# residents share.
+ignoreip = {{ (['127.0.0.1/8', '::1', h360_internal_subnet | default('172.30.10.0/24')] + (h360_campus_egress_cidrs | default([])) + h360_fail2ban_ignoreip) | map('string') | unique | join(' ') }}
 
 
 # SSH arrives only through the OCI Bastion endpoint; bans are short so an administrator's

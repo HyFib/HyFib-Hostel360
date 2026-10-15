@@ -9,6 +9,7 @@
   "mess_manager",
   "column_break_main",
   "is_active",
+  "billed_upto",
   "hostels_section",
   "hostels",
   "description"
@@ -43,6 +44,14 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Active"
+  },
+  {
+   "description": "Last day covered by a published mess bill run. Stock movements, expenses, extra charges and reductions dated on or before it can no longer be changed.",
+   "fieldname": "billed_upto",
+   "fieldtype": "Date",
+   "label": "Bills Published Up To",
+   "no_copy": 1,
+   "read_only": 1
   },
   {
    "fieldname": "hostels_section",
@@ -100,7 +109,7 @@
    "link_fieldname": "mess"
   }
  ],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Mess",
  "name": "Hostel Mess",
@@ -149,21 +158,18 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Deputy Warden",
-   "share": 1
+   "role": "Deputy Warden"
   },
   {
    "read": 1,
    "role": "Hostel Office Staff"
   },
   {
-   "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Institution Auditor",
-   "share": 1
+   "role": "Institution Auditor"
   },
   {
    "create": 1,

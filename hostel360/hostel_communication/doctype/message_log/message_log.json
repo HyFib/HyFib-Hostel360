@@ -154,19 +154,22 @@
    "fieldname": "content_section",
    "fieldtype": "Section Break",
    "label": "Content",
-   "collapsible": 1
+   "collapsible": 1,
+   "description": "Visible to Hostel Administrators and System Managers only."
   },
   {
    "fieldname": "subject",
    "fieldtype": "Data",
    "label": "Subject",
-   "read_only": 1
+   "read_only": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "message",
    "fieldtype": "Text",
    "label": "Message",
-   "read_only": 1
+   "read_only": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "payload",
@@ -182,7 +185,7 @@
  ],
  "in_create": 1,
  "links": [],
- "modified": "2026-10-15 15:30:00.000000",
+ "modified": "2026-10-15 20:30:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Communication",
  "name": "Message Log",
@@ -209,6 +212,11 @@
    "read": 1,
    "delete": 1,
    "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "permlevel": 1,
+   "role": "Hostel Administrator"
   },
   {
    "read": 1,

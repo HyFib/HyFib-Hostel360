@@ -6,10 +6,11 @@ other or on data from other modules' tests.
 
 import random
 from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, getdate, now_datetime
 
 from hostel360.setup.roles import PARENT_ROLE, STUDENT_ROLE
 
@@ -138,6 +139,79 @@ def make_guardian(student: str, can_approve_leave: int = 1, relation: str = "Fat
 	student_doc.flags.ignore_permissions = True
 	student_doc.save()
 	return frappe._dict(name=guardian.name, user=user, guardian_name=guardian.guardian_name)
+
+
+def make_block_room(hostel: str) -> frappe._dict:
+	"""A block of the hostel with one room in it."""
+	block = frappe.get_doc(
+		{"doctype": "Hostel Block", "hostel": hostel, "block_name": f"Block {uid(3)}", "block_code": uid(3)}
+	).insert(ignore_permissions=True)
+	room = frappe.get_doc(
+		{
+			"doctype": "Hostel Room",
+			"hostel": hostel,
+			"block": block.name,
+			"room_number": "R" + uid(4),
+			"room_type": "Double",
+			"capacity": 2,
+		}
+	).insert(ignore_permissions=True)
+	return frappe._dict(block=block.name, room=room.name)
+
+
+def put_in_room(student: str, room: str) -> None:
+	# Allotment belongs to Hostel People; only its outcome matters here.
+	frappe.db.set_value("Hostel Student", student, "current_room", room, update_modified=False)
+
+
+def make_block_deputy(hostel: str, blocks: list[str]) -> str:
+	"""A deputy warden assigned, through a Hostel Staff record, to some blocks of a hostel."""
+	suffix = uid(8).lower()
+	staff = frappe.get_doc(
+		{
+			"doctype": "Hostel Staff",
+			"staff_name": f"Deputy {suffix}",
+			"designation": "Deputy Warden",
+			"email": f"h360-deputy-{suffix}@example.com",
+			"mobile_number": unique_mobile(),
+			"create_user": 1,
+			"send_welcome_email": 0,
+			"is_active": 1,
+			"assignments": [{"hostel": hostel, "block": block} for block in blocks],
+		}
+	)
+	staff.insert(ignore_permissions=True)
+	return frappe.db.get_value("Hostel Staff", staff.name, "user")
+
+
+def make_linked_reduction(leave: str, from_date=None, to_date=None, status: str = "Approved") -> str:
+	"""A Mess Reduction Application raised for a leave, already in ``status``."""
+	values = frappe.db.get_value("Home Visit Leave", leave, ["student", "from_datetime", "to_datetime"], as_dict=True)
+	frappe.flags.hostel360_migration = True
+	try:
+		doc = frappe.get_doc(
+			{
+				"doctype": "Mess Reduction Application",
+				"student": values.student,
+				"from_date": getdate(from_date or values.from_datetime),
+				"to_date": getdate(to_date or values.to_datetime),
+				"reason": "Home Visit",
+				"home_visit_leave": leave,
+				"status": status,
+			}
+		).insert(ignore_permissions=True)
+	finally:
+		frappe.flags.hostel360_migration = False
+	frappe.db.set_value("Home Visit Leave", leave, "mess_reduction", doc.name, update_modified=False)
+	return doc.name
+
+
+def run_form_action(doc, method: str, **args):
+	"""Call a form button's controller method the way the desk does: on the copy the form sends."""
+	from frappe.handler import run_doc_method
+
+	with patch.object(frappe.local, "request", SimpleNamespace(method="POST"), create=True):
+		run_doc_method(method, docs=frappe.as_json(doc.as_dict()), args=frappe.as_json(args))
 
 
 def set_hostel_settings(**values) -> None:

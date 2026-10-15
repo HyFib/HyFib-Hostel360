@@ -6,6 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, cint, date_diff, format_date, getdate, now_datetime
 
+from hostel360.hostel_mess.permissions import assert_mess_access
 from hostel360.hostel_mess.utils import (
 	MEAL_ORDER,
 	WEEKDAYS,
@@ -23,6 +24,7 @@ class MessMenu(Document):
 		self.validate_unique_week()
 
 	def validate(self):
+		assert_mess_access(self.mess, doctype=self.doctype)
 		self.validate_week()
 		self.validate_unique_week()
 		self.clean_items()
@@ -95,6 +97,7 @@ class MessMenu(Document):
 	def publish(self):
 		"""Publish the week's menu and let the residents know (in-app)."""
 		self.check_permission("write")
+		assert_mess_access(self.mess, doctype=self.doctype)
 		if self.status == "Published":
 			frappe.throw(_("This menu is already published."))
 		if not self.items:
@@ -128,6 +131,7 @@ class MessMenu(Document):
 def get_previous_week_items(mess: str, week_start_date: str) -> list[dict]:
 	"""Meals of the latest menu before the given week, moved onto the given week's dates."""
 	frappe.has_permission("Mess Menu", "read", throw=True)
+	assert_mess_access(mess, doctype="Mess Menu")
 	target_start = getdate(week_start_date)
 	if target_start.weekday() != 0:
 		frappe.throw(_("Week Starting must be a Monday."))

@@ -20,6 +20,7 @@
   "column_break_reference",
   "bank_name",
   "payment_transaction",
+  "is_test",
   "section_allocations",
   "allocations",
   "total_allocated",
@@ -29,6 +30,8 @@
   "received_by",
   "column_break_other",
   "remarks",
+  "cancelled_on",
+  "cancelled_by",
   "amended_from"
  ],
  "fields": [
@@ -147,6 +150,16 @@
    "depends_on": "eval:doc.payment_transaction"
   },
   {
+   "fieldname": "is_test",
+   "fieldtype": "Check",
+   "label": "Test Payment",
+   "read_only": 1,
+   "no_copy": 1,
+   "in_standard_filter": 1,
+   "depends_on": "eval:doc.is_test",
+   "description": "Paid with the gateway's test credentials: no real money was received. Kept out of collection reports."
+  },
+  {
    "fieldname": "section_allocations",
    "fieldtype": "Section Break",
    "label": "Allocation to Invoices"
@@ -199,6 +212,25 @@
    "label": "Remarks"
   },
   {
+   "fieldname": "cancelled_on",
+   "fieldtype": "Datetime",
+   "label": "Cancelled On",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "depends_on": "eval:doc.docstatus==2"
+  },
+  {
+   "fieldname": "cancelled_by",
+   "fieldtype": "Link",
+   "label": "Cancelled By",
+   "options": "User",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "depends_on": "eval:doc.docstatus==2"
+  },
+  {
    "fieldname": "amended_from",
    "fieldtype": "Link",
    "label": "Amended From",
@@ -211,7 +243,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-15 16:30:00.000000",
+ "modified": "2026-10-15 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Fees",
  "name": "Hostel Payment",

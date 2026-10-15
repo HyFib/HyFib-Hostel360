@@ -4,7 +4,9 @@
 frappe.ui.form.on("Mess Settings", {
 	refresh(frm) {
 		frm.set_intro(
-			__("These rules apply to mess reduction applications made after you save. Existing applications are not affected."),
+			__(
+				"Changes apply from the moment you save: to reduction applications made after that, and to indents and receipts still to be approved or received."
+			),
 			"blue"
 		);
 	},

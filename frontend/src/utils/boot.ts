@@ -11,6 +11,8 @@ export interface BootData {
 	institution_name?: string;
 	institution_short_name?: string;
 	logo?: string | null;
+	office_phone?: string | null;
+	office_email?: string | null;
 	support_phone?: string;
 	support_email?: string;
 	is_logged_in?: boolean;

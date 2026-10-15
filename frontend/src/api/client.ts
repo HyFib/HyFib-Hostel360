@@ -47,9 +47,30 @@ export class ApiError extends Error {
 export interface ApiHandlers {
 	/** Connection state as observed by real requests (more reliable than navigator.onLine). */
 	onNetworkStatus?: (online: boolean) => void;
-	/** A 403 from the server: the session may have ended. */
-	onForbidden?: (error: ApiError) => void;
+	/**
+	 * A 403 that may mean the session ended (timeout, sign-out in another tab). Resolves true
+	 * when it found the session had ended, so the caller shows that instead of the raw reply.
+	 */
+	onForbidden?: (error: ApiError) => boolean | void | Promise<boolean | void>;
+	/** The server said the session expired (401 SessionExpired). */
+	onSessionEnded?: (error: ApiError) => void | Promise<void>;
+	/** The session belongs to a record that may no longer use the portal (not validated, closed). */
+	onAccessClosed?: (error: ApiError) => void | Promise<void>;
+	/** A new version of the privacy notice was published while the user was signed in. */
+	onConsentRequired?: (error: ApiError) => void | Promise<void>;
 }
+
+/**
+ * 403s that are about one feature or one ward, not about the session: re-checking the
+ * session for them would only cost a request (and they must never sign the user out).
+ */
+export const FEATURE_REFUSALS = new Set(["PortalValidationPending", "PortalConsentRequired", "PortalStudentInactive"]);
+/** The caller's record may no longer use the portal; the message says why. */
+export const ACCESS_CLOSED = "PortalAccessClosed";
+/** The privacy notice changed and has to be accepted again before anything else. */
+export const CONSENT_REQUIRED = "PortalConsentRequired";
+/** Frappe's answer to the first call after the session lapsed. */
+const SESSION_EXPIRED = "SessionExpired";
 
 export interface CallOptions {
 	method?: "GET" | "POST";
@@ -101,18 +122,28 @@ export async function refreshCsrfToken(): Promise<string> {
 	return csrfToken;
 }
 
+/**
+ * Language for this request's server messages. Frappe reads `_lang` before the signed-in
+ * user's saved language, so errors always come back in the language on screen (and a guest's
+ * sign-in errors too, whatever the browser sends as Accept-Language).
+ */
+function requestLanguage(): string {
+	return locale.value === "ta" ? "ta" : "en";
+}
+
 function serialise(args: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(args)) {
 		if (value !== undefined) out[key] = value;
 	}
+	if (out._lang === undefined) out._lang = requestLanguage();
 	return out;
 }
 
 function toQuery(args: Args): string {
-	if (!args || args instanceof FormData) return "";
+	if (args instanceof FormData) return "";
 	const params = new URLSearchParams();
-	for (const [key, value] of Object.entries(serialise(args))) {
+	for (const [key, value] of Object.entries(serialise(args ?? {}))) {
 		if (value === null) continue;
 		params.set(key, typeof value === "object" ? JSON.stringify(value) : String(value));
 	}
@@ -213,6 +244,7 @@ async function send(path: string, args: Args, options: CallOptions, attempt = 0)
 	if (method === "GET") {
 		url += toQuery(args);
 	} else if (args instanceof FormData) {
+		if (!args.has("_lang")) args.append("_lang", requestLanguage());
 		body = args;
 	} else {
 		headers["Content-Type"] = "application/json";
@@ -261,8 +293,35 @@ async function send(path: string, args: Args, options: CallOptions, attempt = 0)
 		await refreshCsrfToken();
 		return send(path, args, options, attempt + 1);
 	}
-	if (error.kind === "permission") handlers.onForbidden?.(error);
-	throw error;
+	throw await afterRefusal(error);
+}
+
+/**
+ * Let the app react to a refusal that concerns the whole session, and decide what the caller
+ * sees. A wrong sign-in code is also a 401, but an ordinary one: only Frappe's SessionExpired
+ * means the session lapsed. A 403 after the session lapsed carries Frappe's internal
+ * "not whitelisted" text, which is replaced by the plain "session ended" message.
+ */
+async function afterRefusal(error: ApiError): Promise<ApiError> {
+	if (error.kind === "auth" && error.excType === SESSION_EXPIRED) {
+		void handlers.onSessionEnded?.(error);
+		return error;
+	}
+	if (error.kind !== "permission") return error;
+	if (error.excType === ACCESS_CLOSED) {
+		void handlers.onAccessClosed?.(error);
+		return error;
+	}
+	if (error.excType === CONSENT_REQUIRED) {
+		void handlers.onConsentRequired?.(error);
+		return error;
+	}
+	if (error.excType && FEATURE_REFUSALS.has(error.excType)) return error;
+	const ended = await handlers.onForbidden?.(error);
+	if (ended) {
+		return new ApiError("auth", t("errors.sessionExpired"), { status: error.status, excType: error.excType });
+	}
+	return error;
 }
 
 /** Call a whitelisted method and return its `message`. */

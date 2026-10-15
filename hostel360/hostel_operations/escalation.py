@@ -29,7 +29,9 @@ def run_escalations(now=None) -> dict | None:
 		return None
 
 	summary = escalate_open_alerts(settings, now)
-	frappe.db.set_single_value(SETTINGS_DOCTYPE, "last_escalation_run_on", now)
+	# Bookkeeping only: leaving `modified` alone keeps an operator's open settings form
+	# saveable (a changed timestamp is what Frappe uses to detect a stale form).
+	frappe.db.set_single_value(SETTINGS_DOCTYPE, "last_escalation_run_on", now, update_modified=False)
 	_commit()
 	return summary
 
@@ -43,6 +45,10 @@ def escalate_open_alerts(settings, now) -> dict:
 		order_by="first_seen asc",
 		limit=BATCH_LIMIT,
 	)
+	# Start each alert in a fresh transaction: alerts are written by other connections all
+	# the time, and a snapshot taken before their commit would make the row lock below fail
+	# with "record has changed since last read".
+	_commit()
 	summary: dict[str, int] = {}
 	for name in names:
 		try:

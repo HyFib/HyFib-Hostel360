@@ -1,9 +1,11 @@
 # Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 # For license information, please see license.txt
 
-"""Outstanding dues with ageing by days past the due date (0-30, 31-60, 61-90, 90+).
+"""Outstanding dues with ageing by days past the due date (1-30, 31-60, 61-90, 90+).
 
 Amounts are the current outstanding balances of invoices raised on or before the "as on" date.
+An invoice falling due on the "as on" date is not yet overdue, as everywhere else in Hostel360
+(invoice status, the overdue job, the portal and this report's own "Overdue Only" filter).
 """
 
 import frappe
@@ -16,7 +18,7 @@ from hostel360.hostel_fees.utils import get_permitted_hostels, money
 # Labels are translated when the report runs, in the reader's language.
 BUCKETS = (
 	("not_due", "Not Yet Due"),
-	("range_0_30", "0-30 Days"),
+	("range_0_30", "1-30 Days"),
 	("range_31_60", "31-60 Days"),
 	("range_61_90", "61-90 Days"),
 	("range_90_plus", "Above 90 Days"),
@@ -24,7 +26,8 @@ BUCKETS = (
 
 
 def bucket_for(days_past_due: int) -> str:
-	if days_past_due < 0:
+	"""Ageing bucket for ``days_past_due`` = as-on date minus due date (0 on the due date itself)."""
+	if days_past_due <= 0:
 		return "not_due"
 	if days_past_due <= 30:
 		return "range_0_30"

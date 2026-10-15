@@ -1,24 +1,90 @@
 <script setup lang="ts">
+/**
+ * Dues, invoices and the fee structure. A redirect checkout (PayU) brings the payer back here
+ * with ?payment=<transaction>&status=…; the status in the address is only a hint, so the
+ * outcome shown is the one the server confirms for that transaction.
+ */
 import { FileText, Receipt, Wallet } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
-import { useRouter } from "vue-router";
-import { downloadFeeStructure, getFees } from "@/api/portal";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { ApiError } from "@/api/client";
+import { downloadFeeStructure, getFees, getPaymentStatus } from "@/api/portal";
+import type { VerifyPaymentResult } from "@/api/types";
 import EmptyState from "@/components/EmptyState.vue";
 import ErrorState from "@/components/ErrorState.vue";
 import InvoiceList from "@/components/InvoiceList.vue";
 import PageHeader from "@/components/PageHeader.vue";
+import PaymentOutcome from "@/components/PaymentOutcome.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
 import { useDownload } from "@/composables/useDownload";
 import { useResource } from "@/composables/useResource";
 import { t } from "@/i18n";
+import { refreshUnread } from "@/stores/inbox";
 import { studentArg, useSession } from "@/stores/session";
 import { formatDate, formatINR, toNumber } from "@/utils/format";
 
+/** How long to wait before asking once more about a payment the gateway is still confirming. */
+const RECHECK_DELAY_MS = 5000;
+const TRANSACTION_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
+
+const route = useRoute();
 const router = useRouter();
 const { session, paymentEnabled } = useSession();
 const fees = useResource(() => getFees(studentArg()), { watch: [() => session.activeStudent] });
 const { busyKey, download } = useDownload();
 const selected = ref<string[]>([]);
+
+const returned = ref<VerifyPaymentResult | null>(null);
+const checking = ref(false);
+let recheckTimer: ReturnType<typeof setTimeout> | null = null;
+let autoRechecked = false;
+
+async function checkPayment(transaction: string) {
+	if (recheckTimer) clearTimeout(recheckTimer);
+	checking.value = true;
+	try {
+		returned.value = await getPaymentStatus(transaction);
+	} catch (error) {
+		// Not one of this user's payments: say the reply could not be matched. Anything else
+		// (no connection, server trouble) leaves the payment to be confirmed later.
+		const unmatched = error instanceof ApiError && (error.kind === "not_found" || error.kind === "permission");
+		returned.value = unmatched
+			? { status: "Failed", payment: null, receipt_number: null, message: t("pay.returnUnmatched") }
+			: { status: "Pending", payment: null, receipt_number: null, transaction, message: t("pay.verifyLater") };
+	} finally {
+		checking.value = false;
+	}
+	void fees.reload();
+	if (returned.value?.status === "Success") void refreshUnread(true);
+	else if (returned.value && !["Failed", "Expired", "Refunded"].includes(returned.value.status) && !autoRechecked) {
+		autoRechecked = true;
+		recheckTimer = setTimeout(() => void checkPayment(transaction), RECHECK_DELAY_MS);
+	}
+}
+
+function readPaymentReturn() {
+	const transaction = typeof route.query.payment === "string" ? route.query.payment : "";
+	const status = typeof route.query.status === "string" ? route.query.status : "";
+	if (!transaction && !status) return;
+	// Drop the parameters so a reload or a shared link never replays the outcome.
+	void router.replace({ query: {} });
+	if (TRANSACTION_NAME.test(transaction)) {
+		void checkPayment(transaction);
+	} else {
+		// The gateway's reply could not be matched to a payment of ours.
+		returned.value = { status: "Failed", payment: null, receipt_number: null, message: t("pay.returnUnmatched") };
+	}
+}
+
+function dismissOutcome() {
+	if (recheckTimer) clearTimeout(recheckTimer);
+	returned.value = null;
+}
+
+onMounted(readPaymentReturn);
+onBeforeUnmount(() => {
+	if (recheckTimer) clearTimeout(recheckTimer);
+});
 
 const summary = computed(() => fees.data.value);
 const canPayOnline = computed(() => paymentEnabled.value && summary.value?.payment_enabled !== false);
@@ -44,6 +110,17 @@ function pay(invoices: string[]) {
 				</RouterLink>
 			</template>
 		</PageHeader>
+
+		<PaymentOutcome
+			v-if="returned"
+			class="mb-5"
+			:result="returned"
+			context="fees"
+			:checking="checking"
+			@retry="dismissOutcome"
+			@dismiss="dismissOutcome"
+			@check="returned.transaction && checkPayment(returned.transaction)"
+		/>
 
 		<SkeletonList v-if="fees.loading.value && !summary" card :rows="2" />
 		<ErrorState v-else-if="fees.error.value" :error="fees.error.value" @retry="fees.reload" />

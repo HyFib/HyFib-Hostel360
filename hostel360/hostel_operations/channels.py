@@ -68,6 +68,14 @@ def facts(message: dict) -> list[tuple[str, str]]:
 		rows.append(("Open for", message["duration_display"]))
 	if message.get("acknowledged_by"):
 		rows.append(("Acknowledged by", message["acknowledged_by"]))
+	if message.get("reporting_due_display"):
+		rows.append(
+			(
+				"Reporting",
+				f"Possible CERT-In reportable incident: report to CERT-In and the institution by "
+				f"{message['reporting_due_display']}. Declare a Security Incident from the alert to track it.",
+			)
+		)
 	if message.get("alert"):
 		rows.append(("Alert", message["alert"]))
 	return rows
@@ -90,6 +98,8 @@ def short_text(message: dict) -> str:
 			f"[{message['instance_label']}] {label}: {title} ({message['category']})."
 			f" Seen {message['occurrence_count']}x since {message['first_seen_display']}."
 		)
+		if message.get("reporting_due_display"):
+			body += f" CERT-In report due by {message['reporting_due_display']}."
 	if message.get("url"):
 		body += f" {message['url']}"
 	return body
@@ -147,6 +157,17 @@ def slack_payload(message: dict) -> dict:
 		{"type": "header", "text": {"type": "plain_text", "text": headline(message)[:150], "emoji": False}},
 		{"type": "section", "fields": fields},
 	]
+	if message.get("reporting_due_display"):
+		# Slack shows at most ten fields; the reporting deadline must never be the one cut.
+		blocks.append(
+			{
+				"type": "section",
+				"text": {
+					"type": "mrkdwn",
+					"text": f"*CERT-In report due by {_slack_escape(message['reporting_due_display'])}*",
+				},
+			}
+		)
 	if message.get("description"):
 		blocks.append(
 			{"type": "section", "text": {"type": "mrkdwn", "text": _slack_escape(message["description"])[:2900]}}

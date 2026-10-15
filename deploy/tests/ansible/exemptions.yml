@@ -1,0 +1,69 @@
+# Campus egress addresses (h360_campus_egress_cidrs): the go-live checks of roles/preflight,
+# and the three places they must reach - the WAF rate-limit exemptions, fail2ban's ignoreip
+# and CAMPUS_EGRESS_CIDRS in stack.env (for h360-site-init and Messaging Settings).
+#
+# Run by deploy/tests/ansible/run.sh with one case's variables (-e); rendered files go to
+# H360_TEST_OUT. Renders templates only: nothing is installed or changed on the machine.
+- name: Campus egress addresses reach every per-address exemption
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    h360_test_out: "{{ lookup('ansible.builtin.env', 'H360_TEST_OUT') }}"
+    h360_test_roles: "{{ playbook_dir }}/../../ansible/roles"
+  roles:
+    - role: preflight
+  tasks:
+    - name: Load the defaults of the roles whose templates are rendered
+      ansible.builtin.include_vars:
+        file: "{{ h360_test_roles }}/{{ item }}/defaults/main.yml"
+      loop: [app, fail2ban]
+
+    - name: Image tag stack.env would carry
+      ansible.builtin.set_fact:
+        h360_effective_tag: "{{ h360_image_tag }}"
+
+    - name: Render the exemption files
+      ansible.builtin.template:
+        src: "{{ h360_test_roles }}/{{ item.src }}"
+        dest: "{{ h360_test_out }}/{{ item.dest }}"
+        mode: "0644"
+      loop:
+        - { src: app/templates/rate-exempt.conf.j2, dest: rate-exempt.conf }
+        - { src: app/templates/stack.env.j2, dest: stack.env }
+        - { src: fail2ban/templates/jail.local.j2, dest: jail.local }
+
+    - name: Read the rendered files
+      ansible.builtin.set_fact:
+        h360_test_rate_exempt: "{{ lookup('ansible.builtin.file', h360_test_out ~ '/rate-exempt.conf') }}"
+        h360_test_stack_env: "{{ lookup('ansible.builtin.file', h360_test_out ~ '/stack.env') }}"
+        h360_test_ignoreip: >-
+          {{ (lookup('ansible.builtin.file', h360_test_out ~ '/jail.local')
+              | regex_search('(?m)^ignoreip = (.*)$', '\1') | first).split(' ') }}
+        h360_test_exempt_entries: >-
+          {{ lookup('ansible.builtin.file', h360_test_out ~ '/rate-exempt.conf')
+             | regex_findall('(?m)^(\S+) 1;$') }}
+
+    - name: Every campus address (and each extra range) is exempt from the WAF rate limits
+      ansible.builtin.assert:
+        that:
+          - (h360_campus_egress_cidrs + h360_waf_rate_exempt_cidrs) | map('string') | unique | difference(h360_test_exempt_entries) | length == 0
+          - h360_test_exempt_entries | length == (h360_campus_egress_cidrs + h360_waf_rate_exempt_cidrs) | map('string') | unique | length
+        fail_msg: "rate-exempt.conf: {{ h360_test_exempt_entries }}"
+
+    - name: Fail2ban never bans the campus, the host or the stack's internal network
+      ansible.builtin.assert:
+        that:
+          - h360_test_never_banned | difference(h360_test_ignoreip) | length == 0
+          - h360_test_ignoreip | length == h360_test_ignoreip | unique | length
+        fail_msg: "ignoreip: {{ h360_test_ignoreip }}"
+      vars:
+        h360_test_never_banned: >-
+          {{ (['127.0.0.1/8', '::1', h360_internal_subnet] + h360_campus_egress_cidrs + h360_fail2ban_ignoreip)
+             | map('string') | list }}
+
+    - name: The stack environment hands the campus addresses to h360-site-init
+      ansible.builtin.assert:
+        that:
+          - ("CAMPUS_EGRESS_CIDRS=" ~ (h360_campus_egress_cidrs | map('string') | join(','))) in h360_test_stack_env.splitlines()
+        fail_msg: "{{ h360_test_stack_env | regex_search('(?m)^CAMPUS_EGRESS_CIDRS=.*$') }}"

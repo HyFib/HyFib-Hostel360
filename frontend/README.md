@@ -71,7 +71,9 @@ service worker falls back to; it never contains personal data.
 Without `Service-Worker-Allowed` the worker cannot control `/hostel`; the portal still works,
 just without the offline shell.
 
-Content-Security-Policy for `/hostel` (Razorpay Checkout is loaded only when a payment starts):
+Content-Security-Policy for `/hostel` (Razorpay Checkout is loaded only when a payment starts;
+with PayU the browser posts a server-signed form to PayU's hosted page, so `form-action` must
+list it):
 
 ```
 default-src 'self';
@@ -81,11 +83,27 @@ img-src 'self' data: blob: https://cdn.razorpay.com;
 connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com;
 frame-src https://api.razorpay.com https://checkout.razorpay.com;
 worker-src 'self'; manifest-src 'self'; font-src 'self' data:;
-base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+base-uri 'self'; form-action 'self' https://secure.payu.in https://test.payu.in;
+frame-ancestors 'none'; object-src 'none'
 ```
 
 `style-src 'unsafe-inline'` is for Razorpay's injected checkout styles; the portal's own styles
 are a single stylesheet. `img-src blob:` is for photo previews before upload.
+
+## Payments
+
+`create_payment` answers with `gateway: "razorpay"` (Checkout opens in the page and its signed
+response goes to `verify_payment`) or `gateway: "payu"` (`checkout: {action_url, method, fields}`
+is posted to PayU as a top-level form, see `utils/redirectCheckout.ts`). PayU sends the payer back
+through `hostel360.api.payments.payu_return`, which redirects to `/hostel/fees?payment=<transaction>&status=…`;
+the fees page treats the status as a hint and shows what `get_payment_status` confirms.
+An invoice with a checkout still open stays payable: paying again resumes the same order.
+
+## Languages
+
+The language switch changes the app's own text (`i18n/`) and the server's: every request
+carries `_lang`, and `set_language` saves the choice as the user's language so notifications
+follow it too. Server messages are translated in `hostel360/locale/ta.po`.
 
 ## Code map
 
@@ -99,7 +117,8 @@ src/
   components/   shell, navigation, form controls (FormField, OtpInput, StarRating, ToggleSwitch),
                 dialogs, lists (InvoiceList, StepTimeline) and states (EmptyState, ErrorState, skeletons)
   views/        one file per route
-  utils/        boot payload, money/date formatting, sanitising admin HTML, Razorpay loader
+  utils/        boot payload, money/date and hostel-clock helpers, sanitising admin HTML,
+                Razorpay loader, redirect checkout form (PayU)
 plugins/frappe-page.ts   builds hostel360/www/hostel.html from the Vite output
 scripts/                 app icon drawing, dependency age check
 tests/                   Vitest suites

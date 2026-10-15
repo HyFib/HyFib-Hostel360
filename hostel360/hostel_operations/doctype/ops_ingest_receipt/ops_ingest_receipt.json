@@ -1,0 +1,82 @@
+{
+ "actions": [],
+ "autoname": "field:receipt_key",
+ "creation": "2026-10-15 20:00:00.000000",
+ "description": "One accepted host agent request. The receipt is written in the same transaction as the alert, backup or metrics it carried, so a repeated request is refused only when the first one was really committed.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "receipt_key",
+  "message_type",
+  "column_break_main",
+  "received_at",
+  "host"
+ ],
+ "fields": [
+  {
+   "fieldname": "receipt_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Receipt Key",
+   "read_only": 1,
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "message_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Message Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "received_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Received At",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "host",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Host",
+   "read_only": 1
+  }
+ ],
+ "in_create": 1,
+ "links": [],
+ "modified": "2026-10-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Operations",
+ "name": "Ops Ingest Receipt",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HyFib Operations"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "receipt_key",
+ "track_changes": 1
+}

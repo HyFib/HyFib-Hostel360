@@ -14,6 +14,7 @@ from hostel360.hostel_mess.utils import (
 	get_mess_settings,
 	get_reduction_approver_role,
 	get_reduction_decider_roles,
+	get_student_hostel,
 	in_migration,
 	iter_months,
 	send_notification,
@@ -58,15 +59,15 @@ class MessReductionApplication(Document):
 
 	def set_derived_values(self):
 		self.number_of_days = date_diff(self.to_date, self.from_date) + 1
-		student = frappe.db.get_value(
-			"Hostel Student", self.student, ["full_name", "current_hostel"], as_dict=True
-		)
-		if not student:
+		if not frappe.db.exists("Hostel Student", self.student):
 			frappe.throw(_("Student {0} does not exist.").format(self.student))
-		self.student_name = student.full_name
+		self.student_name = frappe.db.get_value("Hostel Student", self.student, "full_name")
 		if self.is_new() or self.has_value_changed("student"):
-			self.hostel = student.current_hostel
-			self.mess = get_mess_for_hostel(student.current_hostel)
+			# Kept after the student vacates, so the hostel's staff go on seeing the record.
+			self.hostel = get_student_hostel(self.student)
+			self.mess = get_mess_for_hostel(self.hostel)
+		elif not self.hostel:
+			self.hostel = get_student_hostel(self.student)
 
 	def validate_status_change(self):
 		if in_migration():

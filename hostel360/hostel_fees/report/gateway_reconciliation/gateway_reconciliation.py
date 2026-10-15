@@ -65,6 +65,7 @@ def get_rows(filters):
 			tx.failure_reason,
 			tx.completed_on,
 			tx.reconciled_on,
+			tx.refunded_amount,
 			pay.amount.as_("receipt_amount"),
 			pay.docstatus.as_("receipt_docstatus"),
 		)
@@ -88,6 +89,10 @@ def get_issue(row, stale_before, verify_before) -> str:
 			return _("Paid but no active receipt")
 		if money(row.receipt_amount) != money(row.amount):
 			return _("Receipt amount differs")
+		if money(row.refunded_amount) > 0:
+			return _("Gateway refunded {0}; receipt still shows the full amount").format(
+				money(row.refunded_amount)
+			)
 		if not row.reconciled_on and get_datetime(row.creation) < verify_before:
 			return _("Not yet verified with the gateway")
 	elif row.status in LIVE_TX_STATUSES and get_datetime(row.creation) < stale_before:
@@ -132,6 +137,7 @@ def get_columns():
 		{"fieldname": "payment_method", "label": _("Method"), "fieldtype": "Data", "width": 90},
 		{"fieldname": "completed_on", "label": _("Completed On"), "fieldtype": "Datetime", "width": 150},
 		{"fieldname": "reconciled_on", "label": _("Verified On"), "fieldtype": "Datetime", "width": 150},
+		{"fieldname": "refunded_amount", "label": _("Refunded"), "fieldtype": "Currency", "width": 110},
 		{"fieldname": "failure_reason", "label": _("Failure Reason"), "fieldtype": "Data", "width": 220},
 		{"fieldname": "test_mode", "label": _("Test"), "fieldtype": "Check", "width": 60},
 	]
@@ -142,9 +148,13 @@ def get_summary(rows):
 	failed = [row for row in rows if row.status in ("Failed", "Expired")]
 	open_rows = [row for row in rows if row.status in LIVE_TX_STATUSES]
 	attempts = len(success) + len(failed)
+	# Test-mode payments carry no real money.
+	collected = money(
+		sum(flt(row.amount) - flt(row.refunded_amount) for row in success if not cint(row.test_mode))
+	)
 	return [
 		{
-			"value": money(sum(flt(row.amount) for row in success)),
+			"value": collected,
 			"label": _("Collected Online"),
 			"datatype": "Currency",
 			"indicator": "Green",

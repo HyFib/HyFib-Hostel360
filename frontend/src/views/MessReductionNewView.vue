@@ -10,13 +10,14 @@ import { useSubmit } from "@/composables/useSubmit";
 import { t, tc, tv } from "@/i18n";
 import { studentArg, useSession } from "@/stores/session";
 import { showToast } from "@/stores/toast";
-import { inclusiveDays, toISODate } from "@/utils/format";
+import { inclusiveDays, siteNow, toISODate } from "@/utils/format";
 
 const router = useRouter();
-const { reductionMinDays } = useSession();
+const { reductionMinDays, siteTimeZone } = useSession();
 const { busy, error, run } = useSubmit();
 
-const tomorrow = new Date();
+// "Tomorrow" at the hostel, not on the phone's clock (a parent may be abroad).
+const tomorrow = siteNow(siteTimeZone.value);
 tomorrow.setDate(tomorrow.getDate() + 1);
 const minDate = toISODate(tomorrow);
 

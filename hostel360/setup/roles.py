@@ -12,6 +12,7 @@ MESS_MANAGER_ROLE = "Mess Manager"
 MESS_STAFF_ROLE = "Mess Staff"
 OPERATIONS_ROLE = "HyFib Operations"
 AUDITOR_ROLE = "Institution Auditor"
+SECURITY_ROLE = "Hostel Security"
 STUDENT_ROLE = "Hostel Student"
 PARENT_ROLE = "Hostel Parent"
 
@@ -31,6 +32,9 @@ STAFF_ROLES = frozenset(
 	}
 )
 PORTAL_ROLES = frozenset({STUDENT_ROLE, PARENT_ROLE})
+# Gate staff record check-out and return of students on approved leave; they are kept out of
+# STAFF_ROLES so they never see student records, fees or reports.
+GATE_ROLES = STAFF_ROLES | {SECURITY_ROLE}
 # Staff who may be assigned to and act on grievances. Auditors only observe.
 GRIEVANCE_HANDLER_ROLES = STAFF_ROLES - {AUDITOR_ROLE}
 
@@ -49,6 +53,7 @@ ROLES = (
 	(MESS_STAFF_ROLE, 1, 1, "Records daily stock receipts and issues for the mess."),
 	(OPERATIONS_ROLE, 1, 1, "HyFib Solutions support and operations: alerts, health and tickets."),
 	(AUDITOR_ROLE, 1, 1, "Read-only access to dashboards, reports and monitoring for institution officials."),
+	(SECURITY_ROLE, 1, 1, "Gate check-out and return of students on approved leave for assigned hostels."),
 	(STUDENT_ROLE, 0, 0, "Hostel resident. Uses the student portal with OTP login."),
 	(PARENT_ROLE, 0, 0, "Parent or guardian of a resident. Uses the parent portal with OTP login."),
 )
@@ -61,8 +66,9 @@ DESIGNATION_ROLES = {
 	"Mess Manager": [MESS_MANAGER_ROLE],
 	"Mess Staff": [MESS_STAFF_ROLE],
 	"Hostel Administrator": [ADMIN_ROLE],
+	"Security": [SECURITY_ROLE],
 }
 
 # Designations whose desk access is restricted to their assigned hostels through
 # User Permissions on the Hostel DocType.
-HOSTEL_SCOPED_DESIGNATIONS = frozenset({"Deputy Warden", "Mess Staff", "Office Staff"})
+HOSTEL_SCOPED_DESIGNATIONS = frozenset({"Deputy Warden", "Mess Staff", "Office Staff", "Security"})

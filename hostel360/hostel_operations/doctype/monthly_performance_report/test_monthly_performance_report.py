@@ -18,6 +18,9 @@ from hostel360.hostel_operations.tests.helpers import (
 
 MONTH = "2001-03"
 MONTH_START = get_datetime("2001-03-01 00:00:00")
+MONTH_MINUTES = 31 * 24 * 60
+# Used by tests that change whether a report was sent; MONTH stays untouched for the others.
+OTHER_MONTH = "2001-05"
 PORTAL_USER = "resident.report-test@example.com"
 
 
@@ -63,12 +66,22 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 
 	@classmethod
 	def build_synthetic_month(cls):
-		# Availability: 100 probe minutes, 2 of them down.
+		# Availability: the probe watched the first 100 minutes (50 of them down); readiness
+		# checks every five minutes cover the rest of the month except a 30-minute gap
+		# (15 March 10:00-10:30) in which nothing was measured at all.
 		probe = [
-			{"metric": "uptime_probe", "value": 0 if i in (40, 41) else 1, "recorded_at": add_to_date(MONTH_START, minutes=i)}
+			{"metric": "uptime_probe", "value": 0 if 40 <= i < 90 else 1, "recorded_at": add_to_date(MONTH_START, minutes=i)}
 			for i in range(100)
 		]
 		record_metrics(probe, source="Uptime Probe")
+		gap_start = int((at(15, 10) - MONTH_START).total_seconds() // 60)
+		readiness = [
+			{"metric": "app_ready", "value": 1, "recorded_at": add_to_date(MONTH_START, minutes=minute)}
+			for minute in range(100, MONTH_MINUTES, 5)
+			if not gap_start <= minute < gap_start + 30
+		]
+		for offset in range(0, len(readiness), 500):
+			record_metrics(readiness[offset : offset + 500], source="Health Check")
 		record_metrics(
 			[
 				{"metric": "cpu_percent", "value": 10, "recorded_at": at(2)},
@@ -149,9 +162,12 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 		self.assertEqual(str(doc.from_date), "2001-03-01")
 		self.assertEqual(str(doc.to_date), "2001-03-31")
 
-		self.assertAlmostEqual(doc.uptime_percent, 98.0)
-		self.assertEqual(doc.downtime_minutes, 2)
-		self.assertEqual(doc.uptime_source, "External uptime probe")
+		# 50 measured minutes down plus 30 unmonitored minutes, out of 44,640.
+		self.assertAlmostEqual(doc.uptime_percent, 99.821)
+		self.assertEqual(doc.downtime_minutes, 80)
+		self.assertEqual(doc.unmonitored_minutes, 30)
+		self.assertAlmostEqual(doc.monitoring_coverage_percent, 99.93)
+		self.assertEqual(doc.uptime_source, "External uptime probe + Application readiness checks")
 
 		self.assertEqual(doc.incidents, 2)
 		self.assertEqual(doc.critical_alerts, 5)
@@ -182,8 +198,9 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 			frappe.db.count("Hostel Student", {"status": "Active"}) if frappe.db.table_exists("Hostel Student") else 0
 		)
 		self.assertEqual(doc.active_students, expected_students)
-		self.assertIn("98.0%", doc.summary)
+		self.assertIn("99.821%", doc.summary)
 		self.assertIn("target missed", doc.summary)
+		self.assertIn("30 of those minutes had no availability measurement", doc.summary)
 
 	def test_generation_is_idempotent(self):
 		first = self.generate()
@@ -211,8 +228,95 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 		name = self.generate()
 		html = frappe.get_print("Monthly Performance Report", name, print_format=reports.PRINT_FORMAT)
 		self.assertIn("Monthly Server Performance Report", html)
-		self.assertIn("98.000%", html)
+		self.assertIn("99.821%", html)
+		self.assertIn("Monitoring coverage", html)
 		self.assertIn("HyFib Solutions Private Limited", html)
+
+	def isolate(self):
+		"""Tests in a class share one transaction; undo this test's changes when it ends."""
+		savepoint = "mpr_" + frappe.generate_hash(length=8)
+		frappe.db.savepoint(savepoint)
+
+		def restore():
+			frappe.db.rollback(save_point=savepoint)
+			clear_settings_cache()
+
+		self.addCleanup(restore)
+
+	def clear_institution_contacts(self):
+		configure_settings(report_recipients="")
+		frappe.db.set_single_value("Hostel Settings", "office_email", "")
+
+	def test_report_is_not_marked_sent_without_institution_recipients(self):
+		"""A copy to the HyFib helpdesk alone is not delivery to the institution (TR 13)."""
+		self.isolate()
+		self.clear_institution_contacts()
+		with (
+			DeliveryRecorder(),
+			patch.object(reports, "render_pdf", return_value=(b"%PDF-1.4 synthetic", "report.pdf")),
+			patch("frappe.sendmail") as sendmail,
+		):
+			name = reports.generate_monthly_performance_report(month=OTHER_MONTH, send=True)
+			sendmail.assert_not_called()
+			self.assertFalse(frappe.db.get_value("Monthly Performance Report", name, "sent_on"))
+			self.assertEqual(reports.report_recipients(), [])
+			alert = frappe.db.get_value("Ops Alert", {"open_key": reports.NO_RECIPIENTS_ALERT_KEY}, "name")
+			self.assertTrue(alert, "operations must be told the report is stuck")
+
+			# The hostel office address is the institution's fallback contact.
+			frappe.db.set_single_value("Hostel Settings", "office_email", "office@example.edu")
+			reports.generate_monthly_performance_report(month=OTHER_MONTH, send=True)
+		sendmail.assert_called_once()
+		self.assertEqual(set(sendmail.call_args.kwargs["recipients"]), {"office@example.edu", LEVEL_ONE_EMAIL})
+		self.assertTrue(frappe.db.get_value("Monthly Performance Report", name, "sent_on"))
+		self.assertEqual(frappe.db.get_value("Ops Alert", alert, "status"), "Resolved")
+
+	def test_catch_up_sends_a_report_held_back_on_the_first(self):
+		self.isolate()
+		self.clear_institution_contacts()
+		moment = get_datetime("2001-06-03 09:00:00")
+		with (
+			DeliveryRecorder(),
+			patch.object(reports, "render_pdf", return_value=(b"%PDF", "report.pdf")),
+			patch("frappe.sendmail") as sendmail,
+		):
+			name = reports.generate_monthly_performance_report(month=OTHER_MONTH, send=True)
+			status = reports.delivery_status(moment)
+			self.assertEqual((status["month"], status["name"], status["sent_on"]), (OTHER_MONTH, name, None))
+			self.assertTrue(status["applicable"])
+			# Still nobody to send it to: retried, but not sent and not marked sent.
+			reports.catch_up_monthly_report(moment)
+			sendmail.assert_not_called()
+			self.assertFalse(frappe.db.get_value("Monthly Performance Report", name, "sent_on"))
+
+			configure_settings(report_recipients="principal@example.edu")
+			self.assertEqual(reports.catch_up_monthly_report(moment), name)
+			self.assertIsNone(reports.catch_up_monthly_report(moment), "never e-mailed twice")
+		sendmail.assert_called_once()
+		self.assertFalse(reports.delivery_status(get_datetime("2001-06-01 06:00:00"))["applicable"], "before the 07:00 run")
+
+	def test_health_check_retries_and_escalates_an_unsent_report(self):
+		from hostel360.hostel_operations import health
+		from hostel360.hostel_operations.settings import get_settings
+
+		self.isolate()
+		self.clear_institution_contacts()
+		with DeliveryRecorder(), patch.object(reports, "render_pdf", return_value=(b"%PDF", "report.pdf")), patch("frappe.sendmail"):
+			reports.generate_monthly_performance_report(month=OTHER_MONTH, send=True)
+
+			def ctx(moment, read_only=True):
+				return frappe._dict(settings=get_settings(), now=get_datetime(moment), read_only=read_only)
+
+			self.assertEqual(health.check_monthly_report(ctx("2001-06-02 09:00:00")).status, health.WARN)
+			late = health.check_monthly_report(ctx("2001-06-04 09:00:00"))
+			self.assertEqual(late.status, health.CRIT)
+			self.assertIn(OTHER_MONTH, late.title)
+
+			configure_settings(report_recipients="principal@example.edu")
+			frappe.cache.delete(frappe.cache.make_key(health.REPORT_CATCH_UP_KEY))
+			fixed = health.check_monthly_report(ctx("2001-06-04 10:00:00", read_only=False))
+		self.assertEqual(fixed.status, health.OK)
+		self.assertTrue(frappe.db.get_value("Monthly Performance Report", f"MPR-{OTHER_MONTH}", "sent_on"))
 
 	def test_month_helpers(self):
 		self.assertEqual(reports.previous_month("2026-10-15"), "2026-09")

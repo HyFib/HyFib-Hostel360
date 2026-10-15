@@ -9,11 +9,15 @@ because a whole campus can share one public IP address.
 import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
+from frappe.utils import cstr
 
 from hostel360.auth import otp as otp_codes
+from hostel360.setup.roles import ADMIN_ROLE, OFFICE_ROLE, WARDEN_ROLE
 
 PORTAL_REDIRECT = "/hostel"
 FLOOD_LIMIT_PER_HOUR = 3000
+# Staff who may lift a sign-in lock after confirming with the number's owner.
+UNLOCK_ROLES = (ADMIN_ROLE, WARDEN_ROLE, OFFICE_ROLE, "System Manager")
 
 
 def _client_ip() -> str | None:
@@ -53,12 +57,31 @@ def verify_otp(mobile: str, otp: str, kind: str | None = None) -> dict:
 	return {"ok": True, "kind": result["kind"], "redirect": PORTAL_REDIRECT}
 
 
+@frappe.whitelist(methods=["POST"])
+def unlock_sign_in(mobile: str) -> dict:
+	"""Lift the one-hour sign-in lock on a number (desk staff only).
+
+	The lock follows repeated wrong codes. When the student or parent calls the office,
+	staff confirm who they are and can let them try again straight away.
+	"""
+	frappe.only_for(UNLOCK_ROLES)
+	otp_codes.unlock_number(mobile)
+	otp_codes.security_log("otp_number_unlocked", mobile, _client_ip(), by_hash=_user_hash())
+	return {"ok": True}
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def get_csrf_token() -> dict:
 	"""CSRF token for the current session (the SPA sends it as X-Frappe-CSRF-Token)."""
 	from frappe.sessions import get_csrf_token as session_csrf_token
 
 	return {"csrf_token": session_csrf_token()}
+
+
+def _user_hash() -> str:
+	import hashlib
+
+	return hashlib.sha256(cstr(frappe.session.user).encode()).hexdigest()[:12]
 
 
 def _ensure_portal_user(doctype: str, name: str) -> str:

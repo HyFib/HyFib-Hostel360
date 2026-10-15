@@ -4,10 +4,18 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 
 class MessItem(Document):
+	def before_save(self):
+		# The stock revision is written only by stock postings. A form opened before a posting
+		# still carries the old number; keep the stored one so the counter never moves back.
+		if not self.is_new():
+			self.stock_revision = cint(
+				frappe.db.get_value("Mess Item", self.name, "stock_revision", for_update=True)
+			)
+
 	def validate(self):
 		self.item_name = (self.item_name or "").strip()
 		if self.item_code:

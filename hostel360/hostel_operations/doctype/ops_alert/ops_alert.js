@@ -34,6 +34,15 @@ frappe.ui.form.on("Ops Alert", {
 				);
 			});
 		}
+		// CERT-In reportable incidents have a six-hour clock that starts when they are noticed.
+		const declare = frm.add_custom_button(
+			__("Declare Security Incident"),
+			() => declare_security_incident(frm),
+			frm.doc.category === "Security" ? null : __("More")
+		);
+		if (frm.doc.category === "Security" && frm.doc.severity === "Critical") {
+			declare.addClass("btn-danger");
+		}
 		if (["Open", "Acknowledged"].includes(status)) {
 			frm.add_custom_button(
 				__("Suppress"),
@@ -93,6 +102,20 @@ function show_alert_headline(frm) {
 		parts.push(__("open for {0} minutes", [doc.duration_minutes]));
 	}
 	frm.dashboard.set_headline(parts.join(" · "), doc.status === "Resolved" ? "green" : OPS_ALERT_COLOURS[doc.severity]);
+}
+
+function declare_security_incident(frm) {
+	frappe.call({
+		method: "hostel360.hostel_operations.doctype.security_incident.security_incident.declare_from_alert",
+		args: { alert: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Opening the security incident..."),
+		callback(r) {
+			if (r.message) {
+				frappe.set_route("Form", "Security Incident", r.message);
+			}
+		},
+	});
 }
 
 function call_alert_action(frm, method, args, message) {

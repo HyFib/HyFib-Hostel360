@@ -15,7 +15,10 @@
   "column_break_billing",
   "bill_rounding",
   "stock_section",
-  "low_stock_alert"
+  "low_stock_alert",
+  "column_break_stock",
+  "require_indent_for_receipts",
+  "indent_warden_approval_above"
  ],
  "fields": [
   {
@@ -96,11 +99,31 @@
    "fieldname": "low_stock_alert",
    "fieldtype": "Check",
    "label": "Send Weekly Low Stock Alert"
+  },
+  {
+   "fieldname": "column_break_stock",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Goods that are not perishable can be received only against an approved indent, and no more than the approved quantity. Perishables (milk, vegetables, eggs…) can still be bought without one.",
+   "fieldname": "require_indent_for_receipts",
+   "fieldtype": "Check",
+   "label": "Receive Stock Only Against Approved Indents"
+  },
+  {
+   "default": "0",
+   "description": "Indents estimated above this amount must be approved by a Hostel Warden or Hostel Administrator. 0 means a Mess Manager may approve any indent raised by someone else.",
+   "fieldname": "indent_warden_approval_above",
+   "fieldtype": "Currency",
+   "label": "Warden Approval for Indents Above",
+   "non_negative": 1,
+   "options": ""
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Mess",
  "name": "Mess Settings",

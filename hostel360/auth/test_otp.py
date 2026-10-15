@@ -24,6 +24,14 @@ def clear_otp_keys(mobile: str, ip: str | None = None) -> None:
 	otp._delete(*names)
 
 
+def error_text(callable_, *args, **kwargs) -> str:
+	try:
+		callable_(*args, **kwargs)
+	except (frappe.AuthenticationError, frappe.ValidationError) as e:
+		return f"{type(e).__name__}: {e}"
+	return "no error"
+
+
 class OTPTestCase(IntegrationTestCase):
 	"""Shared set-up: identities and delivery are stubbed; Redis keys are cleaned per test."""
 
@@ -34,8 +42,11 @@ class OTPTestCase(IntegrationTestCase):
 		self.delivery_ok = {"SMS": True, "WhatsApp": True}
 		self.mobiles: list[str] = []
 
-		def fake_send(mobile, code, channel):
+		self.timeouts = []
+
+		def fake_send(mobile, code, channel, timeout=None):
 			self.sent.append((mobile, code, channel))
+			self.timeouts.append(timeout)
 			return self.delivery_ok.get(channel, False)
 
 		for target, kwargs in (
@@ -198,6 +209,22 @@ class TestOTPFlow(OTPTestCase):
 			otp.verify_code(unknown, "123456")
 		self.assertEqual(str(known_error.exception), str(unknown_error.exception))
 
+	def test_unknown_number_verification_matches_a_registered_one_after_a_request(self):
+		# send_otp then verify_otp must not tell a resident's number from any other.
+		known = self.new_mobile(otp.KIND_STUDENT)
+		unknown = self.new_mobile()
+		otp.request_code(known, ip=TEST_IP)
+		wrong = "000000" if self.last_code() != "000000" else "111111"
+		otp.request_code(unknown, ip=TEST_IP)
+		self.assertEqual(len(self.sent), 1)
+		# A code is stored for the unknown number too; it is not digits, so it never matches.
+		self.assertIsNotNone(otp._load_code(otp.mobile_ref(unknown)))
+		for _attempt in range(otp.get_policy().max_attempts + 1):
+			self.assertEqual(
+				error_text(otp.verify_code, known, wrong, ip=TEST_IP),
+				error_text(otp.verify_code, unknown, wrong, ip=TEST_IP),
+			)
+
 	def test_shared_number_asks_who_is_signing_in(self):
 		mobile = self.new_mobile(otp.KIND_STUDENT, otp.KIND_PARENT)
 		otp.request_code(mobile)
@@ -220,14 +247,76 @@ class TestOTPFlow(OTPTestCase):
 
 	def test_number_is_locked_after_repeated_failures(self):
 		mobile = self.new_mobile(otp.KIND_STUDENT)
-		for _attempt in range(otp.FAILED_VERIFICATIONS_PER_HOUR):
-			with self.assertRaises((frappe.AuthenticationError, frappe.RateLimitExceededError)):
-				otp.verify_code(mobile, "999999")
+		policy = otp.get_policy()
+		failures = 0
+		while failures < otp.FAILED_VERIFICATIONS_PER_HOUR:
+			self.allow_resend(mobile)
+			otp.request_code(mobile)
+			wrong = "000000" if self.last_code() != "000000" else "111111"
+			for _attempt in range(min(policy.max_attempts, otp.FAILED_VERIFICATIONS_PER_HOUR - failures)):
+				with self.assertRaises((frappe.AuthenticationError, frappe.RateLimitExceededError)):
+					otp.verify_code(mobile, wrong)
+				failures += 1
 		with self.assertRaises(frappe.RateLimitExceededError):
 			otp.verify_code(mobile, "999999")
+		self.allow_resend(mobile)
 		with self.assertRaises(frappe.RateLimitExceededError):
 			otp.request_code(mobile)
-		self.assertEqual(self.sent, [])
+
+	def test_verification_without_a_code_never_locks_the_number(self):
+		# No code was sent, so nothing can be guessed: such attempts count for the network
+		# only. Otherwise anyone could keep a resident out without a single SMS going out.
+		mobile = self.new_mobile(otp.KIND_STUDENT)
+		for _attempt in range(otp.FAILED_VERIFICATIONS_PER_HOUR * 2):
+			with self.assertRaises(frappe.AuthenticationError):
+				otp.verify_code(mobile, "999999", ip=TEST_IP)
+		self.assertEqual(otp._ttl(f"lock:{otp.mobile_ref(mobile)}"), 0)
+		self.assertEqual(otp._count(f"ipfail:{otp.ip_ref(TEST_IP)}"), otp.FAILED_VERIFICATIONS_PER_HOUR * 2)
+		otp.request_code(mobile, ip=TEST_IP)
+		self.assertTrue(otp.verify_code(mobile, self.last_code(), ip=TEST_IP)["ok"])
+
+	def test_guesses_are_reserved_before_they_are_compared(self):
+		# Simultaneous requests each take their attempt before comparing, so the ones past
+		# the limit are refused without a comparison - even when they carry the right code.
+		mobile = self.new_mobile(otp.KIND_STUDENT)
+		policy = otp.get_policy()
+		ref = otp.mobile_ref(mobile)
+		otp.request_code(mobile)
+		code = self.last_code()
+		for _other_request in range(policy.max_attempts):
+			otp._incr_window(f"attempts:{ref}", policy.expiry)
+		with patch("hostel360.auth.otp.code_digest", wraps=otp.code_digest) as digest:
+			with self.assertRaises(frappe.AuthenticationError) as refused:
+				otp.verify_code(mobile, code)
+		digest.assert_not_called()
+		self.assertIn("too many times", str(refused.exception))
+
+		# The same for the hourly failure limit of the number.
+		mobile = self.new_mobile(otp.KIND_STUDENT)
+		ref = otp.mobile_ref(mobile)
+		otp.request_code(mobile)
+		code = self.last_code()
+		for _other_request in range(otp.FAILED_VERIFICATIONS_PER_HOUR):
+			otp._incr_window(f"fail:{ref}", otp.HOUR)
+		with patch("hostel360.auth.otp.code_digest", wraps=otp.code_digest) as digest:
+			with self.assertRaises(frappe.RateLimitExceededError):
+				otp.verify_code(mobile, code)
+		digest.assert_not_called()
+		self.assertGreater(otp._ttl(f"lock:{ref}"), 0)
+
+	def test_right_code_does_not_count_as_a_failure(self):
+		mobile = self.new_mobile(otp.KIND_STUDENT, otp.KIND_PARENT)
+		ref = otp.mobile_ref(mobile)
+		otp.request_code(mobile, ip=TEST_IP)
+		code = self.last_code()
+		policy = otp.get_policy()
+		# Asking who is signing in neither uses an attempt nor counts as a failure.
+		for _question in range(policy.max_attempts + 1):
+			self.assertFalse(otp.verify_code(mobile, code, ip=TEST_IP)["ok"])
+		self.assertEqual(otp._count(f"attempts:{ref}"), 0)
+		self.assertEqual(otp._count(f"fail:{ref}"), 0)
+		self.assertEqual(otp._count(f"ipfail:{otp.ip_ref(TEST_IP)}"), 0)
+		self.assertTrue(otp.verify_code(mobile, code, kind="student", ip=TEST_IP)["ok"])
 
 	def test_invalid_mobile_number(self):
 		for value in ("12345", "5123456789", "abcdefghij", ""):
@@ -257,6 +346,44 @@ class TestOTPFlow(OTPTestCase):
 		with patch("hostel360.auth.otp.get_policy", return_value=policy):
 			otp.request_code(mobile, channel="whatsapp")
 		self.assertEqual([s[2] for s in self.sent], ["SMS"])
+
+
+class TestBoundedDelivery(OTPTestCase):
+	"""The code goes out inside the sign-in request, so the send must stay short."""
+
+	def test_provider_calls_get_a_short_timeout(self):
+		mobile = self.new_mobile(otp.KIND_STUDENT)
+		otp.request_code(mobile, channel="sms")
+		connect, read = self.timeouts[-1]
+		self.assertLessEqual(connect, otp.OTP_CONNECT_TIMEOUT)
+		self.assertLessEqual(read, otp.OTP_READ_TIMEOUT)
+
+	def test_time_budget_stops_further_channels(self):
+		policy = otp.get_policy()
+		policy.channels = ["SMS", "WhatsApp"]
+		self.delivery_ok = {"SMS": False, "WhatsApp": False}
+		# request start, first channel, second channel, send-time bookkeeping
+		clock = iter([0.0, 0.0, otp.OTP_SEND_BUDGET_SECONDS, otp.OTP_SEND_BUDGET_SECONDS])
+		mobile = self.new_mobile(otp.KIND_STUDENT)
+		with (
+			patch("hostel360.auth.otp.get_policy", return_value=policy),
+			patch("hostel360.auth.otp._clock", side_effect=lambda: next(clock)),
+		):
+			otp.request_code(mobile, channel="sms")
+		self.assertEqual([s[2] for s in self.sent], ["SMS"])
+
+	def test_sends_in_flight_are_capped(self):
+		held = [otp._acquire_send_slot() for _slot in range(otp.MAX_SENDS_IN_FLIGHT)]
+		self.addCleanup(lambda: [otp._release_send_slot(token) for token in held])
+		self.assertTrue(all(held))
+		mobile = self.new_mobile(otp.KIND_STUDENT)
+		response = otp.request_code(mobile)
+		self.assertTrue(response["sent"])  # same answer as always
+		self.assertEqual(self.sent, [])
+		otp._release_send_slot(held.pop())
+		self.allow_resend(mobile)
+		otp.request_code(mobile)
+		self.assertEqual(len(self.sent), 1)
 
 
 class TestFixedDevelopmentCode(OTPTestCase):
@@ -319,6 +446,37 @@ class TestAuthAPI(OTPTestCase):
 		self.assertEqual(response, {"ok": False, "choose": ["student", "parent"]})
 		login_manager.login_as.assert_not_called()
 
+	def test_staff_can_lift_a_sign_in_lock(self):
+		from hostel360.api.auth import unlock_sign_in
+		from hostel360.setup.roles import OFFICE_ROLE, STUDENT_ROLE
+
+		mobile = self.new_mobile(otp.KIND_STUDENT)
+		ref = otp.mobile_ref(mobile)
+		frappe.cache.set(otp._key(f"lock:{ref}"), "1", ex=otp.LOCKOUT_SECONDS)
+
+		def user_with(role):
+			doc = frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": f"otp-{frappe.generate_hash(length=8)}@example.com",
+					"first_name": "Otp",
+					"send_welcome_email": 0,
+					"roles": [{"role": role}],
+				}
+			)
+			doc.flags.no_welcome_mail = True
+			return doc.insert(ignore_permissions=True).name
+
+		with self.set_user(user_with(STUDENT_ROLE)), self.assertRaises(frappe.PermissionError):
+			unlock_sign_in(mobile)
+		self.assertGreater(otp._ttl(f"lock:{ref}"), 0)
+
+		with self.set_user(user_with(OFFICE_ROLE)):
+			self.assertEqual(unlock_sign_in(mobile), {"ok": True})
+		self.assertEqual(otp._ttl(f"lock:{ref}"), 0)
+		otp.request_code(mobile)
+		self.assertEqual(len(self.sent), 1)
+
 
 class TestIdentityResolution(IntegrationTestCase):
 	"""Real Hostel Student and Hostel Guardian records."""
@@ -350,9 +508,8 @@ class TestIdentityResolution(IntegrationTestCase):
 			}
 		).insert(ignore_permissions=True)
 		# Status and validation normally change through Hostel People's own actions.
-		if state:
-			frappe.db.set_value("Hostel Student", doc.name, state)
-			doc.reload()
+		frappe.db.set_value("Hostel Student", doc.name, {"validation_status": "Validated", **state})
+		doc.reload()
 		return doc
 
 	def make_guardian(self, student=None, **state):
@@ -379,6 +536,25 @@ class TestIdentityResolution(IntegrationTestCase):
 			[(i.kind, i.name) for i in otp.resolve_identities(student.mobile_number)],
 			[("student", student.name)],
 		)
+		self.assertEqual(
+			[(i.kind, i.name) for i in otp.resolve_identities(guardian.mobile_number)],
+			[("parent", guardian.name)],
+		)
+
+	def test_unvalidated_students_and_their_parents_cannot_sign_in(self):
+		# Tender 3.1 and 4.1: validated against the college register before the first sign-in.
+		pending = self.make_student(validation_status="Pending")
+		self.assertEqual(otp.resolve_identities(pending.mobile_number), [])
+		self.assertEqual(otp.resolve_identities(self.make_guardian(pending).mobile_number), [])
+
+		left = self.make_student(status="Vacated")
+		self.assertEqual(otp.resolve_identities(self.make_guardian(left).mobile_number), [])
+
+		# One validated resident ward is enough for the parent.
+		guardian = self.make_guardian(pending)
+		resident = self.make_student()
+		resident.append("guardians", {"guardian": guardian.name, "relation": "Father"})
+		resident.save(ignore_permissions=True)
 		self.assertEqual(
 			[(i.kind, i.name) for i in otp.resolve_identities(guardian.mobile_number)],
 			[("parent", guardian.name)],

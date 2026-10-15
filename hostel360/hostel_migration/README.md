@@ -1,18 +1,22 @@
 # Hostel Migration
 
-Legacy data migration (tender TR 5), the exit export (TR 22), demonstration/UAT data and
-non-interactive site setup for HyFib Hostel360.
+Legacy data migration (tender TR 5), the exit export and the deletion of the institution's
+data after exit (TR 22), demonstration/UAT data and non-interactive site setup for HyFib
+Hostel360.
 
 | Tool | Command | Desk |
 |---|---|---|
 | Load legacy data | `bench --site SITE h360-migrate --source DIR --mapping FILE [--dry-run] [--entity NAME ...]` | **Migration Run** |
-| Exit export | `bench --site SITE h360-export --output DIR [--no-files] [--encrypt] [--passphrase-file FILE]` | – |
-| Check an export | `bench h360-verify-export --path DIR_OR_ARCHIVE [--passphrase-file FILE] [--extract-to DIR]` | – |
+| Exit export | `bench --site SITE h360-export --output DIR [--no-files] [--encrypt] [--passphrase-file FILE]` | **Exit Export Log** |
+| Check an export | `bench [--site SITE] h360-verify-export --path DIR_OR_ARCHIVE [--passphrase-file FILE] [--extract-to DIR]` | **Exit Export Log** |
+| Delete the data after exit | `bench --site SITE h360-purge-institution-data --confirm-site SITE --acknowledgement-reference REF [--execute]` | **Exit Export Log** |
+| Check a deletion certificate | `bench [--site SITE] h360-verify-deletion-certificate --path FILE.json [--key-file FILE]` | – |
 | Demo / UAT data | `bench --site SITE h360-demo-data [--students 60] [--seed 2026]` | – |
 | New site setup | `bench --site SITE h360-setup --institution-name ... --short-name ... --admin-email ... --portal-url ...` | – |
 
-Exit codes: `0` success, `1` failure, `2` finished but something needs attention (failed
-rows, a reconciliation mismatch, demo records that could not be created).
+Exit codes: `0` success, `1` failure or refusal, `2` finished but something needs attention
+(failed rows, a reconciliation mismatch, demo records that could not be created, items left
+after a deletion).
 
 ---
 
@@ -299,6 +303,21 @@ the encrypted archive (asks for the passphrase), checks every file against the m
 reports missing, altered and unlisted files, and with `--extract-to DIR` keeps the
 decrypted, unpacked copy. It needs no site.
 
+**Export log**: every finished export is recorded in **Exit Export Log** (name, time, whether
+files are included, size, the SHA-256 of `manifest.json` and of the archive, and where it
+was written). Run the verification *with the site* so the result is recorded there:
+
+```
+bench --site hostel.example.ac.in h360-verify-export --path /srv/exit/hostel360-export-...tar.gz.h360enc \
+      --passphrase-file /root/exit.pass
+```
+
+The log row becomes *Verified* only when every file matches **and** `manifest.json` is the
+one written when the export was made (a copy with a rewritten manifest is *Verification
+Failed*, even if its files match that manifest). An export made before exports were logged
+is adopted into the log the first time it verifies. The deletion after exit (section 5)
+relies on this record.
+
 Decrypting without Hostel360 (Python 3 with the `cryptography` package):
 
 ```python
@@ -370,3 +389,109 @@ first **Hostel Administrator** (also System Manager unless `--no-system-manager`
 random password that is printed once. Two-factor sign-in is enrolled at first login.
 Running it again re-applies the settings and leaves an existing administrator's password
 alone unless `--reset-password` is given.
+
+---
+
+## 5. Deleting the institution's data after exit (TR 22)
+
+The bid commits HyFib to delete all institutional data permanently once ACGCET confirms in
+writing that it has received the exit export, and to issue a deletion certificate. The
+application part of that is one command; the stores outside the application are destroyed
+with the infrastructure exit runbook (5.5).
+
+### 5.1 Before deleting
+
+1. Make a complete export **with files** and keep its passphrase apart from it:
+   `bench --site SITE h360-export --output /srv/exit --encrypt --passphrase-file /root/exit.pass`
+2. Verify it on the site (section 2) so the log shows it *Verified*.
+3. Hand it over. Record ACGCET's written confirmation of receipt: its reference number,
+   date and signatory. The reference is required by the command and printed on the
+   certificate.
+
+### 5.2 Dry run (the default)
+
+```
+bench --site hostel.example.ac.in h360-purge-institution-data \
+      --confirm-site hostel.example.ac.in --acknowledgement-reference "ACGCET/HOSTEL/2027/014"
+```
+
+Nothing is deleted. The command checks the safeguards and lists, per DocType and per
+store, what would be deleted, which accounts are kept, which records were added or changed
+after the export was made (they are not in it), and where the certificate will be written.
+
+Safeguards:
+
+* `--confirm-site` must repeat the site given with `--site`.
+* `--acknowledgement-reference` is required (3 to 140 characters, one line).
+* The newest **verified** export of the site must be at most **30 days** old and include the
+  uploaded files. Otherwise the command refuses; `--force-without-export` overrides only
+  this check, and the certificate states that the deletion was forced and why.
+* Without `--execute` nothing is deleted; with it, the command asks once more at a terminal
+  (`--yes` skips that question in scripts).
+* The certificate may not be written inside the site folder or the public assets folder.
+
+### 5.3 Deleting
+
+Add `--execute`. The site is put into maintenance mode and its scheduler paused (they stay
+so: the site is being retired), then, in one database transaction:
+
+| Deleted | Details |
+|---|---|
+| Hostel360 records | Every row of every Hostel360 DocType, child tables and settings included, with their encrypted secrets (`__Auth`). |
+| Records pointing at them | File, Version (audit trail), Comment, Communication (and its links), Activity Log, Access Log (including exports of Hostel360 reports), View Log, Notification Log, ToDo, DocShare, Document Follow, Tag Link, Email Queue (and recipients), Error Log (also tracebacks from Hostel360 code), Scheduled Job Log entries mentioning Hostel360, Deleted Document copies, Prepared Report, Data Import (and its log), Submission Queue, Integration Request, Webhook Request Log, Document Share Key, Reminder, Workflow Action, Auto Repeat, Event, Route History of Hostel360 pages, Unhandled Email, search-index rows. |
+| People's accounts | Users linked from a student, guardian or staff record, and users holding an institution role (Hostel Administrator, Warden, Deputy Warden, Office Staff, Mess Manager, Mess Staff, Institution Auditor, Student, Parent), with roles, user permissions, sessions, two-factor secrets, saved list settings, defaults, contacts, notification settings, login history and personal-data requests. HyFib Operations accounts and Administrator stay. |
+| Files | Uploaded files attached to anything deleted, uploads attached to nothing, and any file in `public/files` or `private/files` that no remaining record uses. Frappe's own theme stylesheets in `public/files/website_theme` stay. |
+| Local copies | Everything in `private/backups` (Frappe's own backups) and `private/migration` (legacy extracts), and this server's copy of the exit export (archive, `.sha256` file, folder) as recorded in Exit Export Log (`--keep-export-copy` leaves it). Only paths named `hostel360-export-*` are ever removed from there. |
+
+Afterwards every selection is counted again; anything still present (or a file that could
+not be removed) is listed on the certificate and the command exits with `2`.
+
+The Exit Export Log is kept: it holds names, checksums and paths, no student or parent
+data, and is stamped with the acknowledgement reference, the time and the certificate. It
+goes with the site database in 5.5.
+
+If the database step fails, it is rolled back and nothing is deleted; the site stays in
+maintenance mode with the scheduler paused (`bench --site SITE set-maintenance-mode off`,
+`bench --site SITE scheduler resume` to reopen it). If the command stops after the database
+step, run it again: it finishes the files and the next certificate reports the interrupted
+run.
+
+### 5.4 The certificate
+
+Written to `<bench>/hostel360-exit/` (or `--certificate-dir`), readable by the owner only:
+
+* `H360-DEL-<site>-<timestamp>.json`: the authoritative, signed certificate;
+* `.md` and, when the PDF renderer is available, `.pdf`: the same content for the file,
+  with a line for the authorised signatory.
+
+It records the site, institution, acknowledgement reference, start and end times, operator
+and host, the export it relied on (name, dates, **manifest SHA-256**, archive SHA-256), the
+row count per Hostel360 DocType and per related record type, accounts, files and bytes,
+the check afterwards, what was kept and why, and the stores still to be destroyed.
+
+The signature is HMAC-SHA256 over the canonical JSON (sorted keys, no spaces, UTF-8) with a
+key derived from the site's `encryption_key` (`HMAC-SHA256(encryption_key,
+"hostel360/deletion-certificate/v1")`); its fingerprint is printed on the certificate. Check
+it while the site exists with `bench --site SITE h360-verify-deletion-certificate --path
+FILE.json`, and afterwards with `--key-file` holding the encryption key. HyFib keeps that key
+in its password vault with the site's other recovery secrets for as long as the
+certificate must be verifiable; it decrypts nothing once the backups are gone.
+
+### 5.5 Outside the application (exit runbook)
+
+Listed on every certificate under "Still to be destroyed", each signed off separately:
+
+1. Drop the database and site folder **without** a backup: `bench drop-site SITE --no-backup
+   --force`, then delete `<bench>/archived/sites/SITE*` (drop-site moves the folder there).
+2. Off-site backups: every restic snapshot of the server and every object **version** and
+   unfinished multipart upload in the backup bucket (ap-mumbai-1). The server's own
+   credentials cannot delete versions; this needs the tenancy administrator.
+3. Block-volume and boot-volume backups in both regions, including cross-region copies and
+   the ad-hoc pre-deploy and pre-restore snapshots, which never expire once the server and
+   its prune timer are gone.
+4. Pre-deployment database dumps (`/srv/hostel360/backups/pre-deploy`) and the restic cache.
+5. The export passphrase file and any copy of the export outside this server.
+6. The site's Redis data, with the containers.
+7. Logs kept under the CERT-In directions (OCI Logging, load balancer, host security and
+   site logs) are **not** deleted early: they expire after 180 days, and the certificate
+   gives that date.

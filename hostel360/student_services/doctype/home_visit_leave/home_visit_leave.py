@@ -8,16 +8,22 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_to_date, date_diff, get_datetime, getdate, now_datetime
 
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE
 from hostel360.student_services import notifications
 from hostel360.student_services.utils import (
 	assert_student_eligible,
+	assert_unchanged,
 	assert_warden_approver,
 	get_mess_setting,
+	get_role_users,
 	get_setting,
 	get_student,
 	get_warden_approvers,
 	in_migration,
 	is_staff_user,
+	load_for_action,
+	recheck_scope,
+	student_hostel,
 )
 
 PENDING_STATUSES = ("Pending Parent Approval", "Pending Warden Approval")
@@ -29,13 +35,41 @@ CANCELLABLE_STATUSES = (*PENDING_STATUSES, "Approved")
 BACKDATE_TOLERANCE_MINUTES = 60
 # For mess reduction a travel day counts as a day away when most of its meals are missed.
 MESS_DAY_CUTOFF_HOUR = 12
+REDUCTION = "Mess Reduction Application"
+REDUCTION_OPEN_STATUSES = ("Pending", "Approved")
+
+# Taken from the student and the applicant when the leave is created; never edited after.
+IDENTITY_FIELDS = ("student", "hostel", "room", "applied_by", "applied_by_user")
+# Set only by the decision and movement actions (save_status), never by an ordinary save.
+WORKFLOW_FIELDS = (
+	"status",
+	"parent_approval_status",
+	"parent_guardian",
+	"parent_action_on",
+	"parent_remarks",
+	"warden_approval_status",
+	"warden_user",
+	"warden_action_on",
+	"warden_remarks",
+	"cancelled_by",
+	"checked_out_on",
+	"returned_on",
+	"overdue_since",
+	"mess_reduction",
+)
 
 
 class HomeVisitLeave(Document):
 	def validate(self):
 		self.validate_dates()
-		if self.is_new() or self.has_value_changed("student"):
-			self.set_student_details()
+		if self.is_new():
+			student = self.set_student_details()
+		else:
+			self.validate_protected_fields()
+		# Before any check whose message would describe another hostel's records.
+		recheck_scope(self)
+		if self.is_new() and not in_migration():
+			assert_student_eligible(student, _("Leave"))
 		self.validate_dates_locked()
 		if not in_migration() and (
 			self.is_new() or self.has_value_changed("from_datetime") or self.has_value_changed("to_datetime")
@@ -58,14 +92,26 @@ class HomeVisitLeave(Document):
 		if get_datetime(self.to_datetime) <= get_datetime(self.from_datetime):
 			frappe.throw(_("Return date and time must be after the leaving date and time."))
 
-	def set_student_details(self):
+	def set_student_details(self) -> frappe._dict:
 		student = get_student(self.student)
-		if not in_migration():
-			assert_student_eligible(student, _("Leave"))
 		self.student_name = student.full_name
 		if not (in_migration() and self.hostel):
-			self.hostel = student.current_hostel
+			self.hostel = student_hostel(student)
 			self.room = student.get("current_room")
+		return student
+
+	def validate_protected_fields(self):
+		if in_migration():
+			return
+		assert_unchanged(
+			self, IDENTITY_FIELDS, _("{0} cannot be changed. Cancel this leave and apply again if they are wrong.")
+		)
+		if not self.flags.leave_transition:
+			assert_unchanged(
+				self,
+				WORKFLOW_FIELDS,
+				_("{0} can only be changed with the Approve, Reject, Checked Out, Returned and Cancel Leave actions."),
+			)
 
 	def validate_dates_locked(self):
 		if self.is_new() or in_migration():
@@ -112,6 +158,10 @@ class HomeVisitLeave(Document):
 			return
 		self.applied_by = self.applied_by or "Student"
 		self.applied_by_user = self.applied_by_user or frappe.session.user
+		# A new leave carries no decision or movement, whatever the request said.
+		for fieldname in WORKFLOW_FIELDS:
+			if not (fieldname == "parent_guardian" and self.applied_by == "Parent"):
+				self.set(fieldname, None)
 		self.warden_approval_status = "Pending"
 		approver_guardians = self.get_approver_guardians()
 
@@ -159,7 +209,11 @@ class HomeVisitLeave(Document):
 
 	def save_status(self):
 		self.flags.ignore_permissions = True
-		self.save()
+		self.flags.leave_transition = True
+		try:
+			self.save()
+		finally:
+			self.flags.leave_transition = False
 
 	# ------------------------------------------------------------------ decisions
 
@@ -184,7 +238,7 @@ class HomeVisitLeave(Document):
 			self.notify_decided()
 
 	def apply_warden_decision(self, approve: bool, remarks: str | None, user: str):
-		assert_warden_approver(user, self.hostel)
+		assert_warden_approver(user, self.hostel, self.student)
 		if approve and self.status != "Pending Warden Approval":
 			if self.status == "Pending Parent Approval":
 				frappe.throw(_("This leave is still waiting for the parent's approval."))
@@ -254,22 +308,77 @@ class HomeVisitLeave(Document):
 		self.cancel_mess_reduction(user)
 
 	def cancel_mess_reduction(self, user: str):
+		"""Withdraw the mess reduction raised for this leave, now that the leave is cancelled.
+
+		The student was in the hostel after all, so the reduction must go whoever cancelled
+		the leave. Their right to cancel the leave has been checked; the rules for cancelling
+		a reduction directly (a student may not once it has started, office staff may not at
+		all) do not apply to one that exists only because of this leave, so the system
+		withdraws it. When that is impossible (the month is already billed) the people who
+		handle reductions are told, so the bill can be corrected by hand.
+		"""
 		if not self.mess_reduction:
 			return
 		try:
 			from hostel360.hostel_mess.services import cancel_mess_reduction
 		except ImportError:
 			return
+		reduction = frappe.db.get_value(REDUCTION, self.mess_reduction, ["status", "home_visit_leave"], as_dict=True)
+		if not reduction or reduction.status not in REDUCTION_OPEN_STATUSES:
+			return
+		withdrawn_by = "Administrator" if reduction.home_visit_leave == self.name else user
+
 		frappe.db.savepoint("leave_cancel_reduction")
 		try:
-			cancel_mess_reduction(self.mess_reduction, user)
-		except frappe.ValidationError as e:
+			cancel_mess_reduction(self.mess_reduction, withdrawn_by)
+		except (frappe.ValidationError, frappe.PermissionError) as e:
 			frappe.db.rollback(save_point="leave_cancel_reduction")
 			frappe.clear_last_message()
+			reason = str(e)
 			self.add_comment(
 				"Info",
-				_("Mess reduction {0} could not be cancelled automatically: {1}").format(self.mess_reduction, str(e)),
+				_("Mess reduction {0} could not be cancelled automatically: {1}").format(self.mess_reduction, reason),
 			)
+			self.alert_reduction_handlers(reason)
+			return
+		self.add_comment("Info", _("Mess reduction {0} was cancelled with the leave.").format(self.mess_reduction))
+
+	def alert_reduction_handlers(self, reason: str):
+		"""Desk notification to the people who decide mess reductions for this student and to
+		the manager of the mess, who corrects the bill."""
+		from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
+
+		users = set(get_warden_approvers(self.hostel, self.student))
+		try:
+			from hostel360.hostel_mess.utils import get_reduction_decider_roles
+
+			roles = set(get_reduction_decider_roles())
+		except ImportError:
+			roles = set()
+		# Deputy wardens are already included for this hostel only; IT administrators are not
+		# the people who correct a mess bill.
+		users.update(get_role_users(roles - {DEPUTY_WARDEN_ROLE, "System Manager"}))
+		mess = frappe.db.get_value(REDUCTION, self.mess_reduction, "mess")
+		manager = mess and frappe.db.get_value("Hostel Mess", mess, "mess_manager")
+		users.update([manager] if manager else get_role_users({MESS_MANAGER_ROLE}))
+		if not users:
+			return
+		subject = frappe.utils.escape_html(
+			_("Leave {0} of {1} was cancelled, but its mess reduction {2} is still in force.").format(
+				self.name, self.student_name or self.student, self.mess_reduction
+			)
+		)
+		enqueue_create_notification(
+			sorted(users),
+			{
+				"type": "Alert",
+				"document_type": REDUCTION,
+				"document_name": self.mess_reduction,
+				"subject": subject,
+				"email_content": f"{subject}<br><br>{frappe.utils.escape_html(reason)}",
+				"from_user": frappe.session.user,
+			},
+		)
 
 	def record_check_out(self, user: str, checked_out_on=None):
 		if self.status != "Approved":
@@ -294,7 +403,7 @@ class HomeVisitLeave(Document):
 		self.save_status()
 		notifications.send(
 			"leave_overdue",
-			notifications.for_users(get_warden_approvers(self.hostel))
+			notifications.for_users(get_warden_approvers(self.hostel, self.student))
 			+ notifications.for_guardians(self.get_all_guardians()),
 			notifications.leave_context(self),
 			self,
@@ -308,31 +417,43 @@ class HomeVisitLeave(Document):
 	# ------------------------------------------------------------------ desk actions
 
 	def check_staff_write(self):
-		if not is_staff_user(frappe.session.user) or not self.has_permission("write"):
+		user = frappe.session.user
+		if not is_staff_user(user) or not frappe.has_permission(self.doctype, "write", doc=self, user=user):
 			frappe.throw(_("You are not permitted to update this leave."), frappe.PermissionError)
+
+	# The form sends its own copy of the leave with these calls; every action works on the
+	# stored record instead and then refreshes the form's copy from it.
 
 	@frappe.whitelist(methods=["POST"])
 	def warden_approve(self, remarks: str | None = None):
-		self.apply_warden_decision(True, remarks, frappe.session.user)
+		load_for_action(self).apply_warden_decision(True, remarks, frappe.session.user)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def warden_reject(self, remarks: str | None = None):
-		self.apply_warden_decision(False, remarks, frappe.session.user)
+		load_for_action(self).apply_warden_decision(False, remarks, frappe.session.user)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def mark_checked_out(self, checked_out_on: str | None = None):
-		self.check_staff_write()
-		self.record_check_out(frappe.session.user, checked_out_on)
+		leave = load_for_action(self)
+		leave.check_staff_write()
+		leave.record_check_out(frappe.session.user, checked_out_on)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def mark_returned(self, returned_on: str | None = None):
-		self.check_staff_write()
-		self.record_return(frappe.session.user, returned_on)
+		leave = load_for_action(self)
+		leave.check_staff_write()
+		leave.record_return(frappe.session.user, returned_on)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def cancel_leave(self):
-		self.check_staff_write()
-		self.cancel_by(frappe.session.user)
+		leave = load_for_action(self)
+		leave.check_staff_write()
+		leave.cancel_by(frappe.session.user)
+		self.reload()
 
 	# ------------------------------------------------------------------ notifications
 
@@ -352,7 +473,7 @@ class HomeVisitLeave(Document):
 	def notify_wardens(self):
 		notifications.send(
 			"leave_warden_approval_required",
-			notifications.for_users(get_warden_approvers(self.hostel)),
+			notifications.for_users(get_warden_approvers(self.hostel, self.student)),
 			notifications.leave_context(self),
 			self,
 		)

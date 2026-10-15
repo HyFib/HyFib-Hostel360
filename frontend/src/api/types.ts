@@ -23,8 +23,20 @@ export interface Ward {
 	register_number?: string;
 	photo?: string | null;
 	hostel?: string | null;
+	hostel_name?: string | null;
 	room?: string | null;
+	room_number?: string | null;
 	bed?: string | null;
+	bed_label?: string | null;
+	/** Hostel Student status: Active, Applied, Suspended, Vacated, Alumni */
+	status?: string | null;
+	/** Validation of this ward by the hostel office (a parent's own status says nothing about each ward). */
+	validation_status?: string | null;
+}
+
+export interface UploadRules {
+	max_bytes: number;
+	extensions: string[];
 }
 
 export interface PortalSettings {
@@ -33,12 +45,16 @@ export interface PortalSettings {
 	logo?: string | null;
 	support_phone?: string;
 	support_email?: string;
-	office_phone?: string;
-	office_email?: string;
+	office_phone?: string | null;
+	office_email?: string | null;
 	payment_enabled?: boolean | number;
 	mess_reduction_min_days?: number;
+	/** A departure at or after this hour (or a return before it) does not count that mess day. */
+	mess_day_cutoff_hour?: number;
 	leave_requires_parent_approval?: boolean | number;
-	privacy_notice?: string | null;
+	/** The site's time zone; leave and mess dates are wall-clock times in it. */
+	time_zone?: string;
+	upload?: UploadRules;
 }
 
 export interface PortalSession {
@@ -51,8 +67,17 @@ export interface PortalSession {
 	profile_confirmed?: boolean | number;
 	consent_required?: boolean | number;
 	privacy_notice_version?: string;
-	privacy_notice?: string | null;
+	/** Language the server writes this user's messages in (User.language). */
+	language?: string | null;
 	settings: PortalSettings;
+}
+
+export interface PrivacyNotice {
+	version: string | null;
+	notice: string;
+	accepted_version?: string | null;
+	accepted_on?: string | null;
+	consent_required: boolean | number;
 }
 
 export interface RoomInfo {
@@ -85,18 +110,31 @@ export interface TodayMenu {
 export interface PortalNotification {
 	name: string;
 	subject: string;
+	/** The in-app body (plain text), with the details the subject leaves out. */
+	message?: string | null;
 	created: string;
 	read: boolean | number;
 	link?: string | null;
+	/** Which of a parent's wards this is about, when it is about one. */
+	student?: string | null;
 }
+
+export type DashboardSection = "profile" | "fees" | "menu" | "pending";
 
 export interface Dashboard {
 	student: string;
+	student_name?: string | null;
+	/** Hostel Student status; anything but Active means only dues and the basics are open. */
+	student_status?: string | null;
+	restricted?: boolean;
 	room: RoomInfo | null;
-	fees: { outstanding: number; overdue: number; next_due_date?: string | null; payment_enabled?: boolean };
+	/** null when the fee figures could not be loaded (see `unavailable`), never "no dues". */
+	fees: { outstanding: number; overdue: number; next_due_date?: string | null; payment_enabled?: boolean } | null;
 	today_menu: TodayMenu | null;
 	pending: { leaves?: number; reductions?: number; grievances?: number; certificates?: number; approvals?: number };
 	notifications: PortalNotification[];
+	/** Sections that failed to load on the server. */
+	unavailable?: DashboardSection[];
 }
 
 export interface GuardianInfo {
@@ -202,13 +240,30 @@ export interface CheckoutOptions {
 	notes?: Record<string, string>;
 }
 
-export interface CreatePaymentResult {
+/** A gateway's hosted payment page, reached by posting a signed form to it (PayU). */
+export interface RedirectCheckout {
+	action_url: string;
+	method: "POST" | "GET" | string;
+	fields: Record<string, string | number>;
+}
+
+interface PaymentOrderBase {
 	transaction: string;
-	gateway: string;
 	amount?: number;
 	test_mode?: number;
+}
+
+export interface RazorpayPaymentOrder extends PaymentOrderBase {
+	gateway: "razorpay";
 	checkout: CheckoutOptions;
 }
+
+export interface RedirectPaymentOrder extends PaymentOrderBase {
+	gateway: "payu";
+	checkout: RedirectCheckout;
+}
+
+export type CreatePaymentResult = RazorpayPaymentOrder | RedirectPaymentOrder;
 
 export interface VerifyPaymentResult {
 	status: "Success" | "Pending" | "Failed" | string;
@@ -290,6 +345,8 @@ export interface Leave {
 	warden_approval_status?: string;
 	warden_remarks?: string | null;
 	apply_mess_reduction?: boolean | number;
+	/** Full mess days the leave covers (the server's noon rule). */
+	mess_reduction_days?: number | null;
 	mess_reduction?: string | null;
 	checked_out_on?: string | null;
 	returned_on?: string | null;
@@ -323,15 +380,18 @@ export interface TimelineEntry {
 	on: string;
 	by: string;
 	is_staff?: boolean;
+	/** Written by the person viewing (only then is it shown as "You"). */
+	is_mine?: boolean;
 	message: string;
 	status_change?: string | null;
 }
 
 export interface Attachment {
-	name?: string;
+	name: string;
 	file_name: string;
-	file_url: string;
 	file_size?: number;
+	/** Served by the portal after the grievance's own checks (the private file URL is not usable). */
+	url: string;
 }
 
 export interface Grievance extends GrievanceSummary {

@@ -7,7 +7,8 @@ from frappe import _
 from hostel360.utils.validation import mask_mobile
 
 FILTER_FIELDS = (
-	("hostel", "current_hostel"),
+	# last_hostel equals current_hostel for residents and keeps former residents in their hostel.
+	("hostel", "last_hostel"),
 	("program", "program"),
 	("department", "department"),
 	("year_of_study", "year_of_study"),
@@ -69,6 +70,7 @@ def get_students(filters) -> list[dict]:
 			"current_hostel",
 			"current_room",
 			"current_bed",
+			"last_hostel",
 			"status",
 			"validation_status",
 			"profile_confirmed",
@@ -106,6 +108,7 @@ def get_columns() -> list[dict]:
 		{"label": _("Hostel"), "fieldname": "current_hostel", "fieldtype": "Link", "options": "Hostel", "width": 80},
 		{"label": _("Room"), "fieldname": "current_room", "fieldtype": "Link", "options": "Hostel Room", "width": 100},
 		{"label": _("Bed"), "fieldname": "current_bed", "fieldtype": "Link", "options": "Hostel Bed", "width": 110},
+		{"label": _("Last Hostel"), "fieldname": "last_hostel", "fieldtype": "Link", "options": "Hostel", "width": 90},
 		{"label": _("Status"), "fieldname": "status", "fieldtype": "Data", "width": 90},
 		{"label": _("Validation"), "fieldname": "validation_status", "fieldtype": "Data", "width": 100},
 		{"label": _("Guardian"), "fieldname": "guardian_name", "fieldtype": "Data", "width": 160},

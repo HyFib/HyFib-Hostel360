@@ -570,6 +570,9 @@ Support: HyFib Solutions Private Limited, support@hyfib.com, +91 96060 60596
 			"bytes": manifest["totals"]["bytes"],
 			"doctypes": len(self.doctypes_summary),
 			"manifest_sha256": sha256_of(os.path.join(self.root, "manifest.json")),
+			"created_on": manifest["created_on"],
+			"include_files": self.include_files,
+			"archive_sha256": None,
 		}
 		if not (archive or encrypt):
 			return result
@@ -583,9 +586,9 @@ Support: HyFib Solutions Private Limited, support@hyfib.com, +91 96060 60596
 			os.remove(packed)
 			shutil.rmtree(self.root)
 			result.update(archive=encrypted, directory=None, encrypted=True)
-		with open(result["archive"] + ".sha256", "w") as f:
-			f.write(f"{sha256_of(result['archive'])}  {os.path.basename(result['archive'])}\n")
 		result["archive_sha256"] = sha256_of(result["archive"])
+		with open(result["archive"] + ".sha256", "w") as f:
+			f.write(f"{result['archive_sha256']}  {os.path.basename(result['archive'])}\n")
 		return result
 
 
@@ -609,10 +612,16 @@ def run_exit_export(
 	passphrase: str | None = None,
 	archive: bool = True,
 	progress=None,
+	record: bool = True,
 ) -> dict:
+	"""Write the export and, with ``record``, log it in Exit Export Log (not committed).
+
+	The log is what the deletion after exit checks: only a recent export that was then
+	verified with ``h360-verify-export`` on this site clears the way for it.
+	"""
 	export = ExitExport(output_dir, include_files=include_files, progress=progress)
 	try:
-		return export.run(encrypt=encrypt, passphrase=passphrase, archive=archive)
+		result = export.run(encrypt=encrypt, passphrase=passphrase, archive=archive)
 	except Exception:
 		# Never leave a half-written export (possibly holding personal data) behind.
 		if os.path.isdir(export.root):
@@ -623,3 +632,16 @@ def run_exit_export(
 				if os.path.exists(path):
 					os.remove(path)
 		raise
+
+	result["log"] = None
+	if record:
+		from hostel360.hostel_migration.doctype.exit_export_log.exit_export_log import record_export
+
+		# The export itself is complete and must not be thrown away because the log
+		# could not be written; the operator is told, and verifying the export later
+		# adopts it into the log.
+		try:
+			result["log"] = record_export(result)
+		except Exception:
+			frappe.log_error(title="Hostel360: exit export could not be logged")
+	return result

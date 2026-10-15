@@ -22,6 +22,9 @@
       tags: [always]
 
   roles:
+    # Go-live checks on the inventory (campus egress addresses); nothing is changed yet.
+    - role: preflight
+      tags: [always]
     - role: common
       tags: [common]
     - role: ssh

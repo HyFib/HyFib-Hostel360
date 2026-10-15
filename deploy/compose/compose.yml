@@ -13,9 +13,10 @@
 #     -> php-fpm for /integration/ (hostel website integration pages)
 #
 # Networks:
-#   edge      egress to the internet (SMS, WhatsApp, e-mail, Razorpay, ClamAV mirrors) and
-#             the published WAF ports; members: waf, backend, workers, clamav
-#   internal  no route off the host; application and data tier (MariaDB, Redis)
+#   edge      egress to the internet (SMS, WhatsApp, e-mail, Razorpay, PayU, ClamAV mirrors)
+#             and the published WAF ports; members: waf, backend, workers, clamav
+#   internal  no route off the host; application and data tier (MariaDB, Redis). The WAF is
+#             also reachable here under the portal host name (SITE_NAME), for print PDFs
 #   php       no route off the host; only the WAF and PHP-FPM
 #
 # Memory plan (limits; 16 GB host): MariaDB 7 GB, application 4 GB (backend 2 GB, two
@@ -262,10 +263,21 @@ services:
       - ${H360_CONFIG_DIR:-/etc/hostel360}/waf/tls:/etc/nginx/h360-tls:ro
       - ${H360_CONFIG_DIR:-/etc/hostel360}/waf/lists:/etc/nginx/h360:ro
       - ${H360_DATA_DIR:-/srv/hostel360}/logs/waf:/var/log/nginx
+    # nginx runs as uid 101 and also listens on 443 and 80 for the stack's own containers
+    # (see networks below); this is Docker's default for a container network namespace,
+    # stated here because those listeners depend on it.
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
     networks:
-      - edge
-      - internal
-      - php
+      edge: {}
+      # The portal host name resolves to the WAF inside the stack. Frappe renders print PDFs
+      # with wkhtmltopdf, which loads the logo and other /files and /assets URLs from the
+      # site's public URL (host_name, https://SITE_NAME); with this alias the backend and
+      # workers reach them here on 443 instead of leaving the host for the load balancer.
+      internal:
+        aliases:
+          - ${SITE_NAME:?SITE_NAME must be set}
+      php: {}
     depends_on:
       frontend:
         condition: service_started

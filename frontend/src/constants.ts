@@ -27,6 +27,14 @@ export const GRIEVANCE_CATEGORIES = [
 /** Always confidential, urgent and sent straight to the chief warden. */
 export const SENSITIVE_CATEGORY = "Ragging or Harassment";
 
+/**
+ * Numbers offered next to a ragging or harassment complaint. They are public, round-the-clock
+ * services; the hostel office's own number (Hostel Settings) is shown first when it is set.
+ * The software vendor's helpdesk is deliberately never offered here.
+ */
+export const EMERGENCY_NUMBER = "112";
+export const ANTI_RAGGING_HELPLINE = "1800-180-5522";
+
 export const GRIEVANCE_PRIORITIES = ["Low", "Medium", "High", "Urgent"] as const;
 
 export const BONAFIDE_PURPOSES = [

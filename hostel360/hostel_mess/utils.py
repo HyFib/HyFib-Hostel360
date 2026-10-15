@@ -25,6 +25,8 @@ DEFAULT_SETTINGS = {
 	"bill_due_days": 10,
 	"bill_rounding": "Nearest Rupee",
 	"low_stock_alert": 1,
+	"require_indent_for_receipts": 0,
+	"indent_warden_approval_above": 0,
 }
 
 APPROVER_ROLE_BY_SETTING = {
@@ -104,6 +106,35 @@ def get_mess_for_hostel(hostel: str | None) -> str | None:
 	return rows[0][0] if rows else None
 
 
+def student_hostel_fields() -> list[str]:
+	"""Hostel Student fields that say where a student lives or last lived."""
+	fields = ["current_hostel"]
+	if frappe.get_meta("Hostel Student").has_field("last_hostel"):
+		fields.append("last_hostel")
+	return fields
+
+
+def get_student_hostel(student: str | None) -> str | None:
+	"""The student's hostel: the current one, or the last one after they vacated.
+
+	Records copied from a student (reductions, extra charges, bills) keep the hostel even
+	after the student leaves, so hostel-scoped staff go on seeing their own residents' history
+	and never another hostel's.
+	"""
+	if not student:
+		return None
+	try:
+		from hostel360.hostel_people.services import get_student_hostel as people_student_hostel
+	except ImportError:
+		people_student_hostel = None
+	if people_student_hostel:
+		return people_student_hostel(student) or None
+	row = frappe.db.get_value("Hostel Student", student, student_hostel_fields(), as_dict=True)
+	if not row:
+		return None
+	return row.get("current_hostel") or row.get("last_hostel") or None
+
+
 def get_published_upto(mess: str) -> datetime.date | None:
 	"""Last day covered by a published (submitted) mess bill run of the mess.
 
@@ -120,11 +151,84 @@ def get_published_upto(mess: str) -> datetime.date | None:
 	return getdate(value) if value else None
 
 
-def assert_period_open(mess: str, date, what: str) -> None:
-	"""Refuse changes dated inside a published billing period."""
+# ------------------------------------------------------------------ books lock
+#
+# Publishing a bill run must not overlap with anything that changes the books of the same
+# mess, otherwise an entry committed while the invoices are being created ends up in the
+# closed period but in no bill. The Hostel Mess row is the lock:
+#
+# * every change to the books (stock entry submit/cancel, expense submit/cancel, extra
+#   charges, reduction approval/cancellation) takes a SHARED lock on it, so such changes
+#   never wait for one another;
+# * publishing or cancelling a bill run takes an EXCLUSIVE lock, so it waits for changes in
+#   flight to commit and keeps new ones out until it commits, and records the new
+#   ``billed_upto`` on the row.
+#
+# The shared lock is taken with a locking read, which returns the last committed
+# ``billed_upto`` even when the transaction's snapshot is older; with MariaDB's snapshot
+# isolation such a read refuses outright when the row changed after the snapshot. Either
+# way a change racing a publish is refused instead of slipping into the closed period.
+
+
+class BooksChangedError(frappe.ValidationError):
+	"""The mess's bill runs changed after this transaction started reading."""
+
+
+def lock_mess_books(mess: str, exclusive: bool = False) -> datetime.date | None:
+	"""Lock the books of a mess for this transaction; returns ``billed_upto`` as committed."""
+	if not mess:
+		return None
+	query = (
+		"select billed_upto from `tabHostel Mess` where name = %(mess)s for update"
+		if exclusive
+		else "select billed_upto from `tabHostel Mess` where name = %(mess)s lock in share mode"
+	)
+	try:
+		row = frappe.db.sql(query, {"mess": mess})
+	except frappe.QueryDeadlockError:
+		raise_books_changed(mess)
+	return getdate(row[0][0]) if row and row[0][0] else None
+
+
+def start_books_transaction(mess: str) -> None:
+	"""Take the exclusive books lock with a view of the books that is current at the lock.
+
+	Plain reads in REPEATABLE READ return the database as it was at the transaction's first
+	query, so a bill run verified in a long-running transaction could miss an entry that
+	committed just before the lock. When nothing has been written yet the open transaction
+	is ended first; the lock is then the first statement of a fresh transaction and every
+	later read includes everything committed before it. A caller that has already written
+	keeps its transaction (and its snapshot); the lock still keeps new entries out.
+	"""
+	if not frappe.db.transaction_writes:
+		frappe.db.commit()
+	lock_mess_books(mess, exclusive=True)
+
+
+def raise_books_changed(mess: str) -> None:
+	frappe.throw(
+		_(
+			"The books of {0} changed at the same moment, for example because mess bills were just published or cancelled. Please try again."
+		).format(frappe.bold(mess)),
+		BooksChangedError,
+		title=_("Please Try Again"),
+	)
+
+
+def assert_period_open(mess: str, date, what: str, lock: bool = False) -> None:
+	"""Refuse changes dated inside a published billing period.
+
+	``lock`` is for changes that are about to be committed to the books (submit, cancel,
+	approve, and so on): it takes the shared books lock so the check cannot race a bill run
+	being published. Drafts and other early checks leave it off.
+	"""
 	if in_migration() or not (mess and date):
 		return
 	upto = get_published_upto(mess)
+	if lock:
+		committed = lock_mess_books(mess)
+		if committed and (not upto or committed > upto):
+			upto = committed
 	if upto and getdate(date) <= upto:
 		frappe.throw(
 			_(

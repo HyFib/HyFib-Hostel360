@@ -142,3 +142,20 @@ class TestHostelPayment(FeeTestCase):
 
 		with self.assertRaises(frappe.ValidationError):
 			record_payment(self.student, "Online", [{"invoice": second.name, "allocated_amount": 500}])
+
+	def test_test_flag_cannot_be_set_on_a_counter_receipt(self):
+		# Read-only fields are still writable through the REST API; a counter receipt marked as a
+		# test would vanish from the day-end cash summary.
+		payment = make_payment(self.student, [(self.invoice.name, 1000)], is_test=1)
+		self.assertEqual(payment.is_test, 0)
+		payment.submit()
+		self.assertTrue(self.notified("payment_received", payment.name))
+
+	def test_cancellation_is_time_stamped(self):
+		payment = make_payment(self.student, [(self.invoice.name, 1000)])
+		payment.submit()
+		self.assertFalse(payment.cancelled_on)
+		payment.cancel()
+		stored = frappe.db.get_value(PAYMENT, payment.name, ["cancelled_on", "cancelled_by"], as_dict=True)
+		self.assertTrue(stored.cancelled_on)
+		self.assertEqual(stored.cancelled_by, frappe.session.user)

@@ -10,15 +10,21 @@ of the same (mess, item) is revalued and the values of later issues are written 
 their vouchers. Anything on or before the last published mess bill is closed (see
 ``utils.assert_period_open``), so revaluation never changes a published bill.
 
-Concurrency: stock movements of an item are serialised with a row lock on the Mess Item
-record, taken in item-name order to avoid deadlocks.
+Concurrency: stock movements of an item are serialised by writing the item's
+``stock_revision`` (an exclusive row lock held until commit), taken in item-name order to
+avoid deadlocks. A lock alone is not enough: under REPEATABLE READ the waiting transaction
+would go on reading the ledger as it was when its first query ran, without the movement it
+waited for. Writing the row makes such a transaction fail instead (MariaDB's snapshot
+isolation refuses to change a row changed after the snapshot), and the revision check below
+catches the same situation on servers where snapshot isolation is off. Either way the user
+is asked to submit again, and the next attempt reads the ledger afresh.
 """
 
 import datetime
 
 import frappe
 from frappe import _
-from frappe.utils import flt, format_date, get_link_to_form, get_time, getdate
+from frappe.utils import cint, flt, format_date, get_link_to_form, get_time, getdate
 
 LEDGER = "Mess Stock Ledger Entry"
 VOUCHER_TYPE = "Mess Stock Entry"
@@ -36,6 +42,10 @@ class NegativeStockError(frappe.ValidationError):
 	pass
 
 
+class StockChangedError(frappe.ValidationError):
+	"""Another posting of the item committed while this one was being prepared."""
+
+
 def get_posting_datetime(posting_date, posting_time=None) -> datetime.datetime:
 	return datetime.datetime.combine(getdate(posting_date), get_time(posting_time or "00:00:00"))
 
@@ -51,8 +61,45 @@ def signed_qty(entry_type: str, qty) -> float:
 
 
 def lock_items(items) -> None:
+	"""Take the stock lock of each item and make sure this transaction sees its latest ledger.
+
+	Raises StockChangedError when another posting of an item committed after this
+	transaction started reading, because every balance it computed would be out of date.
+	"""
 	for item in sorted(set(items)):
-		frappe.db.sql("select name from `tabMess Item` where name = %(item)s for update", {"item": item})
+		_lock_item(item)
+
+
+def _lock_item(item: str) -> None:
+	values = {"item": item}
+	# What this transaction's snapshot believes; a plain read never waits and never fails.
+	seen = frappe.db.sql("select stock_revision from `tabMess Item` where name = %(item)s", values)
+	if not seen:
+		return  # unknown items are reported by the entry's own validation
+	try:
+		frappe.db.sql(
+			"update `tabMess Item` set stock_revision = ifnull(stock_revision, 0) + 1 where name = %(item)s",
+			values,
+		)
+	except frappe.QueryDeadlockError:
+		# MariaDB refuses to update a row changed after this transaction's snapshot
+		# (innodb_snapshot_isolation), or picked this transaction as a deadlock victim.
+		_raise_stock_changed(item)
+	# A transaction always reads its own change, which is applied to the latest committed row,
+	# so anything other than "what we saw plus one" means a posting committed in between.
+	current = frappe.db.sql("select stock_revision from `tabMess Item` where name = %(item)s", values)
+	if cint(current[0][0]) != cint(seen[0][0]) + 1:
+		_raise_stock_changed(item)
+
+
+def _raise_stock_changed(item: str) -> None:
+	frappe.throw(
+		_(
+			"The stock of {0} changed while this entry was being saved, because another entry for it was posted at the same moment. Please submit it again."
+		).format(frappe.bold(item)),
+		StockChangedError,
+		title=_("Stock Changed"),
+	)
 
 
 # ------------------------------------------------------------------ balances

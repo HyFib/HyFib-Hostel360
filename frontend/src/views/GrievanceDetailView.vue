@@ -11,12 +11,10 @@ import StatusChip from "@/components/StatusChip.vue";
 import { useResource } from "@/composables/useResource";
 import { useSubmit } from "@/composables/useSubmit";
 import { t, tv } from "@/i18n";
-import { useSession } from "@/stores/session";
 import { showToast } from "@/stores/toast";
 import { formatBytes, formatDate, formatDateTime } from "@/utils/format";
 
 const route = useRoute();
-const { isParent } = useSession();
 const name = computed(() => String(route.params.name || ""));
 const grievance = useResource(() => getGrievance(name.value), { watch: [name] });
 const item = computed(() => grievance.data.value);
@@ -97,8 +95,9 @@ async function rate() {
 				<div v-if="item.attachments?.length" class="mt-4">
 					<h2 class="text-sm font-semibold text-muted">{{ t("grievances.attachmentsTitle") }}</h2>
 					<ul class="mt-2 space-y-1">
-						<li v-for="file in item.attachments" :key="file.file_url">
-							<a :href="file.file_url" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center gap-2 text-sm">
+						<li v-for="file in item.attachments" :key="file.name">
+							<!-- Served by the portal after the grievance's own checks; the private file URL would not open for a parent. -->
+							<a :href="file.url" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center gap-2 text-sm">
 								<FileText :size="16" aria-hidden="true" />
 								{{ file.file_name }}
 								<span v-if="file.file_size" class="text-muted">({{ formatBytes(file.file_size) }})</span>
@@ -142,7 +141,7 @@ async function rate() {
 						:class="entry.is_staff ? 'border-brand-soft bg-brand-soft' : 'border-line bg-surface'"
 					>
 						<p class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-							<span class="font-semibold text-ink">{{ entry.is_staff || isParent ? entry.by : t("grievances.byYou") }}</span>
+							<span class="font-semibold text-ink">{{ entry.is_mine ? t("grievances.byYou") : entry.by }}</span>
 							<span>{{ formatDateTime(entry.on) }}</span>
 						</p>
 						<p class="mt-1 whitespace-pre-line text-sm text-ink">{{ entry.message }}</p>

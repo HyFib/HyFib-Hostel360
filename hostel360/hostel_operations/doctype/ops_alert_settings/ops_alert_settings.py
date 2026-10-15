@@ -18,8 +18,14 @@ INGEST_METHOD = "/api/method/hostel360.api.ops.ingest"
 OCI_METHOD = "/api/method/hostel360.api.ops.oci_notification"
 
 
+# Written by the scheduler jobs, never by people. A form opened before the last run still
+# carries the old values; saving it must not put them back.
+RUN_TIMESTAMP_FIELDS = ("last_health_check_on", "last_escalation_run_on", "last_heartbeat_sent_on")
+
+
 class OpsAlertSettings(Document):
 	def validate(self):
+		self._keep_run_timestamps()
 		self._validate_channels()
 		self._validate_levels()
 		self._validate_thresholds()
@@ -27,6 +33,10 @@ class OpsAlertSettings(Document):
 			self.report_recipients = "\n".join(parse_emails(self.report_recipients, throw=True))
 		if self.heartbeat_url and not self._url_allowed(self.heartbeat_url):
 			frappe.throw(_("The heartbeat URL must start with https://."))
+
+	def _keep_run_timestamps(self):
+		for fieldname in RUN_TIMESTAMP_FIELDS:
+			self.set(fieldname, frappe.db.get_single_value(self.doctype, fieldname, cache=False))
 
 	def _url_allowed(self, url: str) -> bool:
 		url = (url or "").strip()
@@ -53,6 +63,7 @@ class OpsAlertSettings(Document):
 
 	def _validate_levels(self):
 		seen = set()
+		unreachable = []
 		for row in sorted(self.escalation_levels, key=lambda r: cint(r.level)):
 			level = cint(row.level)
 			if level < 1:
@@ -64,6 +75,8 @@ class OpsAlertSettings(Document):
 				frappe.throw(_("Escalation level {0}: minutes cannot be negative.").format(level))
 			row.notify_emails = "\n".join(parse_emails(row.notify_emails, throw=True))
 			row.notify_mobiles = "\n".join(parse_mobiles(row.notify_mobiles, throw=True))
+			if not row.notify_emails and not row.notify_mobiles:
+				unreachable.append(row)
 
 		previous = -1
 		for row in sorted(self.escalation_levels, key=lambda r: cint(r.level)):
@@ -74,6 +87,18 @@ class OpsAlertSettings(Document):
 					)
 				)
 			previous = cint(row.after_minutes)
+
+		# Not an error: the shipped matrix leaves the technical lead blank until the operator
+		# fills it in, and saving the rest of the settings must still work meanwhile. The
+		# health checks keep raising a warning alert until every level can be reached.
+		if unreachable and not (frappe.flags.in_install or frappe.flags.in_migrate):
+			frappe.msgprint(
+				_(
+					"Escalation level {0} has no e-mail address or mobile number, so nobody will be told when an alert reaches it."
+				).format(", ".join(f"{cint(row.level)} ({row.label or '-'})" for row in unreachable)),
+				title=_("Escalation contacts missing"),
+				indicator="orange",
+			)
 
 	def _validate_thresholds(self):
 		if cint(self.disk_warning_percent) and cint(self.disk_critical_percent):

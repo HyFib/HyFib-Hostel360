@@ -15,10 +15,12 @@ from urllib.parse import quote
 import frappe
 import requests
 from frappe import _
+from frappe.utils import cint
 
 from hostel360.hostel_fees.gateways.base import (
 	AUTHORIZED,
 	CAPTURED,
+	CHECKOUT_MODAL,
 	ORDER_ATTEMPTED,
 	ORDER_CREATED,
 	ORDER_PAID,
@@ -60,6 +62,8 @@ SAFE_PAYMENT_KEYS = (
 
 class RazorpayGateway(PaymentGateway):
 	name = "Razorpay"
+	checkout_mode = CHECKOUT_MODAL
+	reusable_orders = True
 
 	def __init__(self, settings):
 		super().__init__(settings)
@@ -169,6 +173,27 @@ class RazorpayGateway(PaymentGateway):
 			"raw": data,
 		}
 
+	def checkout_options(self, tx, context: dict) -> dict:
+		"""Options for Razorpay Standard Checkout (``new Razorpay(options).open()``)."""
+		context = frappe._dict(context or {})
+		options = {
+			"key": self.checkout_key,
+			"order_id": tx.gateway_order_id,
+			"amount": to_minor_units(tx.amount),
+			"currency": (tx.currency or "INR").upper(),
+			"name": context.title or "",
+			"description": (context.description or "")[:255],
+			"prefill": dict(context.payer or {}),
+			"notes": {"transaction": tx.name, "student": tx.student},
+		}
+		if context.image:
+			options["image"] = context.image
+		if cint(context.timeout) > 0:
+			# Closes the checkout before Hostel360 expires the transaction, so a stale window
+			# cannot be paid after the dues were released for a new payment.
+			options["timeout"] = cint(context.timeout)
+		return options
+
 	def verify_checkout(self, order_id: str, payment_id: str, signature: str) -> bool:
 		if not (order_id and payment_id and signature and self.key_secret):
 			return False
@@ -229,6 +254,8 @@ class RazorpayGateway(PaymentGateway):
 			error_description=entity.get("error_description"),
 			created_at=entity.get("created_at"),
 			raw={key: entity.get(key) for key in SAFE_PAYMENT_KEYS if key in entity},
+			# Razorpay keeps a partly refunded payment "captured" and reports the refund here.
+			amount_refunded=entity.get("amount_refunded") or 0,
 		)
 
 

@@ -1,0 +1,86 @@
+time="2026-10-15T15:03:12Z" level=info msg="profile smoke: 5 portal users, 1 desk users, ramp 15s, hold 60s, ramp-down 10s, think 1-3s" source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=29.67ms
+
+      {flow:desk}
+      ✓ 'p(95)<800' p(95)=18.28ms
+
+      {flow:portal}
+      ✓ 'p(95)<800' p(95)=29.7ms
+
+      {flow:sign_in}
+      ✓ 'p(95)<800' p(95)=30.62ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+      {flow:desk}
+      ✓ 'rate<0.01' rate=0.00%
+
+      {flow:portal}
+      ✓ 'rate<0.01' rate=0.00%
+
+      {flow:sign_in}
+      ✓ 'rate<0.01' rate=0.00%
+
+    portal_sign_in_failures
+    ✓ 'count<1' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 250     2.737709/s
+    checks_succeeded...: 100.00% 250 out of 250
+    checks_failed......: 0.00%   0 out of 250
+
+    ✓ desk list loaded
+    ✓ desk list counted
+    ✓ student number found
+    ✓ sign-in code requested
+    ✓ sign-in code accepted
+    ✓ CSRF token issued
+    ✓ portal session loaded
+    ✓ menu answered 200
+    ✓ dashboard answered 200
+    ✓ fees answered 200
+    ✓ desk form opened
+    ✓ notifications answered 200
+    ✓ portal page loaded
+    ✓ session answered 200
+    ✓ leave list answered 200
+
+    CUSTOM
+    portal_sign_in_failures........: 0      0/s
+    portal_sign_ins................: 5      0.054754/s
+
+    HTTP
+    http_req_duration..............: avg=16.12ms med=15.46ms p(90)=28.05ms p(95)=29.67ms p(99)=30.78ms max=47.48ms
+      { expected_response:true }...: avg=16.12ms med=15.46ms p(90)=28.05ms p(95)=29.67ms p(99)=30.78ms max=47.48ms
+      { flow:desk }................: avg=11.32ms med=10.85ms p(90)=17.53ms p(95)=18.28ms p(99)=20.08ms max=20.1ms 
+      { flow:portal }..............: avg=17.17ms med=16.44ms p(90)=28.19ms p(95)=29.7ms  p(99)=30.44ms max=31.12ms
+      { flow:sign_in }.............: avg=15.21ms med=13.49ms p(90)=29.11ms p(95)=30.62ms p(99)=43.5ms  max=47.48ms
+    http_req_failed................: 0.00%  0 out of 251
+      { flow:desk }................: 0.00%  0 out of 39
+      { flow:portal }..............: 0.00%  0 out of 186
+      { flow:sign_in }.............: 0.00%  0 out of 25
+    http_reqs......................: 251    2.74866/s
+
+    EXECUTION
+    iteration_duration.............: avg=2.37s   med=2.11s   p(90)=3s      p(95)=5.2s    p(99)=7.91s   max=8.02s  
+    iterations.....................: 191    2.09161/s
+    vus............................: 1      min=1        max=6
+    vus_max........................: 6      min=6        max=6
+
+    NETWORK
+    data_received..................: 367 kB 4.0 kB/s
+    data_sent......................: 156 kB 1.7 kB/s
+
+
+

@@ -1,10 +1,13 @@
 #!/bin/bash
 # Gunicorn for the Frappe backend.
 #
-# Sizing for the A1.Flex 8 OCPU / 16 GB host: 6 workers x 4 threads = 24 concurrent requests,
-# which covers the 150 req/s peak for 1,500 portal users at the p95 target (most requests
-# finish in well under 200 ms). --preload shares the imported code between workers;
-# max-requests recycles workers gradually so slow memory growth never accumulates.
+# Sizing for the A1.Flex 8 OCPU / 16 GB host: 6 workers x 4 threads = 24 requests in flight.
+# At the 150 req/s peak of 1,500 portal users that holds while the average request takes
+# under about 160 ms (24 / 150 s). This is the sizing assumption; tests/load (profile "load"
+# on the staging stack) is the measurement, and its results in tests/load/results decide
+# whether GUNICORN_WORKERS / GUNICORN_THREADS in stack.env need raising.
+# --preload shares the imported code between workers; max-requests recycles workers
+# gradually so slow memory growth never accumulates.
 set -Eeuo pipefail
 
 : "${GUNICORN_WORKERS:=6}"

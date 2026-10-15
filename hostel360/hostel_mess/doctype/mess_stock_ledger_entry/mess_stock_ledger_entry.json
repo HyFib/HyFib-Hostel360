@@ -168,7 +168,7 @@
  ],
  "in_create": 1,
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Mess",
  "name": "Mess Stock Ledger Entry",
@@ -199,8 +199,7 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Deputy Warden",
-   "share": 1
+   "role": "Deputy Warden"
   },
   {
    "read": 1,
@@ -220,13 +219,11 @@
    "role": "Mess Staff"
   },
   {
-   "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Institution Auditor",
-   "share": 1
+   "role": "Institution Auditor"
   },
   {
    "email": 1,

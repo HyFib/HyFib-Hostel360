@@ -18,7 +18,7 @@
    "reqd": 1
   },
   {
-   "description": "Optional; leave blank for the whole hostel.",
+   "description": "Optional. Leave blank for the whole hostel. With a block, this person only sees, approves and is notified about students living in that block.",
    "fieldname": "block",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -29,7 +29,7 @@
  "index_web_pages_for_search": 0,
  "istable": 1,
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 19:20:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel People",
  "name": "Hostel Staff Assignment",

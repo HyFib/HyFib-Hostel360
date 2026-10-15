@@ -219,3 +219,57 @@ def make_reduction(
 def set_mess_settings(**values) -> None:
 	for fieldname, value in values.items():
 		frappe.db.set_single_value("Mess Settings", fieldname, value)
+
+
+# Transactions keyed by mess, with their child tables.
+_MESS_RECORDS = (
+	("Mess Stock Ledger Entry", None),
+	("Mess Stock Entry", "Mess Stock Entry Item"),
+	("Mess Expense", None),
+	("Mess Extra Charge", None),
+	("Mess Bill", None),
+	("Mess Bill Run", None),
+	("Mess Reduction Application", None),
+	("Mess Indent", "Mess Indent Item"),
+	("Mess Menu", "Mess Menu Item"),
+)
+
+
+def purge_committed_records(
+	messes=(), items=(), hostels=(), students=(), users=(), extra: dict | None = None
+) -> None:
+	"""Remove what a multi-connection test had to commit, and commit the removal.
+
+	Tests that simulate two users need their fixtures committed so the second connection
+	can see them; the usual rollback at the end of a test does not undo that.
+	"""
+	names = []
+	for mess in messes:
+		for doctype, child in _MESS_RECORDS:
+			rows = frappe.get_all(doctype, filters={"mess": mess}, pluck="name")
+			names += rows
+			if child and rows:
+				frappe.db.delete(child, {"parent": ["in", rows], "parenttype": doctype})
+			frappe.db.delete(doctype, {"mess": mess})
+		frappe.db.delete("Hostel Mess Hostel", {"parent": mess, "parenttype": "Hostel Mess"})
+		frappe.db.delete("Hostel Mess", {"name": mess})
+		names.append(mess)
+	for student in students:
+		names += frappe.get_all("Room Allotment", filters={"student": student}, pluck="name")
+		frappe.db.delete("Room Allotment", {"student": student})
+		frappe.db.delete("Hostel Student", {"name": student})
+		names.append(student)
+	for doctype, values in (("Mess Item", items), ("Hostel", hostels), ("User", users)):
+		for name in values:
+			frappe.db.delete(doctype, {"name": name})
+			names.append(name)
+	for user in users:
+		frappe.db.delete("Has Role", {"parent": user, "parenttype": "User"})
+		frappe.db.delete("User Permission", {"user": user})
+	for doctype, values in (extra or {}).items():
+		for name in values:
+			frappe.db.delete(doctype, {"name": name})
+			names.append(name)
+	if names:
+		frappe.db.delete("Version", {"docname": ["in", names]})
+	frappe.db.commit()

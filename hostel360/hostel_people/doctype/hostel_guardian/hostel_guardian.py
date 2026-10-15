@@ -41,8 +41,11 @@ class HostelGuardian(Document):
 	def set_validation_status(self):
 		"""A guardian is validated once linked to a validated student (tender 4.1).
 
-		A changed mobile number sends a validated guardian back to Pending until a
-		validated student's record confirms the new number again.
+		A changed mobile number is re-checked against the wards: the guardian stays
+		Validated only while a validated student still lists them, otherwise it goes back
+		to Pending. Only staff who may edit every ward can change the number (see
+		``hostel360.hostel_people.permissions.guardian_has_permission``), so the person
+		making the change is the one confirming it.
 		"""
 		if self.is_new() or self.validation_status == "Rejected":
 			return

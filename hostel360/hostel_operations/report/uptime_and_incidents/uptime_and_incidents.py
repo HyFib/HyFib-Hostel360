@@ -29,6 +29,8 @@ def execute(filters=None):
 				"date": day["date"],
 				"uptime_percent": day["uptime_percent"],
 				"downtime_minutes": day["downtime_minutes"],
+				"unmonitored_minutes": day["unmonitored_minutes"],
+				"coverage_percent": day["coverage_percent"] if day["uptime_percent"] is not None else None,
 				"samples": day["samples"],
 				"measured_by": day["source"],
 				"critical_alerts": counts.get("critical", 0),
@@ -44,6 +46,8 @@ def get_columns():
 		{"fieldname": "date", "label": _("Date"), "fieldtype": "Date", "width": 110},
 		{"fieldname": "uptime_percent", "label": _("Uptime (%)"), "fieldtype": "Percent", "precision": 3, "width": 110},
 		{"fieldname": "downtime_minutes", "label": _("Downtime (Minutes)"), "fieldtype": "Int", "width": 140},
+		{"fieldname": "unmonitored_minutes", "label": _("Unmonitored (Minutes)"), "fieldtype": "Int", "width": 150},
+		{"fieldname": "coverage_percent", "label": _("Coverage (%)"), "fieldtype": "Percent", "precision": 2, "width": 110},
 		{"fieldname": "critical_alerts", "label": _("Critical Alerts"), "fieldtype": "Int", "width": 120},
 		{"fieldname": "outages", "label": _("Outages"), "fieldtype": "Int", "width": 90},
 		{"fieldname": "samples", "label": _("Samples"), "fieldtype": "Int", "width": 90},
@@ -110,6 +114,14 @@ def get_summary(data, overall):
 			"label": _("Downtime (Minutes)"),
 			"datatype": "Int",
 			"indicator": "Green" if not overall["downtime_minutes"] else "Orange",
+		},
+		{
+			# Unmonitored minutes are already counted in the downtime above; shown on their
+			# own so a monitoring gap is not mistaken for a measured outage (or hidden).
+			"value": overall.get("unmonitored_minutes", 0),
+			"label": _("Unmonitored (Minutes)"),
+			"datatype": "Int",
+			"indicator": "Green" if not overall.get("unmonitored_minutes") else "Red",
 		},
 		{
 			"value": sum(row["critical_alerts"] for row in data),

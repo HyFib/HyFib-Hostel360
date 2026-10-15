@@ -4,6 +4,7 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from hostel360.hostel_people.services import ensure_portal_user
 from hostel360.hostel_people.testing import (
 	allot,
 	beds_of,
@@ -118,3 +119,67 @@ class TestHostelStudent(IntegrationTestCase):
 		self.assertEqual(student.validation_status, "Pending")
 		self.assertIsNone(student.current_bed)
 		self.assertEqual(student.profile_confirmed, 0)
+
+	def test_validation_ignores_a_tampered_client_copy(self):
+		owner = make_student("Male")
+		owner_user = ensure_portal_user("Hostel Student", owner.name)
+		hostel = make_hostel("Male")
+		bed = beds_of(make_room(hostel.name, capacity=1).name)[0]
+		target = make_student("Male")
+
+		# What a crafted request sends with the call: the form's copy with protected fields rewritten.
+		sent = frappe.get_doc(
+			{
+				**target.as_dict(),
+				"user": owner_user,
+				"profile_confirmed": 1,
+				"privacy_consent_version": "forged",
+				"current_bed": bed,
+				"last_hostel": hostel.name,
+			}
+		)
+		sent.mark_validated()
+
+		stored = frappe.db.get_value(
+			"Hostel Student",
+			target.name,
+			["validation_status", "user", "profile_confirmed", "privacy_consent_version", "current_bed", "last_hostel"],
+			as_dict=True,
+		)
+		self.assertEqual(stored.validation_status, "Validated")
+		self.assertIsNone(stored.user)
+		self.assertEqual(stored.profile_confirmed, 0)
+		self.assertIsNone(stored.privacy_consent_version)
+		self.assertIsNone(stored.current_bed)
+		self.assertIsNone(stored.last_hostel)
+		self.assertEqual(frappe.get_all("Hostel Student", filters={"user": owner_user}, pluck="name"), [owner.name])
+
+	def test_rejection_checks_the_stored_allotment(self):
+		hostel = make_hostel("Male")
+		bed = beds_of(make_room(hostel.name, capacity=1).name)[0]
+		student = make_student("Male")
+		allotment = allot(student.name, bed)
+
+		sent = frappe.get_doc(
+			{
+				**frappe.get_doc("Hostel Student", student.name).as_dict(),
+				"current_allotment": None,
+				"current_bed": None,
+				"current_room": None,
+				"current_hostel": None,
+			}
+		)
+		self.assertRaises(frappe.ValidationError, sent.mark_rejected, "Does not match the admission list")
+		stored = frappe.db.get_value(
+			"Hostel Student", student.name, ["validation_status", "current_allotment"], as_dict=True
+		)
+		self.assertEqual(stored.validation_status, "Pending")
+		self.assertEqual(stored.current_allotment, allotment.name)
+
+	def test_validation_keeps_a_portal_link_made_after_the_form_opened(self):
+		student = make_student("Male")
+		form = frappe.get_doc("Hostel Student", student.name)
+		# The student signs in for the first time while the office has the form open.
+		user = ensure_portal_user("Hostel Student", student.name)
+		form.mark_validated()
+		self.assertEqual(frappe.db.get_value("Hostel Student", student.name, "user"), user)

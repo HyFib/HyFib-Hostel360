@@ -11,7 +11,9 @@ replaced by a stub; the ownership checks under test run before the service is re
 
 import io
 import json
+import os
 import random
+import re
 from contextlib import contextmanager
 from unittest.mock import patch
 
@@ -35,18 +37,50 @@ SESSION_KEYS = {
 	"profile_confirmed",
 	"consent_required",
 	"privacy_notice_version",
+	"language",
 	"settings",
 }
-WARD_KEYS = {"student", "full_name", "register_number", "photo", "hostel", "room", "bed"}
+WARD_KEYS = {
+	"student",
+	"full_name",
+	"register_number",
+	"photo",
+	"hostel",
+	"hostel_name",
+	"room",
+	"room_number",
+	"bed",
+	"bed_label",
+	"status",
+	"validation_status",
+}
 SETTINGS_KEYS = {
 	"institution_name",
 	"institution_short_name",
 	"logo",
+	"office_phone",
+	"office_email",
 	"support_phone",
 	"support_email",
 	"payment_enabled",
 	"mess_reduction_min_days",
+	"mess_day_cutoff_hour",
 	"leave_requires_parent_approval",
+	"time_zone",
+	"upload",
+}
+BOOT_KEYS = {
+	"site_name",
+	"institution_name",
+	"institution_short_name",
+	"logo",
+	"office_phone",
+	"office_email",
+	"support_phone",
+	"support_email",
+	"is_logged_in",
+	"kind",
+	"lang",
 }
 
 
@@ -557,26 +591,99 @@ class TestPortalAPI(IntegrationTestCase):
 
 	# ------------------------------------------------------------------ validation and consent
 
-	def test_unvalidated_student_gets_only_the_basics(self):
+	def test_session_of_an_unvalidated_record_is_refused_with_its_reason(self):
+		# Sign-in is only for validated residents (TR 3.1, 4.1); a session opened earlier must
+		# stop working too, and say why instead of failing like an expired session.
 		with self.set_user(self.pending.user):
-			session = portal.get_session()
-			self.assertEqual(session["validation_status"], "Pending")
-			self.assertEqual(portal.get_profile()["name"], self.pending.name)
-			self.assertEqual(portal.accept_privacy_notice(version=privacy_version()), {"ok": True})
-			self.assertIsInstance(portal.list_notifications(), list)
-			self.assertEqual(portal.mark_notifications_read(), {"ok": True})
-			self.assertEqual(portal.confirm_profile(updates={"city": "Karaikudi"}), {"ok": True})
+			for fn in (portal.get_session, portal.get_profile, portal.list_notifications, portal.get_fees):
+				with self.assertRaises(portal.PortalAccessClosed) as refused:
+					fn()
+				self.assertIn("validated", str(refused.exception))
+				frappe.clear_messages()
+			self.assertRefused(portal.accept_privacy_notice, version=privacy_version(), exc=portal.PortalAccessClosed)
+			self.assertRefused(portal.confirm_profile, updates={"city": "Karaikudi"}, exc=portal.PortalAccessClosed)
 
-			for fn in (portal.get_fees, portal.get_dashboard, portal.list_leaves, portal.list_grievances, portal.get_menu):
-				self.assertRefused(fn, exc=portal.PortalValidationPending)
-			self.assertRefused(portal.apply_leave, **leave_data(), exc=portal.PortalValidationPending)
-			with multipart_request("photo.png", png_bytes()):
+		# A guardian whose only ward is not validated yet is held back the same way.
+		with self.set_user(self.parent_pending.user):
+			self.assertRefused(portal.get_session, exc=portal.PortalAccessClosed)
+
+	def test_session_ends_when_the_record_is_closed_or_rejected(self):
+		hostel = make_hostel()
+		beds = make_beds(hostel, 2)
+		leaver, rejected = make_student(beds[0]), make_student(beds[1])
+		parent = make_guardian([leaver.name])
+		with self.set_user(leaver.user):
+			self.assertEqual(portal.get_session()["kind"], "student")
+
+		frappe.db.set_value("Hostel Student", leaver.name, "status", "Vacated")
+		frappe.db.set_value("Hostel Student", rejected.name, "validation_status", "Rejected")
+		with self.set_user(leaver.user):
+			self.assertRefused(portal.get_session, exc=portal.PortalAccessClosed)
+			self.assertRefused(portal.get_fees, exc=portal.PortalAccessClosed)
+		with self.set_user(rejected.user):
+			self.assertRefused(portal.get_session, exc=portal.PortalAccessClosed)
+		with self.set_user(parent.user):
+			# Their only ward has left the hostel, so the parent portal is closed as well.
+			self.assertRefused(portal.get_session, exc=portal.PortalAccessClosed)
+
+	def test_validated_student_confirms_details_on_first_sign_in(self):
+		student = make_student(make_beds(make_hostel(), 1)[0])
+		with self.set_user(student.user):
+			self.assertFalse(portal.get_session()["profile_confirmed"])
+			self.assertEqual(portal.confirm_profile(updates={"city": "Karaikudi"}), {"ok": True})
+			self.assertTrue(portal.get_session()["profile_confirmed"])
+
+	def test_parent_with_a_pending_ward_is_held_back_for_that_ward_only(self):
+		hostel = make_hostel()
+		beds = make_beds(hostel, 2)
+		first, second = sorted([make_student(beds[0]), make_student(beds[1])], key=lambda s: s.name)
+		# The ward a parent's request falls back to (the first by register number) is the pending one.
+		frappe.db.set_value("Hostel Student", first.name, "validation_status", "Pending")
+		parent = make_guardian([first.name, second.name])
+
+		with self.set_user(parent.user):
+			wards = {ward["student"]: ward for ward in portal.get_session()["wards"]}
+			self.assertEqual(wards[first.name]["validation_status"], "Pending")
+			self.assertEqual(wards[second.name]["validation_status"], "Validated")
+			self.assertEqual(portal.get_fees(student=second.name)["student"], second.name)
+			self.assertRefused(portal.get_fees, student=first.name, exc=portal.PortalValidationPending)
+
+			# An upload is checked against the ward the grievance is for, not the first ward.
+			with multipart_request("leak.png", png_bytes()):
+				self.assertTrue(portal.upload_attachment(purpose="grievance", student=second.name)["file_url"])
+			with multipart_request("leak.png", png_bytes()):
 				self.assertRefused(portal.upload_attachment, purpose="grievance", exc=portal.PortalValidationPending)
 
-	def test_parent_of_unvalidated_student_is_limited(self):
-		with self.set_user(self.parent_pending.user):
-			self.assertEqual(portal.get_profile()["name"], self.pending.name)
-			self.assertRefused(portal.get_fees, exc=portal.PortalValidationPending)
+	def test_inactive_student_keeps_dues_but_not_resident_features(self):
+		student = make_student(make_beds(make_hostel(), 1)[0])
+		invoice = make_invoice(student.name)
+		frappe.db.set_value("Hostel Student", student.name, "status", "Suspended")
+		order = {"transaction": "PTX-TEST", "gateway": "razorpay", "checkout": {}}
+
+		with (
+			patch("hostel360.hostel_fees.services.create_payment_order", return_value=order) as create,
+			self.set_user(student.user),
+		):
+			self.assertIn(invoice, [row["name"] for row in portal.get_fees()["invoices"]])
+			self.assertEqual(portal.create_payment(invoices=[invoice]), order)
+			dashboard = portal.get_dashboard()
+			self.assertTrue(dashboard["restricted"])
+			self.assertEqual(dashboard["student_status"], "Suspended")
+			self.assertIsNone(dashboard["today_menu"])
+			self.assertEqual(dashboard["pending"], {})
+			self.assertIsNotNone(dashboard["fees"])
+
+			for fn in (portal.list_leaves, portal.list_grievances, portal.get_menu, portal.list_certificates):
+				self.assertRefused(fn, exc=portal.PortalStudentInactive)
+			self.assertRefused(
+				portal.raise_grievance,
+				category="Water",
+				subject="No water",
+				description="No water since morning.",
+				exc=portal.PortalStudentInactive,
+			)
+			self.assertRefused(portal.apply_leave, **leave_data(), exc=portal.PortalStudentInactive)
+		create.assert_called_once()
 
 	def test_privacy_consent_is_required_until_accepted(self):
 		hostel = make_hostel()
@@ -792,6 +899,204 @@ class TestPortalAPI(IntegrationTestCase):
 		with self.set_user(self.parent_a.user):
 			self.assertIn("approvals", portal.get_dashboard()["pending"])
 
+	def test_dashboard_says_which_sections_failed(self):
+		# A failing fee lookup must not read as "no dues" on the home screen.
+		with (
+			patch("hostel360.hostel_fees.services.get_fee_summary", side_effect=RuntimeError("Unknown column")),
+			patch.object(frappe, "log_error"),
+			self.set_user(self.a.user),
+		):
+			dashboard = portal.get_dashboard()
+		self.assertIsNone(dashboard["fees"])
+		self.assertIn("fees", dashboard["unavailable"])
+		self.assertFalse(dashboard["restricted"])
+
+		with self.set_user(self.a.user):
+			self.assertEqual(portal.get_dashboard()["unavailable"], [])
+
+	# ------------------------------------------------------------------ session details
+
+	def test_session_carries_office_contacts_and_portal_rules(self):
+		set_hostel_settings(office_phone="04565 224528", office_email="hostel.office@example.com")
+		try:
+			with self.set_user(self.a.user):
+				settings = portal.get_session()["settings"]
+			with self.set_user("Guest"):
+				boot = json.loads(hostel_page.get_context(frappe._dict()).boot_json)
+		finally:
+			set_hostel_settings(office_phone=None, office_email=None)
+
+		self.assertEqual(settings["office_phone"], "04565 224528")
+		self.assertEqual(settings["office_email"], "hostel.office@example.com")
+		self.assertEqual(boot["office_phone"], "04565 224528")
+		self.assertEqual(boot["office_email"], "hostel.office@example.com")
+		# The SPA's upload checks use the same limits as the server (5 MB, no GIF).
+		from hostel360.security.files import PORTAL_EXTENSIONS, PORTAL_MAX_BYTES
+
+		self.assertEqual(settings["upload"]["max_bytes"], PORTAL_MAX_BYTES)
+		self.assertEqual(set(settings["upload"]["extensions"]), set(PORTAL_EXTENSIONS))
+		self.assertNotIn("gif", settings["upload"]["extensions"])
+		self.assertEqual(settings["mess_day_cutoff_hour"], 12)
+		self.assertTrue(settings["time_zone"])
+
+	def test_privacy_notice_text_reaches_signed_in_users_and_guests(self):
+		original = frappe.db.get_single_value("Hostel Settings", "privacy_notice")
+		set_hostel_settings(privacy_notice="<p>Grievance Officer: Dr. Meena</p><script>alert(1)</script>")
+		try:
+			with self.set_user(self.a.user):
+				notice = portal.get_privacy_notice()
+			with self.set_user("Guest"):
+				public = portal.get_privacy_notice()
+		finally:
+			set_hostel_settings(privacy_notice=original)
+
+		self.assertIn("Grievance Officer: Dr. Meena", notice["notice"])
+		self.assertNotIn("<script", notice["notice"])
+		self.assertEqual(notice["version"], privacy_version())
+		self.assertEqual(public["notice"], notice["notice"])
+		self.assertEqual(public["version"], privacy_version())
+		self.assertFalse(public["consent_required"])
+		self.assertIsNone(public["accepted_version"])
+
+	def test_set_language_switches_server_messages(self):
+		student = make_student(make_beds(make_hostel(), 1)[0])
+		self.addCleanup(setattr, frappe.local, "lang", "en")
+		with self.set_user(student.user):
+			self.assertEqual(portal.set_language(lang="ta"), {"ok": True, "language": "ta"})
+			self.assertEqual(frappe.db.get_value("User", student.user, "language"), "ta")
+			self.assertEqual(portal.get_session()["language"], "ta")
+			self.assertRefused(portal.set_language, lang="fr", exc=frappe.ValidationError)
+			self.assertRefused(portal.set_language, lang="", exc=frappe.ValidationError)
+			portal.set_language(lang="en")
+		self.assertEqual(frappe.db.get_value("User", student.user, "language"), "en")
+
+	# ------------------------------------------------------------------ notifications and grievances
+
+	def test_notifications_name_the_ward_they_are_about(self):
+		from hostel360.student_services import services as student_services
+
+		hostel = make_hostel()
+		beds = make_beds(hostel, 2)
+		first, second = make_student(beds[0]), make_student(beds[1])
+		parent = make_guardian([first.name, second.name])
+		about_second = student_services.raise_grievance(
+			second.name, {"category": "Water", "subject": "No water", "description": "No water today."}, "Administrator"
+		)
+		about_stranger = student_services.raise_grievance(
+			self.b.name, {"category": "Water", "subject": "No water", "description": "No water today."}, "Administrator"
+		)
+		mine = make_notification(parent.user, "Grievance updated", link=f"/hostel/grievances/{about_second}")
+		frappe.db.set_value("Notification Log", mine, {"document_type": "Hostel Grievance", "document_name": about_second})
+		stray = make_notification(parent.user, "Grievance updated")
+		frappe.db.set_value("Notification Log", stray, {"document_type": "Hostel Grievance", "document_name": about_stranger})
+
+		with self.set_user(parent.user):
+			rows = {row["name"]: row for row in portal.list_notifications()}
+		self.assertEqual(rows[mine]["student"], second.name)
+		self.assertEqual(rows[mine]["message"], "Grievance updated details")
+		self.assertIsNone(rows[stray]["student"])
+
+	def test_grievance_attachments_are_served_through_the_portal(self):
+		with self.set_user(self.a.user):
+			content = png_bytes()
+			with multipart_request("leak.png", content):
+				upload = portal.upload_attachment(purpose="grievance")
+			name = portal.raise_grievance(
+				category="Plumbing", subject="Pipe leak", description="Pipe leaks in bathroom.", attachments=[upload["file_url"]]
+			)["name"]
+			secret_name = portal.raise_grievance(
+				category="Ragging or Harassment", subject="Seniors", description="Being troubled every night."
+			)["name"]
+
+		desk_file = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "statement_witness.png",
+				"content": png_bytes(),
+				"is_private": 1,
+				"attached_to_doctype": "Hostel Grievance",
+				"attached_to_name": name,
+			}
+		).insert(ignore_permissions=True)
+
+		with self.set_user(self.parent_a.user):
+			detail = portal.get_grievance(name=name)
+			self.assertEqual([item["file_name"] for item in detail["attachments"]], [upload["file_name"]])
+			attachment = detail["attachments"][0]
+			self.assertNotIn("file_url", attachment)
+			self.assertIn("download_grievance_attachment", attachment["url"])
+
+			portal.download_grievance_attachment(name=name, file=attachment["name"])
+			self.assertEqual(frappe.local.response.filecontent, content)
+			self.assertEqual(frappe.local.response.display_content_as, "inline")
+			self.assertRefused(
+				portal.download_grievance_attachment, name=name, file=desk_file.name, exc=frappe.DoesNotExistError
+			)
+			self.assertRefused(portal.download_grievance_attachment, name=secret_name, file=attachment["name"])
+		for key in ("type", "filecontent", "filename", "content_type", "display_content_as"):
+			frappe.local.response.pop(key, None)
+
+		with self.set_user(self.b.user):
+			self.assertRefused(portal.download_grievance_attachment, name=name, file=attachment["name"])
+
+	def test_timeline_marks_only_the_viewers_own_entries(self):
+		with self.set_user(self.parent_a.user):
+			name = portal.raise_grievance(
+				category="Water", subject="Hot water", description="No hot water for a week.", student=self.a.name
+			)["name"]
+			portal.comment_grievance(name=name, comment="Please fix this quickly.")
+		with self.set_user(self.a.user):
+			portal.comment_grievance(name=name, comment="Still not fixed.")
+			timeline = portal.get_grievance(name=name)["timeline"]
+
+		parent_name = frappe.utils.get_fullname(self.parent_a.user)
+		by_message = {entry["message"]: entry for entry in timeline}
+		self.assertFalse(by_message["Please fix this quickly."]["is_mine"])
+		self.assertEqual(by_message["Please fix this quickly."]["by"], parent_name)
+		self.assertTrue(by_message["Still not fixed."]["is_mine"])
+		self.assertFalse(timeline[0]["is_mine"])
+
+		with self.set_user(self.parent_a.user):
+			timeline = portal.get_grievance(name=name)["timeline"]
+		self.assertTrue({entry["message"]: entry for entry in timeline}["Please fix this quickly."]["is_mine"])
+
+	# ------------------------------------------------------------------ payments
+
+	def make_transaction(self, student: str, status: str, gateway: str = "PayU", payment: str | None = None) -> str:
+		doc = frappe.new_doc("Hostel Payment Transaction")
+		doc.update({"student": student, "status": status, "gateway": gateway, "amount": 1500, "payment": payment})
+		doc.name = "PTX-PT-" + uid(8)
+		doc.db_insert()
+		return doc.name
+
+	def test_payment_status_after_a_redirect_checkout(self):
+		settled = {"status": "Success", "payment": "PAY-X", "receipt_number": "PAY-X", "transaction": "PTX"}
+		open_payu = self.make_transaction(self.a.name, "Pending", "PayU")
+		open_razorpay = self.make_transaction(self.a.name, "Initiated", "Razorpay")
+		failed = self.make_transaction(self.a.name, "Failed", "PayU")
+		paid = self.make_transaction(self.a.name, "Success", "PayU", payment=self.payment_a)
+		theirs = self.make_transaction(self.b.name, "Pending", "PayU")
+
+		with (
+			patch("hostel360.hostel_fees.services.confirm_checkout", return_value=settled) as confirm,
+			self.set_user(self.a.user),
+		):
+			# An open PayU payment is settled with the gateway; the query string is never trusted.
+			self.assertEqual(portal.get_payment_status(transaction=open_payu), settled)
+			confirm.assert_called_once_with(open_payu, {})
+
+			waiting = portal.get_payment_status(transaction=open_razorpay)
+			self.assertEqual(waiting["status"], "Pending")
+			self.assertTrue(waiting["message"])
+			self.assertEqual(portal.get_payment_status(transaction=failed)["status"], "Failed")
+			done = portal.get_payment_status(transaction=paid)
+			self.assertEqual((done["status"], done["payment"]), ("Success", self.payment_a))
+			self.assertRefused(portal.get_payment_status, transaction=theirs)
+		self.assertEqual(confirm.call_count, 1)
+
+		with self.set_user(self.parent_a.user):
+			self.assertEqual(portal.get_payment_status(transaction=paid)["status"], "Success")
+
 	# ------------------------------------------------------------------ rate limits
 
 	def test_writes_are_rate_limited_per_user(self):
@@ -808,6 +1113,61 @@ class TestPortalAPI(IntegrationTestCase):
 		finally:
 			frappe.flags.hostel360_enforce_rate_limits = False
 			frappe.cache.delete(*keys)
+
+
+class TestPortalTranslations(IntegrationTestCase):
+	"""Server messages follow the portal's Tamil switch (hostel360/locale/ta.po)."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		from babel.messages.pofile import read_po
+
+		cls.locale_dir = os.path.join(frappe.get_app_path("hostel360"), "locale")
+		with open(os.path.join(cls.locale_dir, "ta.po"), "rb") as fh:
+			cls.catalog = read_po(fh)
+		cls.translated = {message.id: message.string for message in cls.catalog if message.id and message.string}
+
+	def tearDown(self):
+		frappe.local.lang = "en"
+		frappe.translate.clear_cache()
+		super().tearDown()
+
+	def portal_messages(self, path: str) -> set[str]:
+		from babel.messages.extract import extract_from_file
+
+		return {
+			message
+			for _lineno, message, _comments, _context in extract_from_file("python", path, keywords={"_": None})
+			if isinstance(message, str) and message
+		}
+
+	def test_every_portal_message_has_a_tamil_translation(self):
+		for path in (portal.__file__, hostel_page.__file__):
+			missing = sorted(self.portal_messages(path) - set(self.translated))
+			self.assertEqual(missing, [], f"untranslated in {os.path.basename(path)}")
+
+	def test_translations_keep_their_placeholders(self):
+		placeholder = re.compile(r"\{\d*\}")
+		for msgid, text in self.translated.items():
+			self.assertEqual(sorted(placeholder.findall(msgid)), sorted(placeholder.findall(text)), msgid)
+
+	def test_server_messages_are_tamil_for_a_tamil_user(self):
+		from frappe.gettext.translate import get_mo_path, get_po_path, write_binary
+
+		# `bench build` compiles the catalogue; compile it here too if this checkout has not been built.
+		if not get_mo_path("hostel360", "ta").exists() or (
+			get_po_path("hostel360", "ta").stat().st_mtime > get_mo_path("hostel360", "ta").stat().st_mtime
+		):
+			write_binary("hostel360", self.catalog, "ta")
+		frappe.translate.clear_cache()
+
+		message = "Please choose to approve or reject the leave."
+		frappe.local.lang = "ta"
+		self.assertEqual(frappe._(message), self.translated[message])
+		self.assertNotEqual(frappe._(message), message)
+		frappe.local.lang = "en"
+		self.assertEqual(frappe._(message), message)
 
 
 class TestPortalPage(IntegrationTestCase):
@@ -829,20 +1189,7 @@ class TestPortalPage(IntegrationTestCase):
 		self.assertEqual(context.no_cache, 1)
 		self.assertEqual(context.csrf_token, "")
 		boot = json.loads(context.boot_json)
-		self.assertEqual(
-			set(boot),
-			{
-				"site_name",
-				"institution_name",
-				"institution_short_name",
-				"logo",
-				"support_phone",
-				"support_email",
-				"is_logged_in",
-				"kind",
-				"lang",
-			},
-		)
+		self.assertEqual(set(boot), BOOT_KEYS)
 		self.assertFalse(boot["is_logged_in"])
 		self.assertIsNone(boot["kind"])
 		self.assertEqual(boot["site_name"], frappe.local.site)

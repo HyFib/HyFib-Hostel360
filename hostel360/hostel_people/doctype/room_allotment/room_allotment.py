@@ -79,6 +79,11 @@ class RoomAllotment(Document):
 		)
 		if not student:
 			frappe.throw(_("Student {0} does not exist.").format(frappe.bold(self.student)))
+		if self.check_user_access():
+			# Link fields are not permission-checked on save, and the student's name is sent
+			# back with the saved allotment, so a hostel-scoped user must be able to see the
+			# student they allot.
+			frappe.has_permission("Hostel Student", "read", doc=self.student, throw=True)
 		self.student_name = student.full_name
 		if self.is_historical():
 			return
@@ -124,6 +129,11 @@ class RoomAllotment(Document):
 		)
 		if previous.student != self.student:
 			frappe.throw(_("Previous allotment {0} belongs to another student.").format(self.previous_allotment))
+		if self.check_user_access():
+			# Submitting a transfer closes the previous allotment, so it is an action on that
+			# allotment too. Without this a user scoped to one hostel could move a student out
+			# of a hostel they cannot see by creating the transfer directly.
+			frappe.has_permission("Room Allotment", "submit", doc=self.previous_allotment, throw=True)
 		if self.is_historical():
 			return
 		if previous.docstatus != 1 or previous.status != "Active":
@@ -172,6 +182,13 @@ class RoomAllotment(Document):
 	def is_historical(self) -> bool:
 		"""A migrated allotment that ended before go-live and never holds a bed."""
 		return in_migration() and self.status in HISTORICAL_STATUSES
+
+	def check_user_access(self) -> bool:
+		"""Whether the records this allotment acts on must be visible to the current user.
+
+		System paths (the data migration, setup scripts) insert with ``ignore_permissions``.
+		"""
+		return not self.flags.ignore_permissions and not in_migration()
 
 	# ------------------------------------------------------------------ submit / cancel
 
@@ -225,6 +242,7 @@ class RoomAllotment(Document):
 
 	def on_submit(self):
 		if self.is_historical():
+			refresh_last_hostel(self.student)
 			return
 
 		if self.allotment_type == "Transfer":
@@ -251,6 +269,9 @@ class RoomAllotment(Document):
 		self.release_bed()
 		self.clear_student_residence()
 		self.db_set("status", "Cancelled")
+		# A cancelled allotment never happened, so the student's last hostel goes back to the
+		# one before it (or to none for a student who never had a bed).
+		refresh_last_hostel(self.student)
 		refresh_room(self.room)
 		refresh_hostel(self.hostel)
 
@@ -275,6 +296,7 @@ class RoomAllotment(Document):
 		)
 		values = {
 			"current_hostel": self.hostel,
+			"last_hostel": self.hostel,
 			"current_room": self.room,
 			"current_bed": self.bed,
 			"current_allotment": self.name,
@@ -282,6 +304,7 @@ class RoomAllotment(Document):
 		if frappe.db.get_value("Hostel Student", self.student, "status") == "Applied":
 			values["status"] = "Active"
 		frappe.db.set_value("Hostel Student", self.student, values)
+		claim_unscoped_records(self.student, self.hostel)
 
 	def release_bed(self):
 		bed = frappe.db.get_value("Hostel Bed", self.bed, ["current_allotment"], as_dict=True, for_update=True)
@@ -298,6 +321,8 @@ class RoomAllotment(Document):
 			)
 
 	def clear_student_residence(self):
+		# last_hostel stays: hostel-scoped staff keep seeing their former residents and staff of
+		# other hostels do not (an empty hostel would make the record visible to everybody).
 		if frappe.db.get_value("Hostel Student", self.student, "current_allotment") == self.name:
 			frappe.db.set_value(
 				"Hostel Student",
@@ -430,6 +455,53 @@ class RoomAllotment(Document):
 			reference_doctype=self.doctype,
 			reference_name=self.name,
 		)
+
+
+def last_allotted_hostel(student: str) -> str | None:
+	"""Hostel of the student's current allotment, else of the most recent one that ended."""
+	rows = frappe.get_all(
+		"Room Allotment",
+		filters={"student": student, "docstatus": 1, "status": ["!=", "Cancelled"]},
+		fields=["hostel", "status"],
+		order_by="from_date desc, creation desc",
+		limit=20,
+	)
+	for row in rows:
+		if row.status == "Active":
+			return row.hostel
+	return rows[0].hostel if rows else None
+
+
+def refresh_last_hostel(student: str) -> None:
+	"""Re-derive ``last_hostel`` from the allotment history (the current hostel wins)."""
+	current = frappe.db.get_value("Hostel Student", student, ["current_hostel", "last_hostel"], as_dict=True)
+	if not current:
+		return
+	wanted = current.current_hostel or last_allotted_hostel(student)
+	if (current.last_hostel or None) != (wanted or None):
+		frappe.db.set_value("Hostel Student", student, "last_hostel", wanted, update_modified=False)
+
+
+# Records that copy the student's hostel when they are created. Ones created before the
+# student had a bed carry no hostel, which Frappe treats as visible to every hostel's staff.
+HOSTEL_SCOPED_STUDENT_RECORDS = ("Hostel Fee Invoice", "Hostel Payment")
+
+
+def claim_unscoped_records(student: str, hostel: str) -> None:
+	"""File the student's hostel-less records under the hostel they have just moved into."""
+	for doctype in HOSTEL_SCOPED_STUDENT_RECORDS:
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		meta = frappe.get_meta(doctype)
+		if not (meta.has_field("student") and meta.has_field("hostel")):
+			continue
+		table = frappe.qb.DocType(doctype)
+		(
+			frappe.qb.update(table)
+			.set(table.hostel, hostel)
+			.where(table.student == student)
+			.where((table.hostel.isnull()) | (table.hostel == ""))
+		).run()
 
 
 def allot_bed(

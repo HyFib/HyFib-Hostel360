@@ -12,15 +12,36 @@ from frappe.utils import add_days, cint, getdate, now_datetime, nowdate
 from hostel360.student_services import notifications
 from hostel360.student_services.utils import (
 	assert_student_eligible,
+	assert_unchanged,
 	assert_warden_approver,
 	get_setting,
 	get_student,
 	get_verification_url,
 	in_migration,
 	is_staff_user,
+	load_for_action,
+	recheck_scope,
+	student_hostel,
 )
 
 CERTIFIED_STATUSES = ("Approved", "Issued")
+# What the certificate says about the student, copied from the student when the request is
+# made. The student's name is fetched from the student record by Frappe on every save.
+CERTIFICATE_FIELDS = ("student", "program", "department", "year_of_study", "academic_year", "hostel", "room")
+# Set only by approve_by, reject_by and mark_issued_by. The public verification page trusts
+# these, so an ordinary save may never change them.
+DECISION_FIELDS = (
+	"status",
+	"approved_by",
+	"approved_on",
+	"rejection_reason",
+	"certificate_number",
+	"issue_date",
+	"valid_till",
+	"verification_code",
+	"issued_on",
+	"issued_by",
+)
 YEAR_WORDS = {"1": "first", "2": "second", "3": "third", "4": "fourth", "5": "fifth"}
 PRONOUNS = {
 	"Male": {"title": "Mr.", "relation": "son", "subject": "He"},
@@ -46,27 +67,47 @@ class BonafideCertificateRequest(Document):
 	def validate(self):
 		self.purpose_details = (self.purpose_details or "").strip() or None
 		if self.is_new():
-			self.set_student_details()
+			student = self.set_student_details()
 			if not in_migration():
+				# A request starts undecided, whatever the request said: a code or number planted
+				# here would be vouched for by the public verification page once approved.
+				for fieldname in DECISION_FIELDS:
+					self.set(fieldname, None)
 				self.status = "Pending"
-				self.validate_duplicate()
+		else:
+			self.validate_protected_fields()
+		# Before any check whose message would describe another hostel's records.
+		recheck_scope(self)
+		if self.is_new() and not in_migration():
+			assert_student_eligible(student, _("A bonafide certificate"))
+			self.validate_duplicate()
 		if self.purpose == "Other" and not self.purpose_details:
 			frappe.throw(_("Please describe the purpose of the certificate."))
 		self.validate_locked()
 
-	def set_student_details(self):
+	def validate_protected_fields(self):
+		if in_migration():
+			return
+		assert_unchanged(
+			self, CERTIFICATE_FIELDS, _("{0} cannot be changed. Please raise a new request if they are wrong.")
+		)
+		if not self.flags.recording_decision:
+			assert_unchanged(
+				self, DECISION_FIELDS, _("{0} can only be changed with the Approve, Reject and Mark Issued actions.")
+			)
+
+	def set_student_details(self) -> frappe._dict:
 		student = get_student(self.student)
-		if not in_migration():
-			assert_student_eligible(student, _("A bonafide certificate"))
 		self.student_name = student.full_name
 		if in_migration() and self.hostel:
-			return
+			return student
 		self.program = student.get("program")
 		self.department = student.get("department")
 		self.year_of_study = student.get("year_of_study")
 		self.academic_year = get_setting("current_academic_year") or student.get("academic_year")
-		self.hostel = student.current_hostel
+		self.hostel = student_hostel(student)
 		self.room = student.get("current_room")
+		return student
 
 	def validate_duplicate(self):
 		existing = frappe.db.get_value(
@@ -92,8 +133,16 @@ class BonafideCertificateRequest(Document):
 
 	# ------------------------------------------------------------------ decisions
 
+	def save_decision(self):
+		self.flags.ignore_permissions = True
+		self.flags.recording_decision = True
+		try:
+			self.save()
+		finally:
+			self.flags.recording_decision = False
+
 	def approve_by(self, user: str):
-		assert_warden_approver(user, self.hostel)
+		assert_warden_approver(user, self.hostel, self.student)
 		if self.status != "Pending":
 			frappe.throw(_("This request has already been decided (it is {0}).").format(_(self.status)))
 		today = getdate(nowdate())
@@ -105,12 +154,11 @@ class BonafideCertificateRequest(Document):
 		self.certificate_number = next_certificate_number(today.year)
 		self.verification_code = new_verification_code()
 		self.rejection_reason = None
-		self.flags.ignore_permissions = True
-		self.save()
+		self.save_decision()
 		self.notify_student()
 
 	def reject_by(self, reason: str, user: str):
-		assert_warden_approver(user, self.hostel)
+		assert_warden_approver(user, self.hostel, self.student)
 		if self.status != "Pending":
 			frappe.throw(_("This request has already been decided (it is {0}).").format(_(self.status)))
 		reason = (reason or "").strip()
@@ -120,20 +168,19 @@ class BonafideCertificateRequest(Document):
 		self.approved_by = user
 		self.approved_on = now_datetime()
 		self.rejection_reason = reason
-		self.flags.ignore_permissions = True
-		self.save()
+		self.save_decision()
 		self.notify_student()
 
 	def mark_issued_by(self, user: str):
-		if not is_staff_user(user) or not self.has_permission("write", user=user):
+		# Not self.has_permission(): an earlier action on this object leaves ignore_permissions set.
+		if not is_staff_user(user) or not frappe.has_permission(self.doctype, "write", doc=self, user=user):
 			frappe.throw(_("You are not permitted to update this request."), frappe.PermissionError)
 		if self.status != "Approved":
 			frappe.throw(_("Only an approved certificate can be handed over."))
 		self.status = "Issued"
 		self.issued_on = now_datetime()
 		self.issued_by = user
-		self.flags.ignore_permissions = True
-		self.save()
+		self.save_decision()
 
 	def notify_student(self):
 		notifications.send(
@@ -203,18 +250,23 @@ class BonafideCertificateRequest(Document):
 		return ""
 
 	# ------------------------------------------------------------------ desk actions
+	# The form sends its own copy of the request with these calls; each action works on the
+	# stored record and then refreshes the form's copy from it.
 
 	@frappe.whitelist(methods=["POST"])
 	def approve(self):
-		self.approve_by(frappe.session.user)
+		load_for_action(self).approve_by(frappe.session.user)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def reject(self, reason: str):
-		self.reject_by(reason, frappe.session.user)
+		load_for_action(self).reject_by(reason, frappe.session.user)
+		self.reload()
 
 	@frappe.whitelist(methods=["POST"])
 	def mark_issued(self):
-		self.mark_issued_by(frappe.session.user)
+		load_for_action(self).mark_issued_by(frappe.session.user)
+		self.reload()
 
 
 def next_certificate_number(year: int) -> str:

@@ -16,6 +16,7 @@ from functools import partial
 
 import frappe
 from frappe.utils import (
+	add_to_date,
 	cint,
 	format_datetime,
 	get_datetime,
@@ -27,6 +28,7 @@ from frappe.utils import (
 from hostel360.hostel_operations import channels
 from hostel360.hostel_operations.constants import (
 	ALERT_DOCTYPE,
+	CERT_IN_REPORTING_HOURS,
 	CHANNEL_EMAIL,
 	CHANNEL_SMS,
 	CHANNEL_WHATSAPP,
@@ -158,27 +160,49 @@ def get_alert_state(alert_name: str, for_update: bool = False):
 # Dispatch -------------------------------------------------------------------
 
 
-def dispatch(alert_name: str, event: str, levels: list[int] | None = None) -> None:
-	"""Deliver now, or after the current web request commits.
+def dispatch(alert_name: str, event: str, levels: list[int] | None = None, committed: bool = False) -> None:
+	"""Deliver now, or through the job queue when called from a web request.
 
-	Inside a web request the alert row is not visible to anyone else until the request
-	commits, and the request may still fail and roll back; delivery is therefore queued
-	after commit. Scheduler jobs, background jobs and tests deliver straight away.
+	``committed`` says whether the alert row is already committed (alerts raised through
+	``alerts.raise_alert`` are written in a transaction of their own). When it is not, a web
+	request's alert is invisible to anyone else until the request commits, and the request
+	may still roll back; delivery is then queued after commit. Scheduler jobs, background
+	jobs and tests deliver straight away.
 	"""
 	levels = sorted(set(levels or []))
-	if getattr(frappe.local, "request", None) and not frappe.flags.in_test and not getattr(frappe, "job", None):
-		frappe.db.after_commit.add(partial(_enqueue_delivery, alert_name, event, levels))
+	if _in_web_request():
+		if committed:
+			_enqueue_delivery(alert_name, event, levels)
+		else:
+			frappe.db.after_commit.add(partial(_enqueue_delivery, alert_name, event, levels))
 		return
 	deliver(alert_name, event, levels)
+
+
+def _in_web_request() -> bool:
+	return bool(getattr(frappe.local, "request", None)) and not frappe.flags.in_test and not getattr(frappe, "job", None)
+
+
+def alert_queue() -> str:
+	"""Queue for alert deliveries: ``hostel360_alert_queue`` in site config, else "short".
+
+	A dedicated queue (with a worker that lists it first) keeps pages independent of bulk
+	student notifications; jobs are put at the front of whichever queue is used.
+	"""
+	return frappe.conf.get("hostel360_alert_queue") or "short"
 
 
 def _enqueue_delivery(alert_name: str, event: str, levels: list[int]) -> None:
 	try:
 		frappe.enqueue(
-			"hostel360.hostel_operations.notification.deliver",
-			queue="short",
+			"hostel360.hostel_operations.notification.deliver_queued",
+			queue=alert_queue(),
+			# A page must not wait behind thousands of fee or mess-bill notifications.
+			at_front=True,
+			timeout=300,
 			alert_name=alert_name,
-			event=event,
+			# "event" is a parameter of frappe.enqueue itself and would never reach the job.
+			alert_event=event,
 			levels=levels,
 		)
 	except Exception:
@@ -186,15 +210,34 @@ def _enqueue_delivery(alert_name: str, event: str, levels: list[int]) -> None:
 		deliver(alert_name, event, levels)
 
 
+def deliver_queued(alert_name: str, alert_event: str, levels: list[int] | None = None) -> dict:
+	"""Background job entry point for ``deliver``."""
+	return deliver(alert_name, alert_event, levels)
+
+
 def deliver(alert_name: str, event: str, levels: list[int] | None = None) -> dict:
 	"""Send one notification for an alert to every matching channel and level contact."""
 	settings = get_settings()
 	alert = frappe.get_doc(ALERT_DOCTYPE, alert_name)
-	message = build_message(alert, settings, event, levels or [])
-	targets = resolve_targets(settings, alert, event, levels or [])
+	levels = levels or []
+	message = build_message(alert, settings, event, levels)
+	targets = resolve_targets(settings, alert, event, levels)
 	results = send_to_targets(targets, message, settings)
-	_record_delivery(alert, event, levels or [], results)
-	return {"event": event, "levels": levels or [], "results": results}
+	_record_delivery(alert, event, levels, results, unreachable_levels(settings, alert, event, levels))
+	return {"event": event, "levels": levels, "results": results}
+
+
+def unreachable_levels(settings, alert, event: str, levels: list[int]) -> list:
+	"""Escalation rows among ``levels`` that have neither an e-mail address nor a mobile number."""
+	if event == "acknowledged":
+		return []
+	rows = []
+	for row in get_levels(settings):
+		if cint(row.level) not in levels or not level_accepts(row, alert.get("severity")):
+			continue
+		if not parse_emails(row.notify_emails) and not parse_mobiles(row.notify_mobiles):
+			rows.append(row)
+	return rows
 
 
 def send_to_targets(targets: list[dict], message: dict, settings) -> list[dict]:
@@ -224,10 +267,11 @@ def send_to_targets(targets: list[dict], message: dict, settings) -> list[dict]:
 	return results
 
 
-def _record_delivery(alert, event: str, levels: list[int], results: list[dict]) -> None:
+def _record_delivery(alert, event: str, levels: list[int], results: list[dict], unreachable=None) -> None:
 	from frappe.utils import escape_html
 
-	if not results:
+	unreachable = unreachable or []
+	if not results and not unreachable:
 		return
 	delivered = [r for r in results if r["ok"]]
 	failed = [r for r in results if not r["ok"]]
@@ -237,6 +281,12 @@ def _record_delivery(alert, event: str, levels: list[int], results: list[dict]) 
 		f"{len(delivered)} of {len(results)} delivered."
 	]
 	lines.extend(f"Not delivered: {r['channel_type']} {r['label']} - {r['info']}" for r in failed)
+	# A level without contacts would otherwise look like a successful escalation.
+	lines.extend(
+		f"Level {cint(row.level)} ({row.label or '-'}) has no e-mail address or mobile number in "
+		"Ops Alert Settings, so nobody at that level was told."
+		for row in unreachable
+	)
 	try:
 		frappe.get_doc(
 			{
@@ -249,7 +299,7 @@ def _record_delivery(alert, event: str, levels: list[int], results: list[dict]) 
 		).insert(ignore_permissions=True)
 	except Exception:
 		frappe.log_error(title="Hostel360: could not record alert delivery", message=frappe.get_traceback())
-	if failed:
+	if failed or unreachable:
 		frappe.log_error(
 			title="Hostel360: alert notification not delivered",
 			message="\n".join(lines),
@@ -291,6 +341,19 @@ def build_message(alert, settings, event: str, levels: list[int]) -> dict:
 	if event == "resolved" and alert.get("first_seen"):
 		duration = _duration(minutes_between(alert.first_seen, alert.get("resolved_on") or now))
 
+	# CERT-In directions: a reportable incident must reach CERT-In (and, by contract, the
+	# institution) within six hours of detection. Say so on every critical security notice.
+	reporting_due = ""
+	if (
+		alert.get("category") == "Security"
+		and alert.get("severity") == CRITICAL
+		and event not in ("resolved", "acknowledged")
+		and alert.get("first_seen")
+		# A Security Incident's own deadline alert already states its (earlier) deadline.
+		and not str(alert.get("alert_key") or "").startswith("security.incident.")
+	):
+		reporting_due = _display(add_to_date(get_datetime(alert.get("first_seen")), hours=CERT_IN_REPORTING_HOURS))
+
 	name = alert.get("name")
 	return {
 		"event": event,
@@ -312,6 +375,7 @@ def build_message(alert, settings, event: str, levels: list[int]) -> dict:
 		"escalation_level": top or cint(alert.get("escalation_level")),
 		"escalation_label": escalation_label,
 		"duration_display": duration,
+		"reporting_due_display": reporting_due,
 		"acknowledged_by": alert.get("acknowledged_by") if event == "acknowledged" else None,
 		"instance_label": settings.get("instance_label") or "Hostel360",
 		"environment": settings.get("environment") or "Production",

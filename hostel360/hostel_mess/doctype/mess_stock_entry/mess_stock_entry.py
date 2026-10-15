@@ -4,8 +4,9 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 
+from hostel360.hostel_mess.permissions import assert_mess_access
 from hostel360.hostel_mess.stock import (
 	QTY_PRECISION,
 	QTY_TOLERANCE,
@@ -19,7 +20,7 @@ from hostel360.hostel_mess.stock import (
 	signed_qty,
 	update_last_purchase_rate,
 )
-from hostel360.hostel_mess.utils import assert_period_open, in_migration
+from hostel360.hostel_mess.utils import assert_period_open, get_mess_settings, in_migration
 
 
 class MessStockEntry(Document):
@@ -34,7 +35,8 @@ class MessStockEntry(Document):
 			self.warn_shortage()
 
 	def before_submit(self):
-		assert_period_open(self.mess, self.posting_date, _("Stock entries"))
+		# Books lock (shared, per mess) before the item locks; bill runs take the mess lock alone.
+		assert_period_open(self.mess, self.posting_date, _("Stock entries"), lock=True)
 		check_stock_availability(self)
 
 	def on_submit(self):
@@ -51,7 +53,7 @@ class MessStockEntry(Document):
 			self.update_indent()
 
 	def before_cancel(self):
-		assert_period_open(self.mess, self.posting_date, _("Stock entries"))
+		assert_period_open(self.mess, self.posting_date, _("Stock entries"), lock=True)
 		check_stock_availability(self, cancelling=True)
 
 	def on_cancel(self):
@@ -64,6 +66,7 @@ class MessStockEntry(Document):
 	# ------------------------------------------------------------------ validation
 
 	def validate_mess(self):
+		assert_mess_access(self.mess, doctype=self.doctype)
 		if not frappe.db.get_value("Hostel Mess", self.mess, "is_active") and not in_migration():
 			frappe.throw(_("Mess {0} is not active.").format(frappe.bold(self.mess)))
 
@@ -82,7 +85,9 @@ class MessStockEntry(Document):
 			frappe.throw(_("Select the supplier the goods are returned to."))
 		if self.entry_type != "Receipt":
 			self.indent = None
+			return
 		if not self.indent:
+			self.validate_receipt_without_indent()
 			return
 		indent = frappe.db.get_value(
 			"Mess Indent", self.indent, ["docstatus", "status", "mess"], as_dict=True
@@ -95,6 +100,70 @@ class MessStockEntry(Document):
 			)
 		if indent.mess != self.mess:
 			frappe.throw(_("Indent {0} was raised for {1}.").format(frappe.bold(self.indent), indent.mess))
+		self.validate_against_indent()
+
+	def validate_receipt_without_indent(self):
+		"""With indents required, only perishables may be bought without an approved indent."""
+		if in_migration() or not cint(get_mess_settings().require_indent_for_receipts):
+			return
+		items = {row.item for row in self.items if row.item}
+		perishable = set(
+			frappe.get_all(
+				"Mess Item", filters={"name": ["in", list(items)], "is_perishable": 1}, pluck="name"
+			)
+		)
+		missing = sorted(items - perishable)
+		if missing:
+			frappe.throw(
+				_(
+					"{0} can be received only against an approved indent. Select the indent in Against Indent."
+				).format(", ".join(frappe.bold(item) for item in missing)),
+				title=_("Approved Indent Needed"),
+			)
+
+	def validate_against_indent(self):
+		"""Receive no more than was approved; with indents required, nothing that was not indented."""
+		approved = {}
+		for row in frappe.get_all(
+			"Mess Indent Item",
+			filters={"parent": self.indent, "parenttype": "Mess Indent"},
+			fields=["item", "required_qty"],
+		):
+			approved[row.item] = flt(approved.get(row.item)) + flt(row.required_qty, QTY_PRECISION)
+
+		received = {}
+		for row in self.items:
+			received[row.item] = flt(received.get(row.item)) + flt(row.qty, QTY_PRECISION)
+		over = [
+			_("{0}: {1} received, {2} approved").format(frappe.bold(item), qty, approved[item])
+			for item, qty in received.items()
+			if item in approved and qty - approved[item] > QTY_TOLERANCE
+		]
+		if over:
+			frappe.throw(
+				_("More than the approved quantity of indent {0}:").format(frappe.bold(self.indent))
+				+ "<br>"
+				+ "<br>".join(over),
+				title=_("Above Approved Quantity"),
+			)
+
+		if in_migration() or not cint(get_mess_settings().require_indent_for_receipts):
+			return
+		not_indented = sorted(item for item in received if item not in approved)
+		if not_indented:
+			perishable = set(
+				frappe.get_all(
+					"Mess Item", filters={"name": ["in", not_indented], "is_perishable": 1}, pluck="name"
+				)
+			)
+			missing = [item for item in not_indented if item not in perishable]
+			if missing:
+				frappe.throw(
+					_("{0} is not in indent {1}. Raise an indent for it first.").format(
+						", ".join(frappe.bold(item) for item in missing), frappe.bold(self.indent)
+					),
+					title=_("Not Indented"),
+				)
 
 	def validate_items(self):
 		if not self.items:
@@ -225,6 +294,7 @@ def get_item_details(
 ) -> dict:
 	"""Stock on hand, moving-average rate and last purchase rate of an item (form helper)."""
 	frappe.has_permission("Mess Stock Entry", "read", throw=True)
+	assert_mess_access(mess, doctype="Mess Stock Entry")
 	as_of = get_posting_datetime(posting_date or nowdate(), posting_time or "23:59:59") if mess else None
 	balance = get_stock_balance(mess, item, as_of) if mess and item else frappe._dict(qty=0, valuation_rate=0)
 	details = frappe.db.get_value("Mess Item", item, ["uom", "last_purchase_rate"], as_dict=True) or {}

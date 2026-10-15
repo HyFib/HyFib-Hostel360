@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
-from frappe.utils import add_days, getdate, nowdate
+from frappe.utils import add_days, cint, getdate, nowdate
 
 from hostel360.hostel_fees.constants import INVOICE, SETTINGS
 from hostel360.hostel_fees.reminders import send_fee_reminders
@@ -204,65 +204,111 @@ class TestHostelFeeInvoice(FeeTestCase):
 
 	# -- reminders ---------------------------------------------------------------------------
 
-	def reminded(self) -> set[str]:
-		return {kwargs["reference_name"] for kwargs in self.notified("fee_reminder")}
+	def reminders_for(self, student: str | None = None) -> list[dict]:
+		return [k for k in self.notified("fee_reminder") if k["student"] == (student or self.student)]
 
-	def test_reminders_cover_due_soon_and_overdue_only(self):
+	def reminded_invoices(self, student: str | None = None) -> set[str]:
+		return {row["invoice"] for k in self.reminders_for(student) for row in k["context"]["invoices"]}
+
+	def test_one_reminder_per_student_covers_due_soon_and_overdue(self):
 		due_soon = make_invoice(self.student, 100, due_date=add_days(nowdate(), 2))
 		far_off = make_invoice(self.student, 100, due_date=add_days(nowdate(), 20))
 		overdue = make_invoice(
-			self.student, 100, posting_date=add_days(nowdate(), -30), due_date=add_days(nowdate(), -5)
+			self.student, 250, posting_date=add_days(nowdate(), -30), due_date=add_days(nowdate(), -5)
 		)
 		paid = make_invoice(self.student, 100, due_date=add_days(nowdate(), 1))
 		make_payment(self.student, [(paid.name, 100)]).submit()
 
 		self.notifications.reset_mock()
 		send_fee_reminders()
-		reminded = self.reminded()
-		self.assertIn(due_soon.name, reminded)
-		self.assertIn(overdue.name, reminded)
-		self.assertNotIn(far_off.name, reminded)
-		self.assertNotIn(paid.name, reminded)
+		reminders = self.reminders_for()
+		self.assertEqual(len(reminders), 1, "one message for the family, not one per invoice")
+		self.assertEqual(self.reminded_invoices(), {due_soon.name, overdue.name})
 
-		reminder = next(k for k in self.notified("fee_reminder") if k["reference_name"] == overdue.name)
-		self.assertTrue(reminder["context"]["is_overdue"])
-		self.assertEqual(reminder["context"]["days_overdue"], 5)
+		reminder = reminders[0]
+		self.assertEqual(reminder["reference_name"], overdue.name)
+		context = reminder["context"]
+		self.assertEqual((context["outstanding"], context["invoice_count"]), (350, 2))
+		self.assertTrue(context["is_overdue"])
+		self.assertEqual(context["days_overdue"], 5)
+		self.assertIn(due_soon.name, context["invoice"])
 		self.assertEqual(frappe.db.get_value(INVOICE, overdue.name, "reminder_count"), 1)
+		self.assertEqual(frappe.db.get_value(INVOICE, due_soon.name, "reminder_count"), 1)
+		self.assertEqual(frappe.db.get_value(INVOICE, far_off.name, "reminder_count"), 0)
 
-	def test_reminders_are_throttled(self):
+	def test_reminders_are_throttled_per_family(self):
 		invoice = make_invoice(self.student, 100, due_date=add_days(nowdate(), 1))
 
 		self.notifications.reset_mock()
 		send_fee_reminders()
-		self.assertIn(invoice.name, self.reminded())
+		self.assertIn(invoice.name, self.reminded_invoices())
 
 		self.notifications.reset_mock()
 		send_fee_reminders()
-		self.assertNotIn(invoice.name, self.reminded(), "reminded twice on the same day")
+		self.assertFalse(self.reminders_for(), "reminded twice on the same day")
 
 		frappe.db.set_value(INVOICE, invoice.name, "last_reminder_on", add_days(nowdate(), -2))
 		self.notifications.reset_mock()
 		send_fee_reminders()
-		self.assertNotIn(invoice.name, self.reminded(), "reminded within three days")
+		self.assertFalse(self.reminders_for(), "reminded within three days")
 
 		frappe.db.set_value(INVOICE, invoice.name, "last_reminder_on", add_days(nowdate(), -3))
 		self.notifications.reset_mock()
 		send_fee_reminders()
-		self.assertIn(invoice.name, self.reminded())
+		self.assertIn(invoice.name, self.reminded_invoices())
 		self.assertEqual(frappe.db.get_value(INVOICE, invoice.name, "reminder_count"), 2)
 
+	def test_invoices_with_different_due_dates_do_not_multiply_messages(self):
+		# Reminded yesterday for one bill; a second bill falling due today must wait for the interval.
+		earlier = make_invoice(self.student, 100, due_date=add_days(nowdate(), 1))
+		frappe.db.set_value(
+			INVOICE, earlier.name, {"last_reminder_on": add_days(nowdate(), -1), "reminder_count": 1}
+		)
+		make_invoice(self.student, 200, due_date=add_days(nowdate(), 2))
+
+		self.notifications.reset_mock()
+		send_fee_reminders()
+		self.assertFalse(self.reminders_for())
+
 	def test_reminder_limit_and_switch(self):
-		invoice = make_invoice(self.student, 100, due_date=add_days(nowdate(), 1))
-		frappe.db.set_value(INVOICE, invoice.name, "reminder_count", 2)
+		capped = make_invoice(self.student, 100, due_date=add_days(nowdate(), 1))
+		frappe.db.set_value(INVOICE, capped.name, "reminder_count", 2)
 
 		frappe.db.set_single_value(SETTINGS, "max_reminders_per_invoice", 2)
 		frappe.clear_document_cache(SETTINGS, SETTINGS)
 		self.notifications.reset_mock()
 		send_fee_reminders()
-		self.assertNotIn(invoice.name, self.reminded())
+		self.assertFalse(self.reminders_for())
+
+		fresh = make_invoice(self.student, 300, due_date=add_days(nowdate(), 2))
+		self.notifications.reset_mock()
+		send_fee_reminders()
+		self.assertEqual(self.reminded_invoices(), {fresh.name}, "a capped invoice is left out of the message")
 
 		frappe.db.set_single_value(SETTINGS, {"max_reminders_per_invoice": 0, "send_fee_reminders": 0})
 		frappe.clear_document_cache(SETTINGS, SETTINGS)
 		self.notifications.reset_mock()
 		self.assertEqual(send_fee_reminders(), 0)
 		self.assertFalse(self.notified("fee_reminder"))
+
+	def test_reminder_cap_has_a_finite_default(self):
+		from hostel360.hostel_fees.setup import SETTINGS_DEFAULTS
+
+		self.assertGreater(SETTINGS_DEFAULTS["max_reminders_per_invoice"], 0)
+		self.assertGreater(cint(frappe.get_meta(SETTINGS).get_field("max_reminders_per_invoice").default), 0)
+
+	# -- hostel of a student who has vacated -------------------------------------------------
+
+	def test_vacated_student_keeps_last_hostel_on_new_invoices(self):
+		if not frappe.get_meta("Hostel Student").has_field("last_hostel"):
+			self.skipTest("Hostel Student.last_hostel is not installed on this site")
+		frappe.db.set_value(
+			"Hostel Student",
+			self.student,
+			{"current_hostel": None, "last_hostel": self.hostel, "status": "Vacated"},
+			update_modified=False,
+		)
+		invoice = make_invoice(self.student, 400)
+		self.assertEqual(invoice.hostel, self.hostel)
+		receipt = make_payment(self.student, [(invoice.name, 400)])
+		self.assertEqual(receipt.hostel, self.hostel)

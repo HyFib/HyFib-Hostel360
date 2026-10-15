@@ -4,13 +4,14 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import formatdate, getdate, nowdate
+from frappe.utils import cint, formatdate, getdate, now_datetime, nowdate
 
 from hostel360.hostel_fees import notifications
 from hostel360.hostel_fees.constants import CASH, INVOICE, ONLINE, TRANSACTION, TX_SUCCESS
 from hostel360.hostel_fees.utils import (
 	DISPLAY_DATE_FORMAT,
 	get_portal_link,
+	get_student_hostel,
 	get_student_print_details,
 	is_migration,
 	money,
@@ -40,7 +41,10 @@ class HostelPayment(Document):
 		amended_from: DF.Link | None
 		amount: DF.Currency
 		bank_name: DF.Data | None
+		cancelled_by: DF.Link | None
+		cancelled_on: DF.Datetime | None
 		hostel: DF.Link | None
+		is_test: DF.Check
 		mode_of_payment: DF.Literal["Online", "Cash", "UPI", "Demand Draft", "Cheque", "Bank Transfer"]
 		naming_series: DF.Literal["RCPT-.YYYY.-.#####"]
 		payment_date: DF.Date
@@ -68,7 +72,7 @@ class HostelPayment(Document):
 
 	def set_missing_values(self):
 		if not self.hostel:
-			self.hostel = frappe.db.get_value("Hostel Student", self.student, "current_hostel")
+			self.hostel = get_student_hostel(self.student)
 		if self.reference_no:
 			self.reference_no = self.reference_no.strip()
 		if self.mode_of_payment != ONLINE and not self.received_by:
@@ -77,6 +81,7 @@ class HostelPayment(Document):
 	def validate_mode(self):
 		if self.mode_of_payment == ONLINE:
 			if is_migration() and not self.payment_transaction:
+				self.is_test = 0
 				return
 			if not self.payment_transaction:
 				frappe.throw(
@@ -88,7 +93,7 @@ class HostelPayment(Document):
 			tx = frappe.db.get_value(
 				TRANSACTION,
 				self.payment_transaction,
-				["student", "amount", "status", "payment", "gateway_payment_id"],
+				["student", "amount", "status", "payment", "gateway_payment_id", "test_mode"],
 				as_dict=True,
 			)
 			if not tx or tx.student != self.student:
@@ -97,6 +102,8 @@ class HostelPayment(Document):
 						self.payment_transaction
 					)
 				)
+			# Whether money is real follows the transaction, never the request.
+			self.is_test = cint(tx.test_mode)
 			if money(tx.amount) != money(self.amount):
 				frappe.throw(
 					_("The receipt amount must equal the online transaction amount {0}.").format(
@@ -114,6 +121,7 @@ class HostelPayment(Document):
 					)
 			return
 
+		self.is_test = 0
 		if self.payment_transaction:
 			frappe.throw(_("Only online receipts can be linked to an online transaction."))
 		if self.mode_of_payment != CASH and not self.reference_no and not is_migration():
@@ -224,6 +232,9 @@ class HostelPayment(Document):
 	def on_submit(self):
 		self.update_invoices()
 		self.link_transaction()
+		if self.is_test:
+			# Nobody paid real money; a "payment received" message would mislead the family.
+			return
 		notifications.notify_student(
 			notifications.EVENT_PAYMENT_RECEIVED,
 			self.student,
@@ -246,6 +257,10 @@ class HostelPayment(Document):
 
 		lock_invoices([row.invoice for row in self.allocations])
 		self.update_invoices()
+		# The day-end summary shows a cancellation on the day it happened, not on the receipt's date.
+		self.db_set(
+			{"cancelled_on": now_datetime(), "cancelled_by": frappe.session.user}, update_modified=False
+		)
 
 	def update_invoices(self):
 		for name in sorted({row.invoice for row in self.allocations}):
@@ -259,7 +274,7 @@ class HostelPayment(Document):
 			)
 
 	def before_print(self, settings=None):
-		self.print_student = get_student_print_details(self.student)
+		self.print_student = get_student_print_details(self.student, self.hostel)
 		if self.received_by:
 			self.received_by_name = frappe.utils.get_fullname(self.received_by)
 

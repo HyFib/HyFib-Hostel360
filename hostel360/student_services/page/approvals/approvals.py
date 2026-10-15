@@ -8,7 +8,7 @@ import frappe
 from frappe import _
 
 from hostel360.setup.roles import ADMIN_ROLES, DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE, WARDEN_ROLE
-from hostel360.student_services.utils import GLOBAL_APPROVER_ROLES, get_user_hostels
+from hostel360.student_services.utils import GLOBAL_APPROVER_ROLES, get_user_hostels, staff_covers_student
 
 SECTION_LIMIT = 200
 ALL_HOSTELS = "*"
@@ -121,11 +121,18 @@ def scoped_filters(user: str, filters: dict) -> dict | None:
 	return filters
 
 
+def covered_rows(user: str, rows: list) -> list:
+	"""Rows of students the user looks after, for deputies assigned to particular blocks."""
+	if approver_hostels(user) == ALL_HOSTELS:
+		return rows
+	return [row for row in rows if staff_covers_student(user, row.student, row.hostel)]
+
+
 def pending_leaves(user: str):
 	filters = scoped_filters(user, {"status": "Pending Warden Approval"})
 	if filters is None:
 		return None
-	return frappe.get_all(
+	rows = frappe.get_all(
 		LEAVE,
 		filters=filters,
 		fields=[
@@ -151,13 +158,14 @@ def pending_leaves(user: str):
 		order_by="from_datetime asc",
 		limit=SECTION_LIMIT,
 	)
+	return covered_rows(user, rows)
 
 
 def pending_certificates(user: str):
 	filters = scoped_filters(user, {"status": "Pending"})
 	if filters is None:
 		return None
-	return frappe.get_all(
+	rows = frappe.get_all(
 		BONAFIDE,
 		filters=filters,
 		fields=[
@@ -174,6 +182,7 @@ def pending_certificates(user: str):
 		order_by="creation asc",
 		limit=SECTION_LIMIT,
 	)
+	return covered_rows(user, rows)
 
 
 def pending_mess_reductions(user: str):

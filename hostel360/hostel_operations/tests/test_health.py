@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from frappe.utils import add_days, add_to_date, now_datetime
+from frappe.utils import add_days, add_to_date, get_datetime, now_datetime
 
 from hostel360.hostel_operations import health, maintenance, metrics
 from hostel360.hostel_operations.settings import get_settings
@@ -14,6 +14,11 @@ from hostel360.hostel_operations.tests.helpers import (
 	configure_settings,
 	unique_key,
 )
+
+
+def record_series(samples: list[dict], source: str) -> None:
+	for offset in range(0, len(samples), metrics.MAX_BATCH):
+		metrics.record_metrics(samples[offset : offset + metrics.MAX_BATCH], source=source)
 
 
 def fake_check(key, status, core=False, metric=None):
@@ -176,26 +181,78 @@ class TestHealthChecks(IntegrationTestCase):
 
 class TestMetrics(IntegrationTestCase):
 	def test_uptime_from_probe_with_readiness_fallback(self):
-		start = add_days(now_datetime(), -3650)
+		start = add_days(now_datetime(), -3650).replace(second=0, microsecond=0)
 		end = add_to_date(start, hours=1)
-		self.assertIsNone(metrics.compute_uptime(start, end)["uptime_percent"])
+		self.assertIsNone(metrics.compute_uptime(start, end)["uptime_percent"], "before monitoring began")
 
+		# Readiness samples every five minutes for the first 20 minutes, one of them down.
 		metrics.record_metrics(
 			[{"metric": "app_ready", "value": v, "recorded_at": add_to_date(start, minutes=5 * i)} for i, v in enumerate([1, 1, 0, 1])],
 			source="Health Check",
 		)
 		fallback = metrics.compute_uptime(start, end)
 		self.assertEqual(fallback["source"], "Application readiness checks")
-		self.assertEqual(fallback["uptime_percent"], 75.0)
-		self.assertEqual(fallback["downtime_minutes"], 5)
+		self.assertEqual(fallback["expected_minutes"], 60)
+		self.assertEqual(fallback["measured_downtime_minutes"], 5)
+		# Nothing measured the last 40 minutes: they count against availability.
+		self.assertEqual(fallback["unmonitored_minutes"], 40)
+		self.assertEqual(fallback["downtime_minutes"], 45)
+		self.assertEqual(fallback["uptime_percent"], 25.0)
 
+		# Probe samples take precedence over readiness for the minutes they cover.
 		metrics.record_metrics(
-			[{"metric": "uptime_probe", "value": 1, "recorded_at": add_to_date(start, minutes=i)} for i in range(10)],
+			[{"metric": "uptime_probe", "value": 1, "recorded_at": add_to_date(start, minutes=i)} for i in range(60)],
 			source="Uptime Probe",
 		)
 		probe = metrics.compute_uptime(start, end)
 		self.assertEqual(probe["source"], "External uptime probe")
 		self.assertEqual(probe["uptime_percent"], 100.0)
+		self.assertEqual(probe["coverage_percent"], 100.0)
+
+	def test_minutes_without_samples_count_as_downtime(self):
+		"""A host outage leaves no samples at all; it must not be reported as 100% uptime."""
+		start = get_datetime("1999-02-01 00:00:00")
+		end = get_datetime("1999-02-02 00:00:00")
+		gap = range(600, 780)  # 10:00 to 13:00: the server itself was down
+		record_series(
+			[
+				{"metric": "uptime_probe", "value": 1, "recorded_at": add_to_date(start, minutes=minute)}
+				for minute in range(1440)
+				if minute not in gap
+			],
+			source="Uptime Probe",
+		)
+
+		uptime = metrics.compute_uptime(start, end)
+		self.assertEqual(uptime["unmonitored_minutes"], 180)
+		self.assertEqual(uptime["measured_downtime_minutes"], 0)
+		self.assertEqual(uptime["downtime_minutes"], 180)
+		self.assertEqual(uptime["uptime_percent"], 87.5)
+		self.assertLess(uptime["uptime_percent"], 99.9)
+		self.assertEqual(uptime["coverage_percent"], 87.5)
+
+		# Readiness checks from inside the application fill the gap where they ran.
+		metrics.record_metrics(
+			[{"metric": "app_ready", "value": 1, "recorded_at": add_to_date(start, minutes=minute)} for minute in range(600, 690, 5)],
+			source="Health Check",
+		)
+		filled = metrics.compute_uptime(start, end)
+		self.assertEqual(filled["unmonitored_minutes"], 90)
+		self.assertEqual(filled["source"], "External uptime probe + Application readiness checks")
+
+		days = metrics.daily_uptime("1999-02-01", "1999-02-01")
+		self.assertEqual(days[0]["unmonitored_minutes"], 90)
+
+	def test_period_before_monitoring_began_is_not_counted(self):
+		start = get_datetime("1998-06-01 00:00:00")
+		# Probe installed at noon: the morning is not "unmonitored downtime".
+		metrics.record_metrics(
+			[{"metric": "uptime_probe", "value": 1, "recorded_at": add_to_date(start, minutes=720 + i)} for i in range(120)],
+			source="Uptime Probe",
+		)
+		uptime = metrics.compute_uptime(start, add_to_date(start, minutes=840))
+		self.assertEqual(uptime["expected_minutes"], 120)
+		self.assertEqual(uptime["uptime_percent"], 100.0)
 
 	def test_future_samples_are_clamped(self):
 		metric = unique_key("clamp")

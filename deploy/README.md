@@ -62,10 +62,11 @@ Region: application in **ap-hyderabad-1**, backups in **ap-mumbai-1**; all data 
 | clamav | `clamav/clamav-debian:1.4.6` (LTS) | edge | 1.75 GB |
 | php-fpm | `php:8.3.35-fpm-alpine3.23` | php | 768 MB |
 
-- **edge**: the only network with a route out (SMS/WhatsApp/e-mail/Razorpay APIs, ClamAV
-  mirrors) and the published WAF ports.
+- **edge**: the only network with a route out (SMS/WhatsApp/e-mail/Razorpay/PayU APIs,
+  ClamAV mirrors) and the published WAF ports.
 - **internal** (`internal: true`): application and data tier; MariaDB and Redis are
-  reachable only here.
+  reachable only here. The WAF is also on it under the portal host name (`SITE_NAME`, a
+  network alias) and listens there on 443 and 80 as well - see *Print PDFs* below.
 - **php** (`internal: true`): WAF and PHP-FPM only, so the PHP pages can never reach the
   database, Redis or the application.
 
@@ -104,9 +105,9 @@ command (`bench …`, `bash`).
 | Network | IMDSv2 only; containers cannot reach the metadata service (instance principal tokens) | `compute.tf`, `ansible/roles/firewall` |
 | Edge | TLS 1.2/1.3 with forward-secret AEAD ciphers, HTTP→HTTPS redirect, header validation | `terraform/oci/lb.tf` |
 | Edge | ModSecurity + OWASP CRS 4.30 (paranoia 1, inbound anomaly 5) with path- and argument-scoped Frappe exclusions | `waf/` |
-| Edge | Rate limits on OTP sign-in (`hostel360.api.auth.*`), desk login and password reset; campus NAT exemptions | `waf/templates/conf.d/00-hostel360.conf.template` |
-| Edge | HSTS, CSP (strict for the portal, Desk-compatible elsewhere; Razorpay allowed), X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, COOP | `waf/templates/includes/h360-security-headers.conf.template` |
-| Edge | Only the portal host name is served (421 otherwise); fail2ban bans abusive clients at the WAF (the real client address, not the load balancer) | `waf/`, `ansible/roles/fail2ban`, `host/bin/h360-waf-ban` |
+| Edge | Rate limits on OTP sign-in (`hostel360.api.auth.*`), desk login and password reset; the campus egress addresses are exempt (see 3.3) | `waf/templates/conf.d/00-hostel360.conf.template` |
+| Edge | HSTS, CSP (strict for the portal, Desk-compatible elsewhere; Razorpay Checkout and the PayU checkout form post allowed), X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, COOP | `waf/templates/includes/h360-security-headers.conf.template` |
+| Edge | Only the portal host name is served (421 otherwise); fail2ban bans clients with repeated failed sign-ins (401/403, never throttled 429s), CRS blocks or rate-limit excess at the WAF (the real client address, not the load balancer); the campus egress addresses and the stack's internal network are never banned | `waf/`, `ansible/roles/fail2ban`, `host/bin/h360-waf-ban` |
 | Host | ufw, SSH hardening (keys only, no root, modern algorithms), sysctl hardening, unattended security updates, auditd rules, login banner | `ansible/roles/{firewall,ssh,common,auditd}` |
 | Host | ClamAV scan-on-upload (application) and Linux Malware Detect realtime monitor + daily scan with quarantine | `clamav/`, `ansible/roles/malware` |
 | Containers | Non-root application image, `no-new-privileges`, all capabilities dropped (a minimal set added back only where an image's entrypoint needs it), read-only root filesystems for frontend, websocket, Redis cache and PHP-FPM | `compose/compose.yml` |
@@ -123,6 +124,28 @@ website loads, see `integration/website/README.md`) is answered with
 `Cross-Origin-Resource-Policy: cross-origin` and `Access-Control-Allow-Origin: *`, so it can be
 embedded and pinned with Subresource Integrity; nothing else on the portal is shared
 cross-origin.
+
+**Payment gateways.** Razorpay Checkout runs in an overlay on the fees page (its script,
+frames and API are in the portal's CSP). PayU is a full-page form post from the fees page to
+PayU's hosted checkout, so the portal's `form-action` also allows `https://secure.payu.in`
+and `https://test.payu.in` (test mode). PayU returns the payer with a cross-site form post to
+`/api/method/hostel360.api.payments.payu_return` and notifies
+`/api/method/hostel360.api.payments.payu_webhook`; the values of those posts are bank and
+gateway text (including HTML fragments from some issuers), so ModSecurity does not inspect
+argument values on exactly these two paths (rule 10111). Headers, cookies, argument names and
+the protocol rules are still enforced, and the application trusts nothing posted until the
+PayU hash checks out and PayU's verify API confirms the payment.
+
+**Print PDFs.** Frappe renders receipts, certificates, invoices and the monthly report with
+wkhtmltopdf, which loads the logo and other `/files` and `/assets` URLs from the site's public
+URL (`host_name`, set by the configurator to `PUBLIC_URL`). Inside the stack the portal host
+name resolves to the WAF (network alias on `internal`), which also listens on 443 (internal
+certificate, accepted by wkhtmltopdf) and 80, so the backend and the workers fetch them
+locally on the same scheme and port as the public URL. Without this the PDF engine would have
+to leave the host through the NAT gateway and come back through the load balancer, and where
+the public name does not resolve from the server (staging, before the DNS change) every PDF
+failed with `HostNotFoundError`. These two ports are not published; the host firewall and
+the load balancer are unchanged.
 
 **WAF tuning.** Set `WAF_RULE_ENGINE=DetectionOnly` in `/etc/hostel360/stack.env` (or
 `h360_waf_rule_engine` in Ansible) to log without blocking while a new exclusion is being
@@ -173,6 +196,30 @@ ansible-vault encrypt group_vars/hostel360/vault.yml          # openssl rand -he
 ansible-playbook site.yml --ask-vault-pass
 ```
 
+**Campus egress addresses (required for go-live).** Students and staff on the hostel and
+college Wi-Fi all reach the portal from the campus gateway's few public addresses. Treated as
+one client, the campus would be throttled after 20 sign-in codes an hour, and the refusals
+would get it banned at the WAF. Before the first run, get the public egress address(es) from
+ACGCET's network administrator (or run `curl -s https://ifconfig.me` on a campus PC) and set
+them in `group_vars/hostel360/main.yml`:
+
+```
+h360_environment: production
+h360_campus_egress_cidrs:
+  - <public address or range of the campus gateway>
+```
+
+From this one list the playbook exempts the campus from the WAF's sign-in rate limits
+(`/etc/hostel360/waf/lists/rate-exempt.conf`), from fail2ban (`ignoreip`), and from the OTP
+limit of 20 codes an hour per address (Messaging Settings > Trusted Networks, written by
+`h360-site-init`, which Ansible also runs once the site exists). The per-number limits
+(5 codes an hour, 60 s apart, 5 wrong codes) still apply to everyone. In production the
+playbook stops before changing anything if the list is empty, or contains a private,
+documentation (the example's placeholder) or over-wide range; `h360_environment: staging`
+relaxes the first two checks for test servers. When the campus address changes, update the
+list and run `ansible-playbook site.yml --tags app,fail2ban`; an address dropped from the
+list is deleted by hand in Messaging Settings (the playbook only adds).
+
 Roles, in order: `common` (packages, Asia/Kolkata, chrony with NIC/NPL, unattended
 upgrades, sysctl, journald and logrotate at 180 days, swap, administrators), `ssh`,
 `storage` (format if blank, mount by label at `/srv/hostel360`, at least 4,000,000 inodes),
@@ -190,13 +237,49 @@ sudo h360-site-init
 
 Creates the site with `hostel360` installed, enables the scheduler, stores the
 Administrator password in `/etc/hostel360/secrets/site_admin_password`, writes the ingest
-secret and an OCI notification token into Ops Alert Settings, and prints the
-`alarm_https_endpoint` to add to `terraform.tfvars` (then `terraform apply` again so OCI
-alarms also arrive in Hostel360 as Ops Alerts). Then sign in as Administrator, enable
-two-factor authentication and complete Hostel Settings, Payment Settings and Messaging
-Settings.
+secret and an OCI notification token into Ops Alert Settings, adds the campus egress
+addresses to Messaging Settings > Trusted Networks, and prints the `alarm_https_endpoint` to
+add to `terraform.tfvars` (then `terraform apply` again so OCI alarms also arrive in
+Hostel360 as Ops Alerts).
 
-### 3.5 Verify
+### 3.5 First sign-in and two-factor enrolment
+
+Two-factor authentication with an authenticator app ("OTP App": Google Authenticator,
+Microsoft Authenticator, FreeOTP, ...) is switched on for the site and required for the
+Administrator, every System Manager and every Hostel360 desk role. Frappe normally e-mails a
+QR code at a user's first desk sign-in; on a new site no outgoing e-mail account exists yet
+(the first sign-in would fail with "Please setup default outgoing Email Account"), and setting
+one up needs a desk sign-in. So the Administrator is enrolled from the server:
+
+1. On the server, with the person who will hold the Administrator account present:
+
+   ```
+   sudo h360-2fa-enrol Administrator
+   ```
+
+   It shows a QR code (and the key in groups of four) for the authenticator app, then asks
+   for the code the app shows; the enrolment counts only when that code is right, so a
+   mistyped key cannot lock anyone out. The key appears on this terminal only - do not
+   redirect the output to a file.
+2. Sign in at `https://<site>/login` as Administrator with the password from
+   `/etc/hostel360/secrets/site_admin_password` and the 6-digit code from the app.
+3. Set up outgoing e-mail (Email Account, "Default Outgoing") and give the Administrator
+   user a real mailbox, so other users receive their QR code by e-mail from now on.
+4. Create a named user with the System Manager role for each HyFib administrator (ACGCET
+   officials get Institution Auditor, wardens and office staff their Hostel360 role); the
+   shared Administrator account is for emergencies only (keep its password and the enrolled
+   phone in the operations vault). Every desk user is asked at the first sign-in to scan the
+   QR code e-mailed to them; the link is valid for 4 minutes (System Settings, "Expiry time
+   of QR Code Image Page"), so they should keep the sign-in page open. Anyone who cannot
+   receive it is enrolled in person with `sudo h360-2fa-enrol <user e-mail>`.
+5. Complete Hostel Settings, Payment Settings (gateway Razorpay or PayU) and Messaging
+   Settings; check that Trusted Networks lists the campus egress addresses.
+
+A lost or replaced phone: `sudo h360-2fa-enrol --reset <user>` issues a new key (the old one
+stops working at once) and enrols the new phone; a System Manager can also use "Reset OTP
+Secret" on the user in the desk.
+
+### 3.6 Verify
 
 ```
 sudo systemctl status hostel360-stack
@@ -276,6 +359,8 @@ sudo journalctl -t h360-agent -t h360-backup -t h360-deploy --since today
 sudo systemctl list-timers 'h360-*'
 sudo h360-waf-ban list | ban <ip> | unban <ip>
 sudo fail2ban-client status
+sudo h360-2fa-enrol <user> | --reset <user>          # authenticator app enrolment (3.5)
+sudo h360-site-init --trusted-networks               # campus addresses into Messaging Settings
 sudo maldet --report list
 sudo docker compose -p hostel360 --env-file /etc/hostel360/stack.env \
      -f /opt/hostel360/deploy/compose/compose.yml exec backend bench --site <site> console
@@ -285,12 +370,12 @@ sudo docker compose -p hostel360 --env-file /etc/hostel360/stack.env \
 
 | File | Contents | Example |
 |---|---|---|
-| `/etc/hostel360/stack.env` | compose settings, image tag | `compose/.env.example` |
+| `/etc/hostel360/stack.env` | compose settings, image tag, campus egress addresses (`CAMPUS_EGRESS_CIDRS`) | `compose/.env.example` |
 | `/etc/hostel360/agent.env` | host agent, probe, ingest | `host/config/agent.env.example` |
 | `/etc/hostel360/backup.env` | restic/rclone, volume backups | `host/config/backup.env.example` |
 | `/etc/hostel360/secrets/` | database root password, restic password, site admin password, OCI notification token | written by Ansible / `h360-site-init` |
 | `/etc/hostel360/waf/tls/` | internal certificate for LB re-encryption | Ansible |
-| `/etc/hostel360/waf/lists/` | `denylist.conf` (fail2ban), `rate-exempt.conf` | Ansible |
+| `/etc/hostel360/waf/lists/` | `denylist.conf` (fail2ban), `rate-exempt.conf` (campus egress addresses and `h360_waf_rate_exempt_cidrs`) | Ansible |
 
 ---
 
@@ -301,13 +386,35 @@ The checks used for this directory, runnable on any machine with Docker:
 ```
 docker compose -f deploy/compose/compose.yml --env-file deploy/compose/.env.example config --quiet
 docker run --rm -v "$PWD":/mnt -w /mnt koalaman/shellcheck:v0.11.0 -x \
-    deploy/host/bin/h360-* deploy/docker/entrypoint.sh deploy/docker/build.sh deploy/docker/bin/*
+    deploy/host/bin/h360-* deploy/docker/entrypoint.sh deploy/docker/build.sh deploy/docker/bin/* \
+    deploy/tests/*/run.sh tests/load/run.sh
 cd deploy/terraform/oci && docker run --rm -v "$PWD":/w -w /w hashicorp/terraform:1.16.6 fmt -check -recursive
-cd deploy/terraform/oci && docker run --rm -v "$PWD":/w -w /w -e TF_DATA_DIR=/tmp/tf hashicorp/terraform:1.16.6 \
-    sh -c 'terraform init -backend=false -input=false >/dev/null && terraform validate'
+cd deploy/terraform/oci && docker run --rm -v "$PWD":/w -w /w -e TF_DATA_DIR=/tmp/tf --entrypoint sh \
+    hashicorp/terraform:1.16.6 -c 'terraform init -backend=false -input=false >/dev/null && terraform validate'
 cd deploy/ansible && ansible-playbook --syntax-check site.yml && ansible-lint site.yml roles
 deploy/docker/build.sh                        # local image for this machine's platform
 ```
+
+Without a local Ansible, the syntax check and lint run in the tools image described below:
+
+```
+docker run --rm -v "$PWD/deploy:/work/deploy:ro" -w /work/deploy/ansible -e HOME=/tmp \
+    -e ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections hostel360-deploy-checks:1 \
+    sh -c 'ansible-playbook -i inventory.example.ini --syntax-check site.yml && ansible-lint site.yml roles'
+```
+
+Regression checks for the edge and the server configuration (Docker only; the tools image
+carries Ansible, ansible-lint and fail2ban at the tested versions):
+
+```
+docker build -t hostel360-deploy-checks:1 -f deploy/tests/Containerfile deploy/tests
+deploy/tests/waf/run.sh        # CSP and PayU at the WAF, CRS still blocking, in-stack 443/80 for PDFs
+deploy/tests/ansible/run.sh    # campus egress checks and their WAF, fail2ban and stack.env outputs
+deploy/tests/fail2ban/run.sh   # h360-auth counts failed sign-ins only, never throttled requests
+```
+
+Capacity (TR 15) is measured with the k6 load test in `tests/load/` against the staging stack;
+see `tests/load/README.md` and the results kept in `tests/load/results/`.
 
 ## 6. Tender clauses covered here
 
@@ -318,4 +425,5 @@ deploy/docker/build.sh                        # local image for this machine's p
 | 6.4 | 4,000,000 inodes | ext4 with one inode per 16 KB (~26 million), asserted by Ansible |
 | 6.5 | 300 PHP workers | PHP-FPM pool `pm = ondemand`, `pm.max_children = 300` |
 | 6.6 | Location: India | Hyderabad (primary), Mumbai (backups) |
+| TR 15 | 1,500 concurrent users | k6 load test `tests/load/` (1,500 portal + 40 desk users, p95 < 800 ms, < 1 % errors, ~150 req/s) run on staging; results in `tests/load/results/` |
 | Security | Firewall, WAF, malware scanning, HTTPS, encrypted backups, CERT-In log retention and NTP | section 2 |

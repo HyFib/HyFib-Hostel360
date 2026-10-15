@@ -18,11 +18,19 @@ import { showToast } from "@/stores/toast";
 import { formatDateTime, inclusiveDays } from "@/utils/format";
 import { leaveSteps } from "@/utils/leave";
 
-const { session, isParent } = useSession();
+const { session, isParent, reductionMinDays } = useSession();
 const leaves = useResource(() => listLeaves(studentArg()), { watch: [() => session.activeStudent] });
 const list = computed(() => leaves.data.value ?? []);
 const open = ref<string | null>(null);
 const cancelling = ref<string | null>(null);
+
+/** Statuses after the warden's approval, when a requested mess reduction would exist. */
+const DECIDED_STATUSES = ["Approved", "Checked Out", "Returned", "Overdue"];
+
+/** Mess reduction was asked for but the server did not create one (too few full mess days, or refused). */
+function reductionNotApplied(leave: Leave): boolean {
+	return Boolean(Number(leave.apply_mess_reduction)) && !leave.mess_reduction && DECIDED_STATUSES.includes(leave.status);
+}
 
 async function cancel(leave: Leave) {
 	const ok = await confirm({
@@ -92,6 +100,13 @@ async function cancel(leave: Leave) {
 					<p class="mb-4 text-sm text-ink"><span class="font-semibold">{{ t("leave.reason") }}:</span> {{ leave.reason }}</p>
 					<StepTimeline :steps="leaveSteps(leave)" :label="t('leave.progress')" />
 					<p v-if="leave.mess_reduction" class="mt-4 text-sm text-muted">{{ t("leave.reductionLinked", { name: leave.mess_reduction }) }}</p>
+					<p
+						v-else-if="reductionNotApplied(leave)"
+						class="mt-4 rounded-xl bg-warning-soft p-3 text-sm text-warning"
+						data-test="reduction-not-applied"
+					>
+						{{ tc("leave.reductionNotApplied", Number(leave.mess_reduction_days) || 0, { min: reductionMinDays }) }}
+					</p>
 					<button
 						v-if="leave.can_cancel"
 						type="button"

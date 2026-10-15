@@ -3,7 +3,9 @@
     bench --site <site> h360-setup --institution-name ... --short-name ... --admin-email ... --portal-url ...
     bench --site <site> h360-migrate --source DIR --mapping FILE [--dry-run] [--entity NAME ...]
     bench --site <site> h360-export --output DIR [--no-files] [--encrypt] [--passphrase-file FILE]
-    bench h360-verify-export --path DIR_OR_ARCHIVE [--passphrase-file FILE] [--extract-to DIR]
+    bench [--site <site>] h360-verify-export --path DIR_OR_ARCHIVE [--passphrase-file FILE] [--extract-to DIR]
+    bench --site <site> h360-purge-institution-data --confirm-site <site> --acknowledgement-reference REF [--execute]
+    bench [--site <site>] h360-verify-deletion-certificate --path FILE [--key-file FILE]
     bench --site <site> h360-demo-data [--students N] [--seed N]
 
 Exit codes: 0 success; 1 failure; 2 finished but with rows or checks that need attention.
@@ -209,7 +211,7 @@ def h360_export(context, output, include_files, encrypt, passphrase_file, archiv
 		except ValueError as e:
 			raise click.ClickException(str(e)) from e
 
-	_connect(context)
+	site = _connect(context)
 	try:
 		result = run_exit_export(
 			resolve_cli_path(output),
@@ -219,6 +221,7 @@ def h360_export(context, output, include_files, encrypt, passphrase_file, archiv
 			archive=archive,
 			progress=_progress,
 		)
+		frappe.db.commit()
 	except ExportError as e:
 		raise click.ClickException(str(e)) from e
 	finally:
@@ -232,14 +235,27 @@ def h360_export(context, output, include_files, encrypt, passphrase_file, archiv
 		click.echo(f"SHA-256 : {result['archive_sha256']}")
 	if result["encrypted"]:
 		click.secho("The archive is encrypted. Without the passphrase it cannot be opened.", fg="yellow")
+	if result.get("log"):
+		click.echo(f"Logged  : Exit Export Log {result['log']} (not verified yet)")
+	else:
+		click.secho("Warning: the export could not be logged on the site (see Error Log).", fg="yellow")
+	if not include_files:
+		click.secho("This export leaves out uploaded files; it cannot clear the way for deleting the data.", fg="yellow")
+	click.echo("Verify it, so the site records the check:")
+	click.echo(f"    bench --site {site} h360-verify-export --path {result['archive'] or result['directory']}")
 
 
 @click.command("h360-verify-export")
 @click.option("--path", "path", required=True, help="Export folder, .tar.gz archive or encrypted archive.")
 @click.option("--passphrase-file", default=None, help="Passphrase for an encrypted archive.")
 @click.option("--extract-to", default=None, help="Keep the decrypted, unpacked export in this folder.")
-def h360_verify_export(path, passphrase_file, extract_to):
-	"""Check an exit export against its manifest (no site needed)."""
+@pass_context
+def h360_verify_export(context, path, passphrase_file, extract_to):
+	"""Check an exit export against its manifest.
+
+	No site is needed for the check itself. With --site, the result is also recorded in
+	that site's Exit Export Log, which the deletion after exit requires.
+	"""
 	from hostel360.hostel_migration import crypto
 	from hostel360.hostel_migration.verify import verify_export
 
@@ -256,15 +272,229 @@ def h360_verify_export(path, passphrase_file, extract_to):
 	click.echo(f"Verified : {result.checked} files, {result.bytes:,} bytes")
 	if result.extracted_to:
 		click.echo(f"Unpacked : {result.extracted_to}")
-	if result.ok:
+	if result.manifest_sha256:
+		click.echo(f"Manifest : SHA-256 {result.manifest_sha256}")
+	recorded_ok = _record_verification(context, result)
+	if result.ok and recorded_ok is not False:
 		click.secho("OK: every file matches the manifest.", fg="green")
 		sys.exit(EXIT_OK)
+	if result.ok:
+		click.secho("The files match the manifest, but the site does not accept this copy (see above).", fg="red")
+		sys.exit(EXIT_FAILED)
 	for problem in result.problems[:200]:
 		click.secho(f"  {problem}", fg="red")
 	if len(result.problems) > 200:
 		click.echo(f"  ... and {len(result.problems) - 200} more")
 	click.secho("FAILED: the export could not be verified.", fg="red", bold=True)
 	sys.exit(EXIT_FAILED)
+
+
+def _record_verification(context, result) -> bool | None:
+	"""Record the outcome on the site given with --site. None: no site, nothing recorded."""
+	import frappe
+
+	site = get_site(context, raise_err=False)
+	if not site:
+		click.echo("Not recorded: run with --site <site> to record the check on the site.")
+		return None
+	from hostel360.hostel_migration.doctype.exit_export_log.exit_export_log import record_verification
+
+	try:
+		frappe.init(site)
+		frappe.connect()
+		name, message = record_verification(result, site=site)
+		status = frappe.db.get_value("Exit Export Log", name, "status") if name else None
+		frappe.db.commit()
+	except Exception as e:
+		click.secho(f"Not recorded on {site}: {e}", fg="yellow")
+		return None
+	finally:
+		frappe.destroy()
+	click.secho(message, fg="green" if status == "Verified" else "yellow")
+	return None if not name else status == "Verified"
+
+
+# ------------------------------------------------------------------- exit purge
+
+
+@click.command("h360-purge-institution-data")
+@click.option("--confirm-site", required=True, help="The site name again; it must match --site.")
+@click.option(
+	"--acknowledgement-reference",
+	required=True,
+	help="Reference of the institution's written confirmation that it received the exit export.",
+)
+@click.option("--execute", is_flag=True, default=False, help="Delete. Without it nothing is deleted; the command only counts.")
+@click.option(
+	"--force-without-export",
+	is_flag=True,
+	default=False,
+	help="Go ahead without a verified, complete export from the last 30 days (stated on the certificate).",
+)
+@click.option("--keep-export-copy", is_flag=True, default=False, help="Leave this server's copy of the exit export.")
+@click.option("--certificate-dir", default=None, help="Folder for the deletion certificate (default: <bench>/hostel360-exit).")
+@click.option("--yes", is_flag=True, default=False, help="Do not ask for confirmation at the terminal.")
+@pass_context
+def h360_purge_institution_data(
+	context,
+	confirm_site,
+	acknowledgement_reference,
+	execute,
+	force_without_export,
+	keep_export_copy,
+	certificate_dir,
+	yes,
+):
+	"""Delete the institution's data after exit (TR 22) and issue a signed deletion certificate."""
+	import frappe
+
+	from hostel360.hostel_migration.purge import InstitutionDataPurge, PurgeRefused, clean_reference
+
+	site = get_site(context)
+	if confirm_site.strip() != site:
+		raise click.ClickException(f"--confirm-site {confirm_site} does not match --site {site}; nothing was done.")
+	try:
+		reference = clean_reference(acknowledgement_reference)
+	except PurgeRefused as e:
+		raise click.ClickException(str(e)) from e
+
+	_connect(context)
+	try:
+		job = InstitutionDataPurge(
+			confirm_site,
+			reference,
+			force_without_export=force_without_export,
+			keep_export_copy=keep_export_copy,
+			certificate_dir=resolve_cli_path(certificate_dir) if certificate_dir else None,
+			progress=_progress,
+		)
+		refusal = None
+		try:
+			checks = job.check()
+		except PurgeRefused as e:
+			checks, refusal = None, str(e)
+		plan = job.plan(checks)
+		_print_purge_plan(plan, checks)
+
+		if refusal:
+			click.secho(f"Refused: {refusal}", fg="red", bold=True)
+			sys.exit(EXIT_FAILED)
+		if not execute:
+			click.secho("Dry run: nothing was deleted. Add --execute to delete.", fg="green", bold=True)
+			sys.exit(EXIT_OK)
+		if not yes and sys.stdin.isatty():
+			click.confirm(
+				f"Permanently delete the data listed above from {site}? This cannot be undone", abort=True
+			)
+		result = job.execute()
+	except PurgeRefused as e:
+		raise click.ClickException(str(e)) from e
+	finally:
+		frappe.destroy()
+
+	paths = result["paths"]
+	click.echo("")
+	click.secho(f"Deletion certificate {result['certificate_id']}", bold=True)
+	click.echo(f"  Signed JSON : {paths['json']}")
+	click.echo(f"  Markdown    : {paths['markdown']}")
+	if paths["pdf"]:
+		click.echo(f"  PDF         : {paths['pdf']}")
+	else:
+		click.secho(f"  PDF         : not produced ({paths['pdf_error']}); the Markdown has the same content.", fg="yellow")
+	totals = result["totals"]
+	click.echo(f"Deleted {totals['records']:,} records and {totals['files']:,} files ({totals['bytes']:,} bytes).")
+	if result["clean"]:
+		click.secho("Checked afterwards: nothing selected for deletion remains.", fg="green")
+	else:
+		click.secho("Some items remain and need attention:", fg="yellow")
+		for row in result["residual"]:
+			click.echo(f"  {row['item']}: {row['remaining']}")
+	click.echo("Finish the exit runbook for the stores outside the application listed on the certificate.")
+	sys.exit(EXIT_OK if result["clean"] else EXIT_ATTENTION)
+
+
+def _print_purge_plan(plan: dict, checks) -> None:
+	deleted = plan["deleted"]
+	click.secho(f"Site {plan['site']}: confirmation {plan['acknowledgement_reference']}", bold=True)
+	if checks and checks.export:
+		export = checks.export
+		click.echo(
+			f"Export   : {export.export_name}, made {str(export.exported_on)[:19]}, "
+			f"verified {str(export.verified_on)[:19]}, manifest SHA-256 {export.manifest_sha256}"
+		)
+	if checks and checks.problem:
+		click.secho(f"Forced   : {checks.problem}", fg="yellow")
+	for warning in (checks.warnings if checks else []):
+		click.secho(f"Warning  : {warning}", fg="yellow")
+
+	rows = [r for r in deleted["hostel360_doctypes"] if r["rows"]]
+	click.echo("")
+	click.secho(f"Hostel360 records ({sum(r['rows'] for r in rows):,} rows in {len(rows)} DocTypes):", bold=True)
+	for row in rows:
+		click.echo(f"  {row['doctype']:<40} {row['rows']:>10,}")
+	click.secho("Related Frappe records:", bold=True)
+	for row in deleted["frappe_records"]:
+		click.echo(f"  {row['doctype']:<40} {row['rows']:>10,}")
+	for row in deleted["internal_tables"]:
+		click.echo(f"  {row['table']:<40} {row['rows']:>10,}")
+	users = deleted["users"]
+	kinds = ", ".join(f"{count} {kind}" for kind, count in sorted(users["by_kind"].items())) or "none"
+	click.echo(f"User accounts: {users['count']:,} ({kinds})")
+	kept_users = plan.get("retained_users") or []
+	if kept_users:
+		shown = ", ".join(kept_users[:15]) + (f" and {len(kept_users) - 15} more" if len(kept_users) > 15 else "")
+		click.echo(f"Accounts kept (Frappe standard and HyFib operations): {shown}")
+	files = deleted["files"]
+	click.echo(
+		f"Uploaded files: {files['deleted']:,} ({files['bytes']:,} bytes), of which {files['orphans']:,} used by no record; "
+		f"{files['kept']:,} kept for records that stay"
+	)
+	for key, label in (("local_backups", "Local backups"), ("migration_sources", "Legacy extracts")):
+		item = deleted[key]
+		click.echo(f"{label}: {item['files']:,} files ({item['bytes']:,} bytes) in {item['path']}")
+	for copy in deleted["export_copies"]:
+		click.echo(f"Export copy: {copy['path']} ({copy['result']})")
+	changed = plan.get("changed_since_export") or []
+	if changed:
+		total = sum(r["rows"] for r in changed)
+		top = ", ".join(f"{r['doctype']} {r['rows']}" for r in changed[:6])
+		click.secho(f"Not in the export (added or changed after it was made): {total:,} records ({top})", fg="yellow")
+	click.echo(f"Certificate folder: {plan['certificate_dir']}")
+	click.echo("")
+
+
+@click.command("h360-verify-deletion-certificate")
+@click.option("--path", "path", required=True, help="The certificate's .json file.")
+@click.option("--key-file", default=None, help="File holding the site's encryption_key (when the site is gone).")
+@pass_context
+def h360_verify_deletion_certificate(context, path, key_file):
+	"""Check the signature of a deletion certificate."""
+	import frappe
+
+	from hostel360.hostel_migration import certificate
+
+	try:
+		document = certificate.load(resolve_cli_path(path))
+		if key_file:
+			with open(resolve_cli_path(key_file), encoding="utf-8") as f:
+				key = certificate.signing_key(f.readline().strip())
+		else:
+			site = get_site(context, raise_err=False)
+			if not site:
+				raise click.ClickException("Give --site <site>, or --key-file with the site's encryption_key.")
+			_connect(context)
+			try:
+				key = certificate.signing_key()
+			finally:
+				frappe.destroy()
+	except (certificate.CertificateError, OSError) as e:
+		raise click.ClickException(str(e)) from e
+
+	ok, message = certificate.verify(document, key)
+	body = document.get("certificate") or {}
+	click.echo(f"Certificate : {body.get('certificate_id')} for {body.get('site')}, finished {body.get('finished_at')}")
+	click.secho(message, fg="green" if ok else "red", bold=True)
+	sys.exit(EXIT_OK if ok else EXIT_FAILED)
 
 
 # --------------------------------------------------------------------- demo data
@@ -302,4 +532,12 @@ def h360_demo_data(context, students, seed):
 		sys.exit(EXIT_ATTENTION)
 
 
-commands = [h360_setup, h360_migrate, h360_export, h360_verify_export, h360_demo_data]
+commands = [
+	h360_setup,
+	h360_migrate,
+	h360_export,
+	h360_verify_export,
+	h360_purge_institution_data,
+	h360_verify_deletion_certificate,
+	h360_demo_data,
+]

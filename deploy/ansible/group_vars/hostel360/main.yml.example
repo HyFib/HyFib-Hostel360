@@ -30,5 +30,18 @@ h360_institution_short_name: ACGCET
 h360_hostel_website_origins:
   - https://www.accet.ac.in
 
-# Campus NAT addresses exempt from the WAF's per-address sign-in rate limits
+# "production" enforces the go-live checks (roles/preflight); "staging" for test servers.
+h360_environment: production
+
+# Public egress address(es) of the ACGCET campus network (the NAT/firewall in front of the
+# hostel and college Wi-Fi). Required in production. They are exempt from the WAF's sign-in
+# rate limits, from fail2ban bans and (through h360-site-init) from the OTP per-address limit,
+# because hundreds of residents share them. Ask the institution's network administrator, or
+# run "curl -s https://ifconfig.me" on a campus PC. The value below is a documentation
+# placeholder; in production the playbook stops until it is replaced.
+h360_campus_egress_cidrs:
+  - 203.0.113.16/29
+
+# Further ranges exempt from the WAF's per-address sign-in rate limits only (for example a
+# staging load generator); the campus addresses above are always included.
 h360_waf_rate_exempt_cidrs: []

@@ -4,6 +4,8 @@
 import random
 
 import frappe
+from frappe.client import insert as client_insert
+from frappe.client import set_value as client_set_value
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_to_date, get_datetime, now_datetime, time_diff_in_hours
 
@@ -16,6 +18,7 @@ from hostel360.setup.roles import (
 	WARDEN_ROLE,
 )
 from hostel360.student_services import services
+from hostel360.student_services.doctype.hostel_grievance.hostel_grievance import staff_user_query
 from hostel360.student_services.grievance_tasks import escalate_overdue_grievances
 from hostel360.student_services.permissions import grievance_has_permission
 from hostel360.student_services.testing import (
@@ -24,6 +27,7 @@ from hostel360.student_services.testing import (
 	make_hostel,
 	make_student,
 	make_user,
+	run_form_action,
 	scope_to_hostel,
 	set_hostel_settings,
 )
@@ -351,3 +355,168 @@ class TestHostelGrievance(IntegrationTestCase):
 			frappe.flags.hostel360_migration = False
 		self.assertEqual(doc.status, "Closed")
 		self.assertEqual(sent, [])
+
+	# ------------------------------------------------------------------ tampering
+
+	def as_user(self, user, fn, *args, **kwargs):
+		frappe.set_user(user)
+		try:
+			return fn(*args, **kwargs)
+		finally:
+			frappe.set_user("Administrator")
+
+	def stored(self, name, *fields):
+		return frappe.db.get_value("Hostel Grievance", name, list(fields), as_dict=True)
+
+	def test_staff_cannot_open_a_confidential_grievance_by_rewriting_it(self):
+		name = self.raise_grievance(category="Ragging or Harassment", description="SECRET: senior in room 12")
+		office = make_user([OFFICE_ROLE])
+		for values in ({"assigned_to": office}, {"category": "Other", "is_confidential": 0}, {"is_confidential": 0}):
+			with self.assertRaises(frappe.PermissionError):
+				self.as_user(office, client_set_value, "Hostel Grievance", name, values)
+		self.assertEqual(
+			self.stored(name, "assigned_to", "is_confidential", "category"),
+			{"assigned_to": None, "is_confidential": 1, "category": "Ragging or Harassment"},
+		)
+		# The hook judges the stored record, not the request's copy
+		doc = frappe.get_doc("Hostel Grievance", name)
+		doc.assigned_to, doc.is_confidential = office, 0
+		self.assertFalse(grievance_has_permission(doc, "write", office))
+
+	def test_assigned_staff_cannot_declassify(self):
+		name = self.raise_grievance(category="Ragging or Harassment")
+		frappe.get_doc("Hostel Grievance", name).assign_to_user(self.deputy, self.warden)
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(self.deputy, client_set_value, "Hostel Grievance", name, {"category": "Other", "is_confidential": 0})
+		self.assertEqual(self.stored(name, "is_confidential").is_confidential, 1)
+		# The Warden may correct a misfiled complaint
+		self.as_user(self.warden, client_set_value, "Hostel Grievance", name, {"category": "Other", "is_confidential": 0})
+		self.assertEqual(self.stored(name, "category").category, "Other")
+
+	def test_staff_may_make_a_grievance_confidential(self):
+		name = self.raise_grievance(subject="Seniors keep calling me to their room")
+		office = make_user([OFFICE_ROLE])
+		self.as_user(office, client_set_value, "Hostel Grievance", name, {"category": "Ragging or Harassment"})
+		self.assertEqual(self.stored(name, "is_confidential", "priority"), {"is_confidential": 1, "priority": "Urgent"})
+		doc = frappe.get_doc("Hostel Grievance", name)
+		self.assertFalse(frappe.has_permission("Hostel Grievance", "read", doc=doc, user=office))
+
+	def test_office_can_register_a_ragging_complaint_for_a_student(self):
+		office = make_user([OFFICE_ROLE])
+		saved = self.as_user(
+			office,
+			client_insert,
+			{
+				"doctype": "Hostel Grievance",
+				"student": self.student.name,
+				"category": "Ragging or Harassment",
+				"subject": "Reported at the office",
+				"description": "Student came to the office in person.",
+				"priority": "Low",
+				"is_confidential": 1,
+			},
+		)
+		self.assertEqual((saved["status"], saved["is_confidential"]), ("Escalated", 1))
+		doc = frappe.get_doc("Hostel Grievance", saved["name"])
+		self.assertFalse(frappe.has_permission("Hostel Grievance", "read", doc=doc, user=office))
+
+	def test_an_ordinary_save_cannot_handle_a_grievance(self):
+		name = self.raise_grievance()
+		office = make_user([OFFICE_ROLE])
+		for values in (
+			{"status": "Closed", "resolution": "fake"},
+			{"assigned_to": office},
+			{"escalation_level": 0, "sla_due_by": "2099-01-01 00:00:00"},
+		):
+			with self.assertRaises(frappe.PermissionError):
+				self.as_user(office, client_set_value, "Hostel Grievance", name, values)
+		self.assertEqual(self.stored(name, "status", "assigned_to"), {"status": "Open", "assigned_to": None})
+		# Correcting the category or priority is still an ordinary edit
+		self.as_user(office, client_set_value, "Hostel Grievance", name, {"priority": "High"})
+		self.assertEqual(self.stored(name, "priority").priority, "High")
+
+	def test_a_new_grievance_has_no_handling_history(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Hostel Grievance",
+				"student": self.student.name,
+				"category": "Water",
+				"subject": "No water",
+				"description": "Since morning",
+				"priority": "Medium",
+				"status": "Resolved",
+				"assigned_to": self.warden,
+				"resolution": "Done",
+				"updates": [{"message": "Fixed long ago", "update_by": self.warden}],
+			}
+		).insert()
+		self.assertEqual(doc.status, "Open")
+		self.assertFalse(doc.assigned_to)
+		self.assertFalse(doc.resolution)
+		self.assertEqual([row.message for row in doc.updates], ["Grievance registered."])
+
+	def test_scoped_staff_cannot_move_a_grievance_into_their_hostel(self):
+		other = make_student(make_hostel())
+		name = self.raise_grievance(student=other)
+		office = make_user([OFFICE_ROLE])
+		scope_to_hostel(office, self.hostel)
+		for hostel in (self.hostel, ""):
+			with self.assertRaises(frappe.PermissionError):
+				self.as_user(office, client_set_value, "Hostel Grievance", name, {"hostel": hostel})
+		self.assertEqual(self.stored(name, "hostel").hostel, other.hostel)
+
+	def test_form_actions_work_on_the_stored_grievance(self):
+		name = self.raise_grievance(category="Ragging or Harassment")
+		office = make_user([OFFICE_ROLE])
+		form_copy = frappe.get_doc("Hostel Grievance", name)
+		form_copy.assigned_to = office
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(office, run_form_action, form_copy, "resolve", resolution="Nothing happened")
+		self.assertEqual(self.stored(name, "status").status, "Escalated")
+
+		form_copy = frappe.get_doc("Hostel Grievance", name)
+		self.as_user(self.warden, form_copy.resolve, "Senior counselled and warned")
+		self.assertEqual(form_copy.status, "Resolved")
+
+	# ------------------------------------------------------------------ assignees
+
+	def test_auditors_neither_handle_nor_appear_as_assignees(self):
+		name = self.raise_grievance()
+		doc = frappe.get_doc("Hostel Grievance", name)
+		auditor = make_user([AUDITOR_ROLE])
+		with self.assertRaises(frappe.ValidationError):
+			doc.assign_to_user(auditor, self.warden)
+
+		picker = {row[0] for row in self.as_user(self.warden, staff_user_query, "User", "", "name", 0, 500, {})}
+		self.assertIn(self.deputy, picker)
+		self.assertNotIn(auditor, picker)
+
+		# One assigned before this rule cannot act on it either
+		frappe.db.set_value("Hostel Grievance", name, "assigned_to", auditor)
+		with self.assertRaises(frappe.PermissionError):
+			frappe.get_doc("Hostel Grievance", name).resolve_by("Done", auditor)
+
+	def test_only_grievance_handlers_can_list_staff(self):
+		guardian = make_guardian(self.student.name)
+		for user in (self.student.user, guardian.user, make_user([AUDITOR_ROLE])):
+			with self.assertRaises(frappe.PermissionError):
+				self.as_user(user, staff_user_query, "User", "", "name", 0, 20, {})
+		mess_manager = make_user([MESS_MANAGER_ROLE])
+		picker = {row[0] for row in self.as_user(mess_manager, staff_user_query, "User", "", "name", 0, 500, {})}
+		self.assertIn(self.warden, picker)
+
+	# ------------------------------------------------------------------ vacated students
+
+	def test_vacated_students_grievance_stays_with_their_last_hostel(self):
+		if not frappe.get_meta("Hostel Student").has_field("last_hostel"):
+			self.skipTest("Hostel Student has no last_hostel on this site")
+		vacated = make_student(None, status="Vacated")
+		frappe.db.set_value("Hostel Student", vacated.name, "last_hostel", self.hostel, update_modified=False)
+		name = self.raise_grievance(student=vacated, subject="Caution deposit not refunded")
+		self.assertEqual(self.stored(name, "hostel").hostel, self.hostel)
+
+		elsewhere = make_user([DEPUTY_WARDEN_ROLE])
+		scope_to_hostel(elsewhere, make_hostel())
+		self.assertEqual(self.visible_to(elsewhere, [name]), set())
+		self.assertEqual(self.visible_to(self.deputy, [name]), {name})
+

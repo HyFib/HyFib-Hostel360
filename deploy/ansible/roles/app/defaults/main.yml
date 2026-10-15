@@ -18,7 +18,13 @@ h360_waf_auth_rate: 120r/m
 h360_waf_auth_burst: 60
 h360_waf_login_rate: 30r/m
 h360_waf_login_burst: 20
+# Extra ranges exempt from the WAF's sign-in rate limits, on top of the campus egress
+# addresses (h360_campus_egress_cidrs, roles/preflight), which are always exempt.
 h360_waf_rate_exempt_cidrs: []
+# Container networks of the stack (change only if they collide with the VCN ranges)
+h360_edge_subnet: 172.30.20.0/24
+h360_internal_subnet: 172.30.10.0/24
+h360_php_subnet: 172.30.30.0/24
 h360_gunicorn_workers: 6
 h360_gunicorn_threads: 4
 

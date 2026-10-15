@@ -1,22 +1,24 @@
 <script setup lang="ts">
 /**
- * Pay selected invoices through Razorpay Checkout.
+ * Pay selected invoices through the gateway the institution chose.
  *
- * The server creates the order and fixes the amount; the browser opens Checkout and hands
- * the signed response back to verify_payment. A payment the browser could not confirm is
- * still picked up by the server's reconciliation, so the page says so instead of failing.
+ * The server creates the order and fixes the amount. With Razorpay the browser opens
+ * Checkout in the page and hands the signed response back to verify_payment; with PayU the
+ * browser posts the server-signed form to PayU's page and comes back to the fees page, which
+ * shows the outcome. A payment the browser could not confirm is still picked up by the
+ * server's reconciliation, so the page says so instead of failing.
  */
-import { CircleAlert, CircleCheck, Clock, Download, Lock } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { CircleAlert, Lock } from "@lucide/vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { ApiError, errorMessage } from "@/api/client";
-import { createPayment, downloadReceipt, getFees, verifyPayment } from "@/api/portal";
+import { createPayment, getFees, verifyPayment } from "@/api/portal";
 import type { VerifyPaymentResult } from "@/api/types";
 import EmptyState from "@/components/EmptyState.vue";
 import ErrorState from "@/components/ErrorState.vue";
 import PageHeader from "@/components/PageHeader.vue";
+import PaymentOutcome from "@/components/PaymentOutcome.vue";
 import SkeletonList from "@/components/SkeletonList.vue";
-import { useDownload } from "@/composables/useDownload";
 import { useResource } from "@/composables/useResource";
 import { t, tv } from "@/i18n";
 import { refreshUnread } from "@/stores/inbox";
@@ -24,14 +26,14 @@ import { studentArg, useSession } from "@/stores/session";
 import { canPay, totalOutstanding } from "@/utils/fees";
 import { formatDate, formatINR } from "@/utils/format";
 import { openCheckout } from "@/utils/razorpay";
+import { submitRedirectCheckout } from "@/utils/redirectCheckout";
 
-type Phase = "review" | "starting" | "checkout" | "confirming" | "done";
+type Phase = "review" | "starting" | "checkout" | "redirecting" | "confirming" | "done";
 
 const BRAND_COLOR = "#0B4F9C";
 const route = useRoute();
 const { session, paymentEnabled } = useSession();
 const fees = useResource(() => getFees(studentArg()), { watch: [() => session.activeStudent] });
-const { busyKey, download } = useDownload();
 
 const phase = ref<Phase>("review");
 const problem = ref("");
@@ -49,6 +51,8 @@ const payable = computed(() => {
 });
 const total = computed(() => totalOutstanding(payable.value));
 const onlineEnabled = computed(() => paymentEnabled.value && fees.data.value?.payment_enabled !== false);
+/** A checkout for these invoices was opened and not finished; paying again resumes it. */
+const resuming = computed(() => payable.value.some((invoice) => invoice.payment_in_progress));
 
 let attempt = 0;
 
@@ -65,6 +69,13 @@ async function startPayment() {
 			studentArg(),
 		);
 		transaction = order.transaction;
+		if (order.gateway === "payu") {
+			// The payer leaves for PayU's page and returns to the fees page with the outcome.
+			phase.value = "redirecting";
+			submitRedirectCheckout(order.checkout);
+			return;
+		}
+		if (order.gateway !== "razorpay") throw new Error("unsupported gateway");
 		phase.value = "checkout";
 		const outcome = await openCheckout(order.checkout, BRAND_COLOR);
 		if (outcome.type === "dismissed") {
@@ -108,6 +119,17 @@ function tryAgain() {
 	phase.value = "review";
 	void fees.reload();
 }
+
+/** Back from the gateway's page with the browser's Back button: the page comes back as it was left. */
+function onPageShow(event: PageTransitionEvent) {
+	if (!event.persisted || phase.value !== "redirecting") return;
+	phase.value = "review";
+	problem.value = t("pay.cancelled");
+	void fees.reload();
+}
+
+onMounted(() => window.addEventListener("pageshow", onPageShow));
+onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 </script>
 
 <template>
@@ -115,49 +137,19 @@ function tryAgain() {
 		<PageHeader :title="t('pay.title')" :back="{ name: 'fees' }" />
 
 		<!-- Outcome -->
-		<section v-if="phase === 'done' && result" class="card p-6 text-center" role="status" aria-live="polite">
-			<template v-if="result.status === 'Success'">
-				<CircleCheck :size="48" class="mx-auto text-success" aria-hidden="true" />
-				<h2 class="mt-3 text-xl font-bold text-ink">{{ t("pay.successTitle") }}</h2>
-				<p class="mt-1 text-muted">{{ t("pay.successBody", { receipt: result.receipt_number || result.payment || "" }) }}</p>
-				<div class="mt-6 grid gap-2 sm:flex sm:justify-center">
-					<button
-						v-if="result.payment"
-						type="button"
-						class="btn-primary"
-						:disabled="busyKey === 'receipt'"
-						@click="download('receipt', () => downloadReceipt(result!.payment!))"
-					>
-						<Download :size="18" aria-hidden="true" />
-						{{ busyKey === "receipt" ? t("common.downloading") : t("pay.downloadReceipt") }}
-					</button>
-					<RouterLink :to="{ name: 'fees' }" class="btn-secondary">{{ t("pay.backToFees") }}</RouterLink>
-				</div>
-			</template>
-			<template v-else-if="result.status === 'Failed'">
-				<CircleAlert :size="48" class="mx-auto text-danger" aria-hidden="true" />
-				<h2 class="mt-3 text-xl font-bold text-ink">{{ t("pay.failedTitle") }}</h2>
-				<p class="mt-1 text-muted">{{ result.message || t("pay.failedBody") }}</p>
-				<div class="mt-6 grid gap-2 sm:flex sm:justify-center">
-					<button type="button" class="btn-primary" @click="tryAgain">{{ t("pay.retry") }}</button>
-					<RouterLink :to="{ name: 'fees' }" class="btn-secondary">{{ t("pay.backToFees") }}</RouterLink>
-				</div>
-			</template>
-			<template v-else>
-				<Clock :size="48" class="mx-auto text-warning" aria-hidden="true" />
-				<h2 class="mt-3 text-xl font-bold text-ink">{{ t("pay.pendingTitle") }}</h2>
-				<p class="mt-1 text-muted">{{ result.message || t("pay.verifyLater") }}</p>
-				<p v-if="result.transaction" class="mt-2 text-xs text-muted">{{ t("pay.reference", { reference: result.transaction }) }}</p>
-				<RouterLink :to="{ name: 'fees' }" class="btn-secondary mt-6">{{ t("pay.backToFees") }}</RouterLink>
-			</template>
-		</section>
+		<PaymentOutcome v-if="phase === 'done' && result" :result="result" context="pay" @retry="tryAgain" />
 
 		<SkeletonList v-else-if="fees.loading.value && !fees.data.value" card :rows="1" />
 		<ErrorState v-else-if="fees.error.value" :error="fees.error.value" @retry="fees.reload" />
 
-		<EmptyState v-else-if="!payable.length" :title="t('pay.nothingToPay')" :body="t('pay.nothingToPayHint')">
-			<RouterLink :to="{ name: 'fees' }" class="btn-secondary">{{ t("pay.backToFees") }}</RouterLink>
-		</EmptyState>
+		<template v-else-if="!payable.length">
+			<p v-if="problem" class="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
+				<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ problem }}
+			</p>
+			<EmptyState :title="t('pay.nothingToPay')" :body="t('pay.nothingToPayHint')">
+				<RouterLink :to="{ name: 'fees' }" class="btn-secondary">{{ t("pay.backToFees") }}</RouterLink>
+			</EmptyState>
+		</template>
 
 		<template v-else>
 			<section class="card" aria-labelledby="pay-summary">
@@ -195,11 +187,17 @@ function tryAgain() {
 					<Lock :size="18" aria-hidden="true" />
 					<span v-if="phase === 'starting'">{{ t("pay.preparing") }}</span>
 					<span v-else-if="phase === 'checkout'">{{ t("pay.inCheckout") }}</span>
+					<span v-else-if="phase === 'redirecting'">{{ t("pay.redirecting") }}</span>
 					<span v-else-if="phase === 'confirming'">{{ t("pay.confirming") }}</span>
+					<span v-else-if="resuming">{{ t("pay.resumeButton", { amount: formatINR(total, "always") }) }}</span>
 					<span v-else>{{ t("pay.payButton", { amount: formatINR(total, "always") }) }}</span>
 				</button>
+				<p v-if="resuming && phase === 'review'" class="mt-3 text-sm text-muted">{{ t("pay.resumeHint") }}</p>
 				<p class="mt-3 flex items-start gap-2 text-xs text-muted">
 					<Lock :size="14" class="mt-0.5 shrink-0" aria-hidden="true" />{{ t("pay.secure") }}
+				</p>
+				<p v-if="phase === 'redirecting'" class="mt-3 rounded-xl bg-info-soft p-3 text-sm font-medium text-info" role="status">
+					{{ t("pay.redirectingHint") }}
 				</p>
 				<p v-if="phase === 'confirming'" class="mt-3 rounded-xl bg-warning-soft p-3 text-sm font-medium text-warning" role="status">
 					{{ t("pay.dontClose") }}

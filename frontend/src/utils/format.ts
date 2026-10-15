@@ -129,6 +129,61 @@ export function inclusiveDays(from: string | Date | null | undefined, to: string
 	return days > 0 ? days : 0;
 }
 
+/** The hostel's time zone; the server sends it in the session settings. */
+export const SITE_TIME_ZONE = "Asia/Kolkata";
+
+/**
+ * The hostel's wall-clock time now, as a Date whose local fields read like a clock in
+ * `timeZone` (the way parseDate reads every server value). Leave and mess dates are site
+ * times, so a phone set to another zone must compare against this, not its own clock.
+ */
+export function siteNow(timeZone: string = SITE_TIME_ZONE, at: Date = new Date()): Date {
+	try {
+		const parts = Object.fromEntries(
+			new Intl.DateTimeFormat("en-CA", {
+				timeZone,
+				hourCycle: "h23",
+				year: "numeric",
+				month: "2-digit",
+				day: "2-digit",
+				hour: "2-digit",
+				minute: "2-digit",
+				second: "2-digit",
+			})
+				.formatToParts(at)
+				.map((part) => [part.type, part.value]),
+		);
+		return new Date(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+	} catch {
+		// An unknown zone name: the device clock is the best remaining guess.
+		return new Date(at.getTime());
+	}
+}
+
+/** True when the device's clock reads differently from the hostel's (a phone abroad). */
+export function deviceOffSiteTime(timeZone: string = SITE_TIME_ZONE, at: Date = new Date()): boolean {
+	return Math.abs(siteNow(timeZone, at).getTime() - at.getTime()) > 60_000;
+}
+
+/**
+ * Full mess days missed during a leave, by the server's rule (Home Visit Leave): the day of
+ * leaving counts only when leaving before `cutoffHour`, the day of return only when returning
+ * at or after it. A Friday 6 pm to Monday 10 am leave is 2 mess days (Saturday, Sunday).
+ */
+export function messDaysAway(
+	from: string | Date | null | undefined,
+	to: string | Date | null | undefined,
+	cutoffHour = 12,
+): number {
+	const start = parseDate(from);
+	const end = parseDate(to);
+	if (!start || !end || end.getTime() <= start.getTime()) return 0;
+	const first = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate() + (start.getHours() >= cutoffHour ? 1 : 0));
+	const last = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate() - (end.getHours() < cutoffHour ? 1 : 0));
+	const days = Math.round((last - first) / 86_400_000) + 1;
+	return days > 0 ? days : 0;
+}
+
 /** "YYYY-MM" for the current month (feedback period). */
 export function currentPeriod(now = new Date()): string {
 	return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;

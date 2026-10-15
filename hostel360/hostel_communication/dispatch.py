@@ -10,6 +10,15 @@ account. Failed messages that may succeed later are retried by
 Nothing in this module raises into the caller for delivery or template problems: a
 broken template or an unreachable gateway must never block a fee payment or a leave
 approval. Problems are recorded on the Message Log row and in the Error Log.
+
+A delivery job commits after each recipient. Messages already handed to a provider keep
+their log row (and retry details) even if the job is stopped later, and no row lock is
+held across the next recipient's provider calls. A job timeout is never swallowed: it
+stops the job, after the work done so far is committed.
+
+Message Log rows keep the rendered subject and text for troubleshooting at permlevel 1
+(Hostel Administrators and System Managers): messages about confidential grievances, leave
+and fees are not for every role that may read the log.
 """
 
 import html
@@ -19,6 +28,7 @@ import math
 import frappe
 from frappe.utils import add_to_date, cint, cstr, now_datetime, strip_html, validate_email_address
 from frappe.utils.password import decrypt, encrypt
+from rq.timeouts import BaseTimeoutException
 
 from hostel360.hostel_communication import events as ev
 from hostel360.hostel_communication import rendering
@@ -26,7 +36,13 @@ from hostel360.hostel_communication.default_templates import get_default_templat
 from hostel360.hostel_communication.providers import email as email_provider
 from hostel360.hostel_communication.providers import sms as sms_provider
 from hostel360.hostel_communication.providers import whatsapp as whatsapp_provider
-from hostel360.hostel_communication.providers.base import DeliveryResult, get_settings, record_outcome
+from hostel360.hostel_communication.providers.base import (
+	BREAKER_SECONDS,
+	DeliveryResult,
+	get_settings,
+	provider_paused,
+	record_outcome,
+)
 from hostel360.setup.roles import ADMIN_ROLE, WARDEN_ROLE
 from hostel360.utils.validation import mask_email, mask_mobile, normalize_mobile
 
@@ -40,6 +56,7 @@ RETRY_BATCH_SIZE = 200
 RECIPIENTS_PER_JOB = 25
 MESSAGE_TEXT_LIMIT = 4000
 SUBJECT_LIMIT = 140
+PURGE_BATCH_SIZE = 1000
 
 # notify() stays silent while data is being installed, migrated or imported.
 SUPPRESS_FLAGS = ("in_install", "in_migrate", "in_import", "hostel360_migration")
@@ -161,17 +178,41 @@ def deliver(
 		for recipient in clean_recipients(recipients):
 			try:
 				job.deliver_to(recipient)
+			except BaseTimeoutException:
+				_commit_progress()
+				raise
 			except Exception:
 				frappe.log_error(title=f"Hostel360: {event} delivery error", message=frappe.get_traceback())
+			_commit_progress()
+	except BaseTimeoutException:
+		raise
 	except Exception:
 		frappe.log_error(title=f"Hostel360: {event} delivery job failed", message=frappe.get_traceback())
 
 
-def send_otp_message(mobile: str, otp: str, channel: str) -> bool:
+def _commit_progress() -> None:
+	"""Commit a delivery job's work so far (see the module docstring).
+
+	Only inside a deliver job of its own: called any other way, the transaction belongs to
+	the caller.
+	"""
+	job = getattr(frappe.local, "job", None)
+	if frappe.in_test or not job or job.get("method") != DELIVER_METHOD:
+		return
+	try:
+		frappe.db.commit()  # nosemgrep: messages already went out; keep their logs
+	except Exception:
+		frappe.db.rollback()
+		frappe.log_error(title="Hostel360: could not save message logs", message=frappe.get_traceback())
+
+
+def send_otp_message(mobile: str, otp: str, channel: str, timeout: tuple[float, float] | None = None) -> bool:
 	"""Send a sign-in code synchronously. Returns True when the provider accepted it.
 
 	The code itself is never written to the Message Log, the Error Log or any log file;
-	provider responses are scrubbed of it before they are stored.
+	provider responses are scrubbed of it before they are stored. ``timeout`` (connect,
+	read) bounds the provider call; a provider whose circuit breaker is open is not called
+	at all, so a messaging outage does not hold sign-in requests.
 	"""
 	channel = ev.normalize_channel(channel)
 	if channel not in ev.MOBILE_CHANNELS or not otp:
@@ -188,6 +229,19 @@ def send_otp_message(mobile: str, otp: str, channel: str) -> bool:
 	expiry_minutes = max(1, math.ceil((cint(settings.get("otp_expiry_seconds")) or 300) / 60))
 	log = _new_log(channel, ev.OTP_LOGIN, mobile, None, None, None, template.get("name"))
 	log["message"] = "Sign-in code message (the code is never stored)."
+
+	provider = _otp_provider(channel, settings)
+	if provider_paused(provider):
+		_finish_log(
+			log,
+			DeliveryResult.failed(
+				provider,
+				f"Not sent: {provider} has failed repeatedly, so sign-in codes skip it for up to "
+				f"{BREAKER_SECONDS} seconds.",
+			),
+		)
+		return False
+
 	try:
 		ctx = rendering.build_context({"otp": otp, "expiry_minutes": expiry_minutes})
 		if channel == ev.SMS:
@@ -199,6 +253,7 @@ def send_otp_message(mobile: str, otp: str, channel: str) -> bool:
 				variables={"otp": otp, "OTP": otp, "expiry_minutes": expiry_minutes},
 				parameters=rendering.render_parameters(template.get("template_parameters"), ctx),
 				settings=settings,
+				timeout=timeout,
 			)
 		else:
 			result = whatsapp_provider.send_authentication_code(
@@ -207,6 +262,7 @@ def send_otp_message(mobile: str, otp: str, channel: str) -> bool:
 				template.get("whatsapp_language"),
 				otp,
 				settings=settings,
+				timeout=timeout,
 			)
 	except Exception as e:
 		result = DeliveryResult.failed(channel, f"{type(e).__name__}: {e}")
@@ -216,6 +272,12 @@ def send_otp_message(mobile: str, otp: str, channel: str) -> bool:
 	_finish_log(log, result)
 	record_outcome(result)
 	return bool(result.ok)
+
+
+def _otp_provider(channel: str, settings) -> str:
+	if channel == ev.WHATSAPP:
+		return whatsapp_provider.PROVIDER
+	return settings.get("sms_provider") or sms_provider.MSG91
 
 
 def send_direct(channel: str, to: str, subject: str | None, body: str) -> bool:
@@ -271,6 +333,10 @@ def retry_failed_messages() -> None:
 				# Each retry has already gone out to a provider; keep its log row in step
 				# even if a later message in this batch fails.
 				frappe.db.commit()  # nosemgrep
+		except BaseTimeoutException:
+			if not frappe.in_test:
+				frappe.db.commit()  # nosemgrep
+			raise
 		except Exception:
 			if not frappe.in_test:
 				frappe.db.rollback()
@@ -298,6 +364,8 @@ def retry_message(name: str, force: bool = False) -> DeliveryResult | None:
 			result = _send_rendered(
 				log.channel, address, payload, log.reference_doctype, log.reference_name, settings
 			)
+	except BaseTimeoutException:
+		raise
 	except Exception as e:
 		result = DeliveryResult.failed(log.channel, f"{type(e).__name__}: {e}", retryable=True)
 
@@ -409,33 +477,77 @@ def recipients_for_users(users: list[str]) -> list[dict]:
 	return clean_recipients(recipients)
 
 
-def recipients_for_approvers(role: str, hostel: str | None = None) -> list[dict]:
-	"""Holders of ``role`` who may act for ``hostel``, plus every warden and administrator.
+def recipients_for_approvers(
+	role: str, hostel: str | None = None, block: str | None = None, student: str | None = None
+) -> list[dict]:
+	"""Holders of ``role`` who may act for ``hostel`` (and ``block``), plus every warden and
+	administrator.
 
-	A role holder qualifies when they have a User Permission for the hostel, or no hostel
-	restriction at all (staff without User Permissions see every hostel).
+	``student`` stands for the student's hostel (current, or the last one for a student who
+	has left) and current block when those are not given. Who looks after which hostel and
+	block is Hostel People's staff scope: assignments to particular blocks narrow a hostel,
+	and holders of roles that are not hostel-scoped (Mess Manager, for example) cover every
+	hostel.
 	"""
+	if student and not (hostel and block):
+		student_hostel, student_block = _student_location(student)
+		hostel = hostel or student_hostel
+		block = block or student_block
+
 	holders = _users_with_roles([role]) if role else []
 	if hostel and holders:
-		restricted = set(
-			frappe.get_all(
-				"User Permission",
-				filters={"allow": "Hostel", "user": ("in", holders)},
-				pluck="user",
-				distinct=True,
-			)
-		)
-		permitted = set(
-			frappe.get_all(
-				"User Permission",
-				filters={"allow": "Hostel", "for_value": hostel, "user": ("in", holders)},
-				pluck="user",
-				distinct=True,
-			)
-		)
-		holders = [u for u in holders if u not in restricted or u in permitted]
+		holders = _holders_for_hostel(role, holders, hostel, block)
 	users = list(dict.fromkeys([*holders, *_users_with_roles([WARDEN_ROLE, ADMIN_ROLE])]))
 	return recipients_for_users(users)
+
+
+def _holders_for_hostel(role: str, holders: list[str], hostel: str, block: str | None) -> list[str]:
+	try:
+		from hostel360.hostel_people.services import get_scoped_staff_users
+	except ImportError:
+		get_scoped_staff_users = None
+	if get_scoped_staff_users:
+		covering = set(get_scoped_staff_users(role, hostel, block) or [])
+		return [user for user in holders if user in covering]
+
+	# Hostel-level fallback while staff scopes are unavailable: User Permissions on Hostel,
+	# and no restriction at all means every hostel.
+	restricted = set(
+		frappe.get_all(
+			"User Permission",
+			filters={"allow": "Hostel", "user": ("in", holders)},
+			pluck="user",
+			distinct=True,
+		)
+	)
+	permitted = set(
+		frappe.get_all(
+			"User Permission",
+			filters={"allow": "Hostel", "for_value": hostel, "user": ("in", holders)},
+			pluck="user",
+			distinct=True,
+		)
+	)
+	return [user for user in holders if user not in restricted or user in permitted]
+
+
+def _student_location(student: str) -> tuple[str | None, str | None]:
+	"""The student's hostel (current, else last) and the block of their current room."""
+	try:
+		from hostel360.hostel_people.services import get_student_block, get_student_hostel
+	except ImportError:
+		get_student_block = get_student_hostel = None
+	if get_student_hostel and get_student_block:
+		return get_student_hostel(student), get_student_block(student)
+
+	fields = ["current_hostel", "current_room"]
+	if frappe.get_meta("Hostel Student").has_field("last_hostel"):
+		fields.append("last_hostel")
+	row = frappe.db.get_value("Hostel Student", student, fields, as_dict=True)
+	if not row:
+		return None, None
+	block = frappe.db.get_value("Hostel Room", row.current_room, "block") if row.current_room else None
+	return row.current_hostel or row.get("last_hostel"), block
 
 
 def clean_recipients(recipients) -> list[dict]:
@@ -740,6 +852,8 @@ def _finish_log(
 			log["next_retry_on"] = _next_retry_on(1)
 	try:
 		frappe.get_doc(log).insert(ignore_permissions=True, ignore_links=True)
+	except BaseTimeoutException:
+		raise
 	except Exception:
 		frappe.log_error(title="Hostel360: could not write Message Log", message=frappe.get_traceback())
 
@@ -749,14 +863,30 @@ def _next_retry_on(attempts: int):
 
 
 def _purge_stale_payloads(cutoff) -> None:
-	"""Drop stored delivery details of messages that will not be retried any more."""
+	"""Drop stored delivery details of messages that will not be retried any more.
+
+	payload and next_retry_on are always set and cleared together, and next_retry_on is
+	indexed, so the candidates come from a range read of that index. The read takes no row
+	locks; only the rows found are then updated, by primary key, with the condition checked
+	again. Delivery jobs inserting new rows are never made to wait.
+	"""
 	log = frappe.qb.DocType("Message Log")
+	stale = (log.creation < cutoff) | (log.attempts >= MAX_ATTEMPTS) | (log.status != "Failed")
+	names = (
+		frappe.qb.from_(log)
+		.select(log.name)
+		.where(log.next_retry_on.isnotnull())
+		.where(stale)
+		.limit(PURGE_BATCH_SIZE)
+	).run(pluck=True)
+	if not names:
+		return
 	(
 		frappe.qb.update(log)
 		.set(log.payload, None)
 		.set(log.next_retry_on, None)
-		.where(log.payload.isnotnull())
-		.where((log.creation < cutoff) | (log.attempts >= MAX_ATTEMPTS) | (log.status != "Failed"))
+		.where(log.name.isin(names))
+		.where(stale)
 	).run()
 
 

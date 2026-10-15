@@ -12,10 +12,12 @@ import SkeletonList from "@/components/SkeletonList.vue";
 import { useResource } from "@/composables/useResource";
 import { t } from "@/i18n";
 import { setUnread } from "@/stores/inbox";
+import { useSession } from "@/stores/session";
 import { showToast } from "@/stores/toast";
 import { formatDateTime } from "@/utils/format";
 
 const router = useRouter();
+const { session, isParent, setActiveStudent } = useSession();
 const notifications = useResource(() => listNotifications(50));
 const list = computed(() => notifications.data.value ?? []);
 const unread = computed(() => list.value.filter((item) => !item.read));
@@ -55,7 +57,15 @@ async function openItem(item: PortalNotification) {
 		void markNotificationsRead([item.name]).catch(() => undefined);
 	}
 	const path = portalPath(item.link);
-	if (path) await router.push(path);
+	if (!path) return;
+	// A parent with several wards: open the page for the child this is about.
+	if (isParent.value && item.student && item.student !== session.activeStudent) setActiveStudent(item.student);
+	await router.push(path);
+}
+
+function wardName(student?: string | null): string {
+	if (!isParent.value || !student || session.wards.length < 2) return "";
+	return session.wards.find((ward) => ward.student === student)?.full_name ?? "";
 }
 </script>
 
@@ -79,7 +89,9 @@ async function openItem(item: PortalNotification) {
 					<span class="mt-1.5 size-2.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-brand'" aria-hidden="true" />
 					<span class="min-w-0 flex-1">
 						<span class="block text-[0.95rem]" :class="item.read ? 'text-ink' : 'font-semibold text-ink'">{{ item.subject }}</span>
+						<span v-if="item.message" class="mt-0.5 block text-sm text-muted line-clamp-3">{{ item.message }}</span>
 						<span class="mt-0.5 block text-xs text-muted">
+							<template v-if="wardName(item.student)">{{ wardName(item.student) }} · </template>
 							{{ formatDateTime(item.created) }}<template v-if="!item.read"> · {{ t("notifications.unread") }}</template>
 						</span>
 					</span>

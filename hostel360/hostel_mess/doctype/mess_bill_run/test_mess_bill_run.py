@@ -1,13 +1,15 @@
 # Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 # For license information, please see license.txt
 
+import json
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests import IntegrationTestCase
+from frappe.tests import IntegrationTestCase, set_user
 from frappe.utils import add_days, flt, getdate, nowdate
 
-from hostel360.hostel_mess.billing import StudentBill, divide_cost
+from hostel360.hostel_mess import billing
+from hostel360.hostel_mess.billing import StudentBill, build_bill_run, divide_cost, get_enrolled_days
 from hostel360.hostel_mess.services import apply_mess_reduction, list_mess_bills
 from hostel360.hostel_mess.testing import (
 	EXTERNAL_DEPENDENCIES,
@@ -19,8 +21,12 @@ from hostel360.hostel_mess.testing import (
 	make_reduction,
 	make_stock_entry,
 	make_student,
+	make_user,
+	purge_committed_records,
 	set_mess_settings,
 )
+from hostel360.hostel_mess.utils import BooksChangedError
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE
 
 IGNORE_TEST_RECORD_DEPENDENCIES = EXTERNAL_DEPENDENCIES
 
@@ -527,3 +533,379 @@ class TestMessBillRun(IntegrationTestCase):
 		self.assertEqual(frappe.db.count("Mess Bill", {"mess_bill_run": run.name}), 6)
 		run.delete(ignore_permissions=True)
 		self.assertEqual(frappe.db.count("Mess Bill", {"mess_bill_run": run.name}), 0)
+
+	# ------------------------------------------------------------------ transfers and enrolment
+
+	def test_transfer_between_messes_bills_the_move_day_once(self):
+		other_mess = make_mess([self.h3])
+		# What Room Allotment.transfer writes: the old stay ends the day before, vacated on the
+		# move day, and the new allotment starts on the move day.
+		mover = make_student(self.h3)
+		old = make_allotment(
+			mover, self.h1, "2026-08-01", to_date="2026-09-15", vacated_on="2026-09-16", status="Transferred"
+		)
+		make_allotment(mover, self.h3, "2026-09-16", previous_allotment=old)
+		# Moved on the day the old allotment began: the day belongs to the new hostel only.
+		same_day = make_student(self.h3)
+		old = make_allotment(
+			same_day,
+			self.h1,
+			"2026-09-16",
+			to_date="2026-09-16",
+			vacated_on="2026-09-16",
+			status="Transferred",
+		)
+		make_allotment(same_day, self.h3, "2026-09-16", previous_allotment=old)
+
+		first = get_enrolled_days(self.mess, *PERIOD)
+		second = get_enrolled_days(other_mess, *PERIOD)
+		self.assertEqual(len(first[mover]["days"]), 15)
+		self.assertEqual(max(first[mover]["days"]), getdate("2026-09-15").toordinal())
+		self.assertEqual(len(second[mover]["days"]), 15)
+		self.assertEqual(min(second[mover]["days"]), getdate("2026-09-16").toordinal())
+		self.assertNotIn(same_day, first)
+		self.assertEqual(len(second[same_day]["days"]), 15)
+
+	def record_enrolment_change(self, student, before, after, when):
+		version = frappe.get_doc(
+			{
+				"doctype": "Version",
+				"ref_doctype": "Hostel Student",
+				"docname": student,
+				"data": json.dumps({"changed": [["mess_enrolled", before, after]]}),
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value("Version", version.name, "creation", when, update_modified=False)
+
+	def test_enrolment_changes_are_charged_by_date(self):
+		hostel = make_hostel()
+		mess = make_mess([hostel])
+		item = make_item("Kg")
+		make_stock_entry(mess, "Receipt", [(item, 100, 30)], "2026-08-30")
+		make_stock_entry(mess, "Issue", [(item, 100)], "2026-09-10")
+		people = {}
+		for key, enrolled in (("left", 0), ("joined", 1), ("steady", 1), ("away", 1), ("later", 0)):
+			people[key] = make_student(hostel, mess_enrolled=enrolled)
+			make_allotment(people[key], hostel, "2026-08-01")
+		self.record_enrolment_change(people["left"], 1, 0, "2026-09-20 11:30:00")
+		self.record_enrolment_change(people["joined"], 0, 1, "2026-09-20 09:00:00")
+		self.record_enrolment_change(people["away"], 1, 0, "2026-09-10 10:00:00")
+		self.record_enrolment_change(people["away"], 0, 1, "2026-09-15 10:00:00")
+		self.record_enrolment_change(people["later"], 1, 0, "2026-10-05 10:00:00")
+
+		result = build_bill_run(mess, *PERIOD, rounding="None")
+		days = {bill.student: bill.enrolled_days for bill in result.bills}
+		self.assertEqual(days[people["left"]], 19)  # 1-19 September
+		self.assertEqual(days[people["joined"]], 11)  # 20-30 September
+		self.assertEqual(days[people["steady"]], 30)
+		self.assertEqual(days[people["away"]], 25)  # out from the 10th, back on the 15th
+		self.assertEqual(days[people["later"]], 30)  # opted out only in October
+		self.assertEqual(result.total_student_days, 115)
+		self.assertEqual(
+			set(result.enrolment_changes), {people["left"], people["joined"], people["away"], people["later"]}
+		)
+
+		run = frappe.get_doc(
+			{"doctype": "Mess Bill Run", "mess": mess, "from_date": PERIOD[0], "to_date": PERIOD[1]}
+		).insert(ignore_permissions=True)
+		with patch("frappe.msgprint") as msgprint:
+			run.compute_bills()
+		self.assertTrue(
+			any(call.kwargs.get("title") == "Enrolment Changes" for call in msgprint.call_args_list)
+		)
+
+	# ------------------------------------------------------------------ invoices amended by the office
+
+	def publish_with_fee_invoices(self):
+		if not frappe.db.exists("Hostel Fee Head", "Mess Charges"):
+			self.skipTest("Hostel Fees defaults are not installed on this site")
+		run = self.make_run()
+		run.compute_bills()
+		with patch(f"{RUN_MODULE}.send_notification"):
+			run.submit()
+		return run
+
+	def amend_invoice(self, invoice_name, amount):
+		"""What the office does from the desk: cancel the invoice, then amend and submit it."""
+		original = frappe.get_doc("Hostel Fee Invoice", invoice_name)
+		original.cancel()
+		amended = frappe.copy_doc(original)
+		amended.amended_from = original.name
+		amended.docstatus = 0
+		amended.reference_doctype = original.reference_doctype
+		amended.reference_name = original.reference_name
+		amended.items = amended.items[:1]
+		amended.items[0].amount = amount
+		amended.insert(ignore_permissions=True)
+		amended.submit()
+		return amended
+
+	def test_amended_invoice_stands_for_the_bill(self):
+		run = self.publish_with_fee_invoices()
+		bill = self.bills(run)[self.students["C"]]
+		amended = self.amend_invoice(bill.fee_invoice, 15000)
+
+		portal = list_mess_bills(self.students["C"])[0]
+		self.assertEqual((portal["fee_invoice"], portal["invoice_status"]), (amended.name, "Unpaid"))
+		run.reload()
+		run.run_method("onload")
+		summary = {row.status: row.count for row in run.get_onload().invoice_summary}
+		self.assertEqual(summary, {"Unpaid": 6})
+		self.assertEqual(len(run.get_invoices()), 6)
+		self.assertEqual(
+			{b.student: b.fee_invoice for b in run.get_bills()}[self.students["C"]], amended.name
+		)
+		self.assertIn(amended.name, run.get_invoices())
+		self.assertNotIn(bill.fee_invoice, run.get_invoices())
+
+		billing.sync_amended_invoice(amended)
+		self.assertEqual(frappe.db.get_value("Mess Bill", bill.name, "fee_invoice"), amended.name)
+
+	def test_payment_on_an_amended_invoice_blocks_cancel(self):
+		run = self.publish_with_fee_invoices()
+		bill = self.bills(run)[self.students["C"]]
+		amended = self.amend_invoice(bill.fee_invoice, 15000)
+
+		frappe.db.set_value(
+			"Hostel Fee Invoice", amended.name, {"paid_amount": 1000, "status": "Partly Paid"}
+		)
+		run.reload()
+		with self.assertRaisesRegex(frappe.ValidationError, "Payments have been received"):
+			run.cancel()
+
+		# Unpaid, the amendment is withdrawn together with the run's own invoices.
+		frappe.db.set_value("Hostel Fee Invoice", amended.name, {"paid_amount": 0, "status": "Unpaid"})
+		run.reload()
+		run.cancel()
+		self.assertEqual(frappe.db.get_value("Hostel Fee Invoice", amended.name, "docstatus"), 2)
+
+	# ------------------------------------------------------------------ closing the period
+
+	def test_publishing_and_cancelling_maintain_billed_upto(self):
+		self.assertIsNone(frappe.db.get_value("Hostel Mess", self.mess, "billed_upto"))
+		run = self.make_run()
+		run.compute_bills()
+		with (
+			patch(
+				"hostel360.hostel_mess.billing.get_fees_service", return_value=MagicMock(return_value=None)
+			),
+			patch(f"{RUN_MODULE}.send_notification"),
+		):
+			run.submit()
+			self.assertEqual(
+				getdate(frappe.db.get_value("Hostel Mess", self.mess, "billed_upto")), getdate(PERIOD[1])
+			)
+			run.reload()
+			run.cancel()
+		self.assertIsNone(frappe.db.get_value("Hostel Mess", self.mess, "billed_upto"))
+
+		from hostel360.hostel_mess.setup import sync_billed_upto
+
+		frappe.db.set_value("Hostel Mess", self.mess, "billed_upto", "2026-01-31")
+		sync_billed_upto()
+		self.assertIsNone(frappe.db.get_value("Hostel Mess", self.mess, "billed_upto"))
+
+	# ------------------------------------------------------------------ hostel-scoped viewers
+
+	def test_summary_print_shows_a_deputy_only_their_hostels(self):
+		run = self.make_run()
+		run.compute_bills()
+		deputy = make_user([DEPUTY_WARDEN_ROLE])
+		frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": deputy,
+				"allow": "Hostel",
+				"for_value": self.h1,
+				"apply_to_all_doctypes": 1,
+			}
+		).insert(ignore_permissions=True)
+		with set_user(deputy):
+			bills = run.get_bills()
+			summary = frappe.get_print("Mess Bill Run", run.name, print_format="Mess Bill Run Summary")
+		self.assertEqual({b.hostel for b in bills}, {self.h1})
+		self.assertIn(self.students["A"], summary)
+		self.assertNotIn(self.students["C"], summary)
+		self.assertNotIn(self.students["G"], summary)
+		self.assertIn(f"Showing {len(bills)} of 6 bills", summary)
+
+		with set_user(make_user([MESS_MANAGER_ROLE])):
+			self.assertEqual(len(run.get_bills()), 6)
+
+	# ------------------------------------------------------------------ large runs in the background
+
+	def test_large_runs_are_queued_on_the_long_queue(self):
+		from hostel360.hostel_mess.doctype.mess_bill_run import mess_bill_run as module
+
+		run = self.make_run()
+		run.compute_bills()
+		with (
+			patch.object(module, "BACKGROUND_THRESHOLD", 0),
+			patch.object(module, "is_scheduler_inactive", return_value=False),
+			patch("frappe.enqueue") as enqueue,
+		):
+			run.run_method("onload")
+			self.assertTrue(run.get_onload().runs_in_background)
+			self.assertEqual(run.submit(), {"queued": True})
+			self.assertEqual(run.docstatus, 0)
+			self.assertTrue(run.is_locked)
+			with self.assertRaises(frappe.DocumentLockedError):
+				module.start_action(run.name, "submit")
+		run.unlock()
+		kwargs = enqueue.call_args.kwargs
+		self.assertEqual(enqueue.call_args.args[0], f"{RUN_MODULE}.run_publishing_action_in_background")
+		self.assertEqual(
+			(kwargs["queue"], kwargs["job_id"], kwargs["action"], kwargs["mess"]),
+			("long", f"mess-bill-run::{run.name}", "submit", self.mess),
+		)
+		self.assertEqual(frappe.db.get_value("Mess Bill Run", run.name, "docstatus"), 0)
+
+	def test_start_action_runs_small_runs_at_once(self):
+		from hostel360.hostel_mess.doctype.mess_bill_run.mess_bill_run import start_action
+
+		run = self.make_run()
+		run.compute_bills()
+		with (
+			patch(
+				"hostel360.hostel_mess.billing.get_fees_service", return_value=MagicMock(return_value=None)
+			),
+			patch(f"{RUN_MODULE}.send_notification"),
+		):
+			self.assertEqual(start_action(run.name, "submit"), {"queued": False, "status": "Published"})
+			self.assertEqual(start_action(run.name, "cancel"), {"queued": False, "status": "Cancelled"})
+
+
+class TestBillRunConcurrency(IntegrationTestCase):
+	"""Publishing while the books change, and publishing in a background worker.
+
+	Each test uses two database connections (two users at the same moment), so the fixtures
+	are committed and purged afterwards.
+	"""
+
+	def setUp(self):
+		set_mess_settings(bill_rounding="Nearest Rupee", bill_due_days=10)
+		self.hostel = make_hostel()
+		self.mess = make_mess([self.hostel])
+		self.item = make_item("Kg")
+		self.students = [make_student(self.hostel) for _ in range(3)]
+		for student in self.students:
+			make_allotment(student, self.hostel, "2026-08-01")
+		make_stock_entry(self.mess, "Receipt", [(self.item, 90, 100)], "2026-08-30")
+		make_stock_entry(self.mess, "Issue", [(self.item, 90)], "2026-09-10")
+		self.run = frappe.get_doc(
+			{"doctype": "Mess Bill Run", "mess": self.mess, "from_date": PERIOD[0], "to_date": PERIOD[1]}
+		).insert(ignore_permissions=True)
+		self.run.compute_bills()
+		self.late_expense = make_expense(self.mess, 900, "2026-09-28", submit=False).name
+		frappe.db.commit()
+		self.addCleanup(
+			purge_committed_records,
+			messes=[self.mess],
+			items=[self.item],
+			hostels=[self.hostel],
+			students=self.students,
+		)
+
+	def publishing(self):
+		"""Fee invoices and notifications are not under test here."""
+		return (
+			patch(
+				"hostel360.hostel_mess.billing.get_fees_service", return_value=MagicMock(return_value=None)
+			),
+			patch(f"{RUN_MODULE}.send_notification"),
+		)
+
+	def test_publish_sees_an_entry_committed_just_before(self):
+		with self.secondary_connection():
+			run = frappe.get_doc("Mess Bill Run", self.run.name)  # the publishing request has started
+		with self.primary_connection():
+			frappe.get_doc("Mess Expense", self.late_expense).submit()
+			frappe.db.commit()
+		fees, notify = self.publishing()
+		with self.secondary_connection(), fees, notify:
+			try:
+				with self.assertRaisesRegex(frappe.ValidationError, "Compute Bills again"):
+					run.submit()
+			finally:
+				frappe.db.rollback()
+		self.assertEqual(frappe.db.get_value("Mess Bill Run", self.run.name, "docstatus"), 0)
+
+	def race_expense_against_publish(self, snapshot_isolation=True):
+		with self.secondary_connection():
+			if not snapshot_isolation:
+				frappe.db.sql("set session innodb_snapshot_isolation = OFF")
+			expense = frappe.get_doc("Mess Expense", self.late_expense)  # the posting request has started
+		fees, notify = self.publishing()
+		with self.primary_connection(), fees, notify:
+			frappe.get_doc("Mess Bill Run", self.run.name).submit()
+			frappe.db.commit()
+		with self.secondary_connection():
+			try:
+				with self.assertRaises(frappe.ValidationError) as caught:
+					expense.submit()
+			finally:
+				frappe.db.rollback()
+		self.assertEqual(frappe.db.get_value("Mess Expense", self.late_expense, "docstatus"), 0)
+		return caught.exception
+
+	def test_entry_racing_a_publish_is_refused(self):
+		error = self.race_expense_against_publish()
+		self.assertIsInstance(error, BooksChangedError)
+
+	def test_entry_racing_a_publish_is_refused_without_snapshot_isolation(self):
+		if not frappe.db.sql("show variables like 'innodb_snapshot_isolation'"):
+			self.skipTest("The database server has no innodb_snapshot_isolation setting")
+		error = self.race_expense_against_publish(snapshot_isolation=False)
+		self.assertIn("published up to", str(error))
+
+	def run_worker(self, action):
+		from hostel360.hostel_mess.doctype.mess_bill_run import mess_bill_run as module
+
+		fees, notify = self.publishing()
+		with (
+			patch.object(module, "BACKGROUND_THRESHOLD", 0),
+			patch.object(module, "is_scheduler_inactive", return_value=False),
+			patch("frappe.enqueue") as enqueue,
+		):
+			run = frappe.get_doc("Mess Bill Run", self.run.name)
+			result = run.submit() if action == "submit" else run.cancel()
+		self.assertEqual(result, {"queued": True})
+		frappe.db.commit()  # the request that queued the work ends here
+		job = {k: v for k, v in enqueue.call_args.kwargs.items() if k in ("name", "mess", "action", "user")}
+		with fees, notify, patch("frappe.publish_realtime") as realtime:
+			module.run_publishing_action_in_background(**job)
+		return realtime
+
+	def test_background_publish_and_cancel(self):
+		realtime = self.run_worker("submit")
+		run = frappe.get_doc("Mess Bill Run", self.run.name)
+		self.assertEqual((run.docstatus, run.status), (1, "Published"))
+		self.assertFalse(run.is_locked)
+		self.assertEqual(
+			getdate(frappe.db.get_value("Hostel Mess", self.mess, "billed_upto")), getdate(PERIOD[1])
+		)
+		self.assertIn("mess_bill_run_action_done", [c.args[0] for c in realtime.call_args_list])
+
+		realtime = self.run_worker("cancel")
+		run.reload()
+		self.assertEqual((run.docstatus, run.status), (2, "Cancelled"))
+		self.assertIsNone(frappe.db.get_value("Hostel Mess", self.mess, "billed_upto"))
+		self.assertIn("mess_bill_run_action_done", [c.args[0] for c in realtime.call_args_list])
+
+	def test_background_failure_is_reported(self):
+		frappe.get_doc("Mess Expense", self.late_expense).submit()
+		frappe.db.commit()
+		realtime = self.run_worker("submit")
+		failure = next(c for c in realtime.call_args_list if c.args[0] == "mess_bill_run_action_failed")
+		self.assertIn("Compute Bills again", failure.args[1]["error"])
+		run = frappe.get_doc("Mess Bill Run", self.run.name)
+		self.assertEqual(run.docstatus, 0)
+		self.assertFalse(run.is_locked)
+		self.assertTrue(
+			frappe.db.exists(
+				"Comment",
+				{"reference_doctype": "Mess Bill Run", "reference_name": run.name, "comment_type": "Comment"},
+			)
+		)
+		frappe.db.delete("Comment", {"reference_doctype": "Mess Bill Run", "reference_name": run.name})
+		frappe.db.commit()

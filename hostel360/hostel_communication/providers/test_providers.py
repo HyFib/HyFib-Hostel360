@@ -397,7 +397,12 @@ class TestProviderHealthAlerts(IntegrationTestCase):
 	def setUp(self):
 		super().setUp()
 		self.provider = f"Test Provider {frappe.generate_hash(length=6)}"
-		self.addCleanup(frappe.cache.delete, base._failure_key(self.provider))
+		self.addCleanup(
+			frappe.cache.delete,
+			base._failure_key(self.provider),
+			base._breaker_key(self.provider),
+			base._probe_key(self.provider),
+		)
 
 	def test_alert_after_repeated_failures_and_resolve_on_recovery(self):
 		threshold = base._threshold()
@@ -427,3 +432,26 @@ class TestProviderHealthAlerts(IntegrationTestCase):
 				base.record_outcome(DeliveryResult.skip(self.provider, "test mode"))
 				base.record_outcome(DeliveryResult.failed(self.provider, "down"), allow_alert=False)
 		raise_alert.assert_not_called()
+
+	def test_alerts_are_raised_after_the_sending_transaction(self):
+		# A delivery job holds its transaction across slow provider calls; the Ops Alert is
+		# created by a job of its own once that transaction has committed.
+		threshold = base._threshold()
+		failure = DeliveryResult.failed(self.provider, "HTTP 503", retryable=True)
+		with (
+			patch.object(frappe, "in_test", False),
+			patch("frappe.enqueue") as enqueue,
+			patch("hostel360.hostel_operations.alerts.raise_alert") as raise_alert,
+		):
+			for _attempt in range(threshold):
+				base.record_outcome(failure)
+			base.record_outcome(DeliveryResult.sent(self.provider, "ok"))
+		raise_alert.assert_not_called()
+		self.assertEqual(
+			[call.args[0] for call in enqueue.call_args_list], [base.ALERT_METHOD, base.RESOLVE_METHOD]
+		)
+		kwargs = enqueue.call_args_list[0].kwargs
+		self.assertTrue(kwargs["enqueue_after_commit"])
+		self.assertTrue(kwargs["deduplicate"])
+		self.assertEqual(kwargs["queue"], "short")
+		self.assertEqual((kwargs["provider"], kwargs["count"]), (self.provider, threshold))

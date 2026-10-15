@@ -4,8 +4,16 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from hostel360.hostel_people.testing import make_block, make_hostel
-from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, OFFICE_ROLE, WARDEN_ROLE
+from hostel360.hostel_people.doctype.hostel_staff.hostel_staff import get_designation_rules
+from hostel360.hostel_people.testing import make_block, make_desk_user, make_hostel
+from hostel360.setup.roles import (
+	ADMIN_ROLE,
+	DEPUTY_WARDEN_ROLE,
+	MESS_STAFF_ROLE,
+	OFFICE_ROLE,
+	OPERATIONS_ROLE,
+	WARDEN_ROLE,
+)
 
 
 def make_staff(designation: str, hostels: list[str], **values):
@@ -27,6 +35,21 @@ def make_staff(designation: str, hostels: list[str], **values):
 
 def hostel_permissions(user: str) -> set[str]:
 	return set(frappe.get_all("User Permission", filters={"user": user, "allow": "Hostel"}, pluck="for_value"))
+
+
+def open_session(user: str) -> str:
+	"""A signed-in session of the user, as the login flow stores it."""
+	sid = frappe.generate_hash()
+	frappe.db.sql(
+		"insert into `tabSessions` (sid, user, sessiondata, lastupdate, status)"
+		" values (%(sid)s, %(user)s, '{}', now(), 'Active')",
+		{"sid": sid, "user": user},
+	)
+	return sid
+
+
+def session_count(user: str) -> int:
+	return frappe.db.sql("select count(*) from `tabSessions` where user = %s", user)[0][0]
 
 
 class TestHostelStaff(IntegrationTestCase):
@@ -125,3 +148,100 @@ class TestHostelStaff(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Hostel Staff", staff.name, "user"), own_user)
 		self.assertEqual(frappe.db.get_value("User", "Administrator", "enabled"), 1)
 		self.assertEqual(frappe.db.get_value("User", own_user, "enabled"), 0)
+
+	def test_hostel_admin_cannot_take_over_an_account_with_other_roles(self):
+		it_account = make_desk_user("System Manager", OPERATIONS_ROLE)
+		hostel_admin = make_staff("Hostel Administrator", []).user
+
+		with self.set_user(hostel_admin):
+			with self.assertRaises(frappe.PermissionError):
+				make_staff("Mess Staff", [self.hostel_a], email=it_account)
+
+		roles = frappe.get_roles(it_account)
+		self.assertIn("System Manager", roles)
+		self.assertIn(OPERATIONS_ROLE, roles)
+		self.assertNotIn(MESS_STAFF_ROLE, roles)
+		self.assertEqual(frappe.db.get_value("User", it_account, "enabled"), 1)
+		self.assertEqual(hostel_permissions(it_account), set())
+
+		# A login that only ever held staff roles is the Hostel Administrator's to manage.
+		former_staff = make_desk_user(MESS_STAFF_ROLE)
+		with self.set_user(hostel_admin):
+			staff = make_staff("Office Staff", [self.hostel_a], email=former_staff)
+		self.assertEqual(staff.user, former_staff)
+		self.assertIn(OFFICE_ROLE, frappe.get_roles(former_staff))
+		self.assertNotIn(MESS_STAFF_ROLE, frappe.get_roles(former_staff))
+
+	def test_hostel_admin_cannot_disable_an_account_with_other_roles(self):
+		it_account = make_desk_user("System Manager")
+		# Linked by someone who may edit the account (here: Administrator).
+		staff = make_staff("Office Staff", [self.hostel_a], email=it_account)
+		hostel_admin = make_staff("Hostel Administrator", []).user
+
+		with self.set_user(hostel_admin):
+			staff.reload()
+			staff.is_active = 0
+			staff.save()
+		self.assertEqual(frappe.db.get_value("User", it_account, "enabled"), 1)
+		self.assertNotIn(OFFICE_ROLE, frappe.get_roles(it_account))
+		self.assertIn("System Manager", frappe.get_roles(it_account))
+
+		with self.set_user(hostel_admin):
+			staff.reload()
+			staff.is_active = 1
+			staff.save()
+		self.assertIn(OFFICE_ROLE, frappe.get_roles(it_account))
+
+		with self.set_user(hostel_admin):
+			frappe.delete_doc("Hostel Staff", staff.name)
+		self.assertEqual(frappe.db.get_value("User", it_account, "enabled"), 1)
+		self.assertNotIn(OFFICE_ROLE, frappe.get_roles(it_account))
+		self.assertIn("System Manager", frappe.get_roles(it_account))
+
+	def test_deleting_staff_revokes_roles_scope_and_sessions(self):
+		staff = make_staff("Deputy Warden", [self.hostel_a])
+		user = staff.user
+		open_session(user)
+		self.assertEqual(session_count(user), 1)
+
+		frappe.delete_doc("Hostel Staff", staff.name)
+
+		self.assertEqual(frappe.db.get_value("User", user, "enabled"), 0)
+		self.assertNotIn(DEPUTY_WARDEN_ROLE, frappe.get_roles(user))
+		self.assertEqual(hostel_permissions(user), set())
+		self.assertEqual(session_count(user), 0)
+
+	def test_deactivation_signs_the_user_out_everywhere(self):
+		staff = make_staff("Office Staff", [self.hostel_a])
+		open_session(staff.user)
+		open_session(staff.user)
+		staff.reload()
+		staff.is_active = 0
+		staff.save()
+		self.assertEqual(session_count(staff.user), 0)
+
+	def test_desk_less_designation_switches_the_login_off(self):
+		staff = make_staff("Office Staff", [self.hostel_a])
+		staff.reload()
+		staff.designation = "Security"
+		staff.save()
+		self.assertEqual(frappe.db.get_value("User", staff.user, "enabled"), 0)
+		self.assertNotIn(OFFICE_ROLE, frappe.get_roles(staff.user))
+		self.assertEqual(hostel_permissions(staff.user), set())
+
+		staff.reload()
+		staff.designation = "Office Staff"
+		staff.save()
+		self.assertEqual(frappe.db.get_value("User", staff.user, "enabled"), 1)
+		self.assertIn(OFFICE_ROLE, frappe.get_roles(staff.user))
+		self.assertEqual(hostel_permissions(staff.user), {self.hostel_a})
+
+	def test_security_staff_are_recorded_without_a_login(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "contact purposes"):
+			make_staff("Security", [self.hostel_a])
+		rules = get_designation_rules()
+		self.assertNotIn("Security", rules["login"])
+		self.assertNotIn("Housekeeping", rules["login"])
+		self.assertIn("Hostel Administrator", rules["login"])
+		self.assertIn("Office Staff", rules["scoped"])
+		self.assertNotIn(ADMIN_ROLE, rules["scoped"])

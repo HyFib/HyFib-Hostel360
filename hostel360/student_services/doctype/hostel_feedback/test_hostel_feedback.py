@@ -1,14 +1,19 @@
 # Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 # For license information, please see license.txt
 
+from unittest.mock import patch
+
 import frappe
+from frappe.client import set_value as client_set_value
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_months, getdate, nowdate
 
+from hostel360.setup.roles import MESS_MANAGER_ROLE, OFFICE_ROLE
 from hostel360.student_services import services
 from hostel360.student_services.doctype.hostel_feedback.hostel_feedback import current_period, has_submitted
 from hostel360.student_services.report.feedback_summary.feedback_summary import execute as feedback_summary
-from hostel360.student_services.testing import make_hostel, make_student
+from hostel360.student_services.setup import install_defaults
+from hostel360.student_services.testing import make_hostel, make_student, make_user, scope_to_hostel
 
 IGNORE_TEST_RECORD_DEPENDENCIES = ["Hostel Student", "Hostel", "User"]
 
@@ -18,6 +23,9 @@ class TestHostelFeedback(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		self.hostel = make_hostel()
 		self.student = make_student(self.hostel)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
 
 	def submit(self, student=None, **data):
 		values = {"feedback_type": "Mess", "overall": 4, "food_quality": 3, "comments": "Sambar too watery", **data}
@@ -90,3 +98,62 @@ class TestHostelFeedback(IntegrationTestCase):
 		self.assertEqual(by_name[anonymous]["student_name"], "Anonymous")
 		self.assertEqual(by_name[named]["student_name"], self.student.full_name)
 		self.assertNotIn("student", {column["fieldname"] for column in columns})
+
+	# ------------------------------------------------------------------ anonymity
+
+	def submit_as_student(self, **data):
+		"""The portal submits feedback in the student's own session."""
+		frappe.set_user(self.student.user)
+		try:
+			with patch("frappe.publish_realtime") as publish:
+				name = self.submit(**data)
+		finally:
+			frappe.set_user("Administrator")
+		return name, publish
+
+	def test_anonymous_feedback_does_not_record_who_submitted_it(self):
+		name, publish = self.submit_as_student(is_anonymous=1, comments="Warden was rude")
+		doc = frappe.get_doc("Hostel Feedback", name)
+		self.assertNotIn(self.student.user, (doc.owner, doc.modified_by))
+		announced = [call.args[1] for call in publish.call_args_list if call.args and call.args[0] == "list_update"]
+		self.assertNotIn(self.student.user, [data.get("user") for data in announced])
+
+		mess_manager = make_user([MESS_MANAGER_ROLE])
+		frappe.set_user(mess_manager)
+		try:
+			rows = frappe.get_list("Hostel Feedback", filters={"name": name}, fields=["owner", "modified_by"])
+		finally:
+			frappe.set_user("Administrator")
+		self.assertEqual(len(rows), 1)
+		self.assertNotIn(self.student.user, (rows[0].owner, rows[0].modified_by))
+
+	def test_named_feedback_still_records_the_student(self):
+		name, _publish = self.submit_as_student()
+		self.assertEqual(frappe.db.get_value("Hostel Feedback", name, "owner"), self.student.user)
+
+	def test_migrate_forgets_submitters_of_old_anonymous_feedback(self):
+		name = self.submit(is_anonymous=1)
+		# How such a row looked before anonymous submissions were scrubbed
+		frappe.db.set_value(
+			"Hostel Feedback", name, {"owner": self.student.user, "modified_by": self.student.user}, update_modified=False
+		)
+		install_defaults()
+		install_defaults()
+		self.assertEqual(
+			frappe.db.get_value("Hostel Feedback", name, ["owner", "modified_by"]), ("Administrator", "Administrator")
+		)
+
+	def test_scoped_staff_cannot_move_feedback_into_their_hostel(self):
+		other = make_student(make_hostel())
+		name = self.submit(student=other)
+		office = make_user([OFFICE_ROLE])
+		scope_to_hostel(office, self.hostel)
+		frappe.set_user(office)
+		try:
+			for hostel in (self.hostel, ""):
+				with self.assertRaises(frappe.PermissionError):
+					client_set_value("Hostel Feedback", name, {"hostel": hostel, "action_taken": "Noted"})
+		finally:
+			frappe.set_user("Administrator")
+		self.assertEqual(frappe.db.get_value("Hostel Feedback", name, ["hostel", "action_taken"]), (other.hostel, None))
+

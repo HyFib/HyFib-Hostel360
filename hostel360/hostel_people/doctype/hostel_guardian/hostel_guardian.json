@@ -140,7 +140,7 @@
  "icon": "users",
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 19:20:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel People",
  "name": "Hostel Guardian",
@@ -178,7 +178,6 @@
    "read": 1,
    "report": 1,
    "role": "Deputy Warden",
-   "share": 1,
    "write": 1
   },
   {
@@ -189,7 +188,6 @@
    "read": 1,
    "report": 1,
    "role": "Hostel Office Staff",
-   "share": 1,
    "write": 1
   },
   {

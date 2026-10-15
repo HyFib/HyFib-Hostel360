@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from hostel360.hostel_operations import alerts, channels, escalation, notification
 from hostel360.hostel_operations.settings import get_settings
@@ -126,6 +126,14 @@ class TestOpsAlert(IntegrationTestCase):
 		self.assertEqual(alerts.raise_alert(None, None, "Critical", "Other"), "")
 		self.assertGreater(frappe.db.count("Error Log"), error_logs)
 		self.assertFalse(alerts.resolve_alert(None))
+
+	def test_deadlock_inside_the_callers_transaction_is_not_hidden(self):
+		# Written inline, a deadlock means InnoDB has already rolled back the caller's whole
+		# transaction; returning "" would let the caller commit only half of its work.
+		with patch.object(alerts, "_record", side_effect=frappe.QueryDeadlockError("1213 deadlock")):
+			self.assertRaises(
+				frappe.QueryDeadlockError, alerts.raise_alert, unique_key(), "Deadlocked", "Warning", "Other"
+			)
 
 	def test_invalid_vocabulary_is_normalised(self):
 		_key, name = self.raise_test_alert("Severe", category="Weather", source="Somewhere")
@@ -315,6 +323,72 @@ class TestOpsAlert(IntegrationTestCase):
 		self.assertIsNotNone(first)
 		self.assertIsNone(second)
 
+	def test_queued_delivery_reaches_people(self):
+		"""Web requests queue the delivery; the queued job must actually be able to run."""
+		from frappe.utils.background_jobs import enqueue as real_enqueue
+
+		_key, name = self.raise_test_alert("Critical")
+		self.recorder.clear()
+		calls = []
+
+		with patch("frappe.enqueue", side_effect=lambda *args, **kwargs: calls.append((args, kwargs))):
+			notification._enqueue_delivery(name, "escalated", [2])
+		self.assertEqual(self.recorder.events(name), [], "queued, not sent from the request")
+
+		# Later, in a worker: frappe.enqueue keeps its own parameters (queue, event, at_front,
+		# ...) and the job receives only the rest.
+		args, kwargs = calls[0]
+		real_enqueue(*args, now=True, **kwargs)
+		self.assertEqual(self.recorder.events(name), ["escalated"])
+		self.assertIn(LEVEL_TWO_EMAIL, self.recorder.email_recipients(name))
+		self.assertTrue(kwargs["at_front"], "pages must not wait behind bulk student notifications")
+		self.assertEqual(kwargs["queue"], notification.alert_queue())
+
+	def test_web_request_alert_is_queued_once_committed(self):
+		_key, name = self.raise_test_alert("Warning")
+		with (
+			patch.object(notification, "_in_web_request", return_value=True),
+			patch.object(notification, "_enqueue_delivery") as enqueue,
+		):
+			notification.dispatch(name, "escalated", [2], committed=True)
+			enqueue.assert_called_once_with(name, "escalated", [2])
+			enqueue.reset_mock()
+			# Not committed yet: wait for the request's commit.
+			callbacks = len(frappe.db.after_commit)
+			notification.dispatch(name, "escalated", [2])
+			enqueue.assert_not_called()
+			self.assertEqual(len(frappe.db.after_commit), callbacks + 1)
+		frappe.db.after_commit.truncate(callbacks)
+
+	def test_level_without_contacts_is_reported_not_hidden(self):
+		settings = frappe.get_doc("Ops Alert Settings")
+		for row in settings.escalation_levels:
+			if row.level == 2:
+				row.notify_emails = ""
+				row.notify_mobiles = ""
+		settings.flags.ignore_permissions = True
+		settings.save()
+		clear_settings_cache()
+
+		_key, name = self.raise_test_alert("Warning")
+		self.escalate_at(121)
+		self.assertEqual(self.recorder.events(name), ["raised", "escalated"])
+		comments = frappe.get_all(
+			"Comment",
+			filters={"reference_doctype": "Ops Alert", "reference_name": name, "comment_type": "Info"},
+			pluck="content",
+		)
+		self.assertTrue(
+			any("Level 2" in (c or "") and "nobody at that level was told" in (c or "") for c in comments),
+			comments,
+		)
+		self.assertTrue(
+			frappe.db.exists(
+				"Error Log",
+				{"reference_doctype": "Ops Alert", "reference_name": name, "method": "Hostel360: alert notification not delivered"},
+			)
+		)
+
 	def test_delivery_is_recorded_on_the_alert(self):
 		_key, name = self.raise_test_alert("Warning")
 		comments = frappe.get_all(
@@ -343,6 +417,38 @@ class TestAlertChannels(IntegrationTestCase):
 		)
 		settings = frappe._dict(instance_label="ACGCET Hostel360", environment="Production", escalation_levels=[])
 		return notification.build_message(alert, settings, event, [])
+
+	def test_critical_security_alert_states_the_cert_in_deadline(self):
+		alert = frappe._dict(
+			name="ALERT-2026-00002",
+			alert_key="malware-detected-abc",
+			title="Malware detected in an uploaded file",
+			severity="Critical",
+			category="Security",
+			source="Security",
+			status="Open",
+			description="EICAR test signature",
+			first_seen=get_datetime("2026-10-15 02:30:00"),
+			last_seen=get_datetime("2026-10-15 02:30:00"),
+			occurrence_count=1,
+			is_outage=0,
+		)
+		settings = frappe._dict(instance_label="ACGCET Hostel360", environment="Production", escalation_levels=[])
+		message = notification.build_message(alert, settings, "raised", [])
+		self.assertEqual(message["reporting_due_display"], "15-10-2026 08:30")
+		self.assertIn("CERT-In", dict(channels.facts(message))["Reporting"])
+		self.assertIn("CERT-In report due by 15-10-2026 08:30", channels.short_text(message))
+		self.assertIn("CERT-In report due", json.dumps(channels.slack_payload(message)))
+
+		# Not for warnings, other categories, or recovery notices.
+		for changes, event in (
+			({"severity": "Warning"}, "raised"),
+			({"category": "Backup"}, "raised"),
+			({}, "resolved"),
+			({"alert_key": "security.incident.SINC-2026-00001.reporting"}, "raised"),
+		):
+			other = frappe._dict(alert, **changes)
+			self.assertFalse(notification.build_message(other, settings, event, [])["reporting_due_display"])
 
 	def test_message_text(self):
 		message = self.message()

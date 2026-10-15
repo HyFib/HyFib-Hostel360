@@ -11,11 +11,25 @@ Abuse controls, all per site:
 * per IP address: ``otp_max_sends_per_ip_per_hour`` codes an hour (trusted networks such
   as the campus Wi-Fi gateway are exempt) and a ceiling on failed verifications;
 * per code: ``otp_max_attempts`` wrong guesses invalidate it;
-* per number: ``FAILED_VERIFICATIONS_PER_HOUR`` failures lock the number for an hour.
+* per number: ``FAILED_VERIFICATIONS_PER_HOUR`` wrong guesses against a live code lock the
+  number for an hour.
 
-Requests for numbers that are not registered get exactly the same response, take about
-as long as a real send, and count against the same limits, so the endpoint cannot be
-used to find out who lives in the hostel.
+Each guess reserves its attempt (and its place in the failure counts) before it is
+compared, so a burst of simultaneous guesses gets no more comparisons than the limits
+allow.
+
+Only students whose registration the hostel office has validated, and who have not left,
+may sign in, and parents only while they have such a ward (tender 3.1 and 4.1). Requests
+for any other number - unknown, not yet validated, closed - get exactly the same response,
+take about as long as a real send, store a code nobody receives (so verification answers
+the same way too) and count against the same limits, so the endpoints cannot be used to
+find out who lives in the hostel.
+
+Codes go out synchronously, inside the sign-in request, so the send is bounded: a short
+provider timeout and an overall time budget, a limit on sends in flight across all
+workers, and a circuit breaker that stops calling a provider that keeps failing (see
+``hostel360.hostel_communication.providers.base``). A messaging outage then costs a few
+seconds per request at most instead of tying up the web workers.
 
 Development shortcut: with ``developer_mode`` on, ``"hostel360_fixed_otp": "123456"`` in
 site_config.json makes every code that value, so testers can sign in without an SMS
@@ -48,11 +62,23 @@ FAILED_VERIFICATIONS_PER_HOUR = 10
 FAILED_VERIFICATIONS_PER_IP_PER_HOUR = 100
 LOCKOUT_SECONDS = HOUR
 INACTIVE_STUDENT_STATUSES = ("Vacated", "Alumni")
+VALIDATED = "Validated"
+REJECTED = "Rejected"
 
 # Unknown numbers are answered after roughly the time a real send takes.
 DEFAULT_SEND_SECONDS = 0.4
 MAX_EQUALISE_SECONDS = 3.0
 SEND_TIME_KEY = "send_seconds"
+
+# Bounds on the synchronous send (seconds). Background notifications keep the longer
+# provider timeout from Messaging Settings.
+OTP_CONNECT_TIMEOUT = 2.0
+OTP_READ_TIMEOUT = 3.0
+OTP_SEND_BUDGET_SECONDS = 4.0
+MIN_CHANNEL_SECONDS = 1.0
+# Sign-in codes being handed to a provider at the same moment, across all web workers.
+MAX_SENDS_IN_FLIGHT = 6
+SEND_SLOT_SECONDS = 30
 
 _random = secrets.SystemRandom()
 
@@ -141,6 +167,10 @@ def _now() -> float:
 	return time.time()
 
 
+def _clock() -> float:
+	return time.monotonic()
+
+
 def _sleep(seconds: float) -> None:
 	time.sleep(seconds)
 
@@ -214,6 +244,35 @@ def portal_enabled(fieldname: str) -> bool:
 	return not rows or rows[0] in (None, "") or cint(rows[0]) == 1
 
 
+def student_may_sign_in(student) -> bool:
+	"""Validated against the college register and still a resident (tender 3.1)."""
+	return bool(
+		student
+		and student.get("validation_status") == VALIDATED
+		and student.get("status") not in INACTIVE_STUDENT_STATUSES
+	)
+
+
+def guardian_has_portal_ward(guardian: str) -> bool:
+	"""The parent portal opens only for a guardian of at least one validated resident (4.1)."""
+	if not guardian:
+		return False
+	link = frappe.qb.DocType("Hostel Student Guardian")
+	student = frappe.qb.DocType("Hostel Student")
+	rows = (
+		frappe.qb.from_(link)
+		.join(student)
+		.on(student.name == link.parent)
+		.select(student.name)
+		.where(link.guardian == guardian)
+		.where(link.parenttype == "Hostel Student")
+		.where(student.validation_status == VALIDATED)
+		.where(student.status.notin(list(INACTIVE_STUDENT_STATUSES)))
+		.limit(1)
+	).run(pluck=True)
+	return bool(rows)
+
+
 def resolve_identities(mobile: str) -> list[frappe._dict]:
 	"""Portal identities that may sign in with this mobile number (student and/or parent)."""
 	identities = []
@@ -224,11 +283,7 @@ def resolve_identities(mobile: str) -> list[frappe._dict]:
 			["name", "status", "validation_status"],
 			as_dict=True,
 		)
-		if (
-			student
-			and student.status not in INACTIVE_STUDENT_STATUSES
-			and student.validation_status != "Rejected"
-		):
+		if student_may_sign_in(student):
 			identities.append(frappe._dict(kind=KIND_STUDENT, doctype="Hostel Student", name=student.name))
 
 	if portal_enabled("parent_portal_enabled") and frappe.db.exists("DocType", "Hostel Guardian"):
@@ -238,13 +293,7 @@ def resolve_identities(mobile: str) -> list[frappe._dict]:
 			["name", "validation_status"],
 			as_dict=True,
 		)
-		if (
-			guardian
-			and guardian.validation_status != "Rejected"
-			and frappe.db.exists(
-				"Hostel Student Guardian", {"guardian": guardian.name, "parenttype": "Hostel Student"}
-			)
-		):
+		if guardian and guardian.validation_status != REJECTED and guardian_has_portal_ward(guardian.name):
 			identities.append(frappe._dict(kind=KIND_PARENT, doctype="Hostel Guardian", name=guardian.name))
 	return identities
 
@@ -254,7 +303,7 @@ def resolve_identities(mobile: str) -> list[frappe._dict]:
 
 def request_code(mobile: str, channel: str | None = None, ip: str | None = None) -> dict:
 	"""Send a sign-in code if the number belongs to a portal user. Same answer either way."""
-	started = time.monotonic()
+	started = _clock()
 	mobile = _normalise(mobile)
 	policy = get_policy()
 	ref = mobile_ref(mobile)
@@ -287,13 +336,17 @@ def request_code(mobile: str, channel: str | None = None, ip: str | None = None)
 		# Named *_secret so Frappe's traceback sanitiser masks it if anything below fails.
 		otp_secret = generate_code(policy.length)
 		_store_code(ref, mobile, otp_secret, policy.expiry, channel)
-		delivered = _deliver(mobile, otp_secret, channel, policy)
+		delivered = _deliver(mobile, otp_secret, channel, policy, started)
 		del otp_secret
 		security_log(
 			"otp_sent" if delivered else "otp_send_failed", mobile, ip, kinds=[i.kind for i in identities]
 		)
-		_remember_send_time(time.monotonic() - started)
+		_remember_send_time(_clock() - started)
 	else:
+		# A code nobody receives, so verify_code answers exactly as it does for a registered
+		# number: attempt counting, "attempts left", invalidation and lockout. It is hex, and
+		# verify_code accepts digits only, so it can never be entered.
+		_store_code(ref, mobile, secrets.token_hex(16), policy.expiry, channel)
 		security_log("otp_requested_unknown", mobile, ip)
 		_equalise_timing(started)
 
@@ -305,20 +358,74 @@ def request_code(mobile: str, channel: str | None = None, ip: str | None = None)
 	}
 
 
-def _deliver(mobile: str, otp_secret: str, requested: str | None, policy) -> bool:
-	"""Try the requested channel first, then any other channel allowed for codes."""
+def _deliver(mobile: str, otp_secret: str, requested: str | None, policy, started: float) -> bool:
+	"""Try the requested channel first, then any other channel allowed for codes.
+
+	The whole attempt stays within ``OTP_SEND_BUDGET_SECONDS`` of the request starting, and
+	is skipped when too many codes are already on their way to a provider.
+	"""
 	from hostel360.hostel_communication.dispatch import send_otp_message
 
 	requested = normalize_channel(requested)
 	order = [requested] if requested in policy.channels else []
 	order += [c for c in policy.channels if c not in order and c in MOBILE_CHANNELS]
-	for channel in order:
-		try:
-			if send_otp_message(mobile, otp_secret, channel):
-				return True
-		except Exception:
-			frappe.log_error(title="Hostel360: sign-in code delivery error", message=frappe.get_traceback())
-	return False
+
+	slot = _acquire_send_slot()
+	if slot is None:
+		security_log("otp_send_capacity", mobile)
+		return False
+	try:
+		deadline = started + OTP_SEND_BUDGET_SECONDS
+		for channel in order:
+			remaining = deadline - _clock()
+			if remaining < MIN_CHANNEL_SECONDS:
+				break
+			timeout = (min(OTP_CONNECT_TIMEOUT, remaining), min(OTP_READ_TIMEOUT, remaining))
+			try:
+				if send_otp_message(mobile, otp_secret, channel, timeout=timeout):
+					return True
+			except Exception:
+				frappe.log_error(
+					title="Hostel360: sign-in code delivery error", message=frappe.get_traceback()
+				)
+		return False
+	finally:
+		_release_send_slot(slot)
+
+
+def _acquire_send_slot() -> str | None:
+	"""A place among the codes in flight, or None when ``MAX_SENDS_IN_FLIGHT`` are out.
+
+	A sorted set of tokens scored by start time: entries older than ``SEND_SLOT_SECONDS``
+	(a worker that died mid-send) drop out on their own.
+	"""
+	key = _key("inflight")
+	token = secrets.token_hex(8)
+	now = _now()
+	try:
+		pipe = frappe.cache.pipeline()
+		pipe.zremrangebyscore(key, 0, now - SEND_SLOT_SECONDS)
+		pipe.zadd(key, {token: now})
+		pipe.zcard(key)
+		pipe.expire(key, SEND_SLOT_SECONDS)
+		in_flight = cint(pipe.execute()[2])
+	except Exception:
+		# The code itself lives in Redis, so this is no worse than the send failing later.
+		return token
+	if in_flight > MAX_SENDS_IN_FLIGHT:
+		_release_send_slot(token)
+		return None
+	return token
+
+
+def _release_send_slot(token: str | None) -> None:
+	if not token:
+		return
+	try:
+		frappe.cache.zrem(_key("inflight"), token)
+	except Exception:
+		# The slot ages out after SEND_SLOT_SECONDS anyway.
+		frappe.logger("hostel360").warning("Could not release a sign-in code send slot", exc_info=True)
 
 
 def _send_time_key() -> bytes:
@@ -341,7 +448,7 @@ def _remember_send_time(seconds: float) -> None:
 
 def _equalise_timing(started: float) -> None:
 	target = _typical_send_seconds() * _random.uniform(0.85, 1.15)
-	delay = target - (time.monotonic() - started)
+	delay = target - (_clock() - started)
 	if delay > 0:
 		_sleep(min(delay, MAX_EQUALISE_SECONDS))
 
@@ -365,32 +472,44 @@ def verify_code(mobile: str, code: str, kind: str | None = None, ip: str | None 
 	code = cstr(code).strip().replace(" ", "")
 	if not code.isdigit() or not 4 <= len(code) <= 8:
 		frappe.throw(_("Please enter the {0}-digit code sent to your phone.").format(policy.length))
+	kind = _normalise_kind(kind)
 
-	if ip and not is_trusted_ip(ip, policy.trusted_networks):
-		if _count(f"ipfail:{ip_ref(ip)}") >= FAILED_VERIFICATIONS_PER_IP_PER_HOUR:
-			security_log("otp_ip_verify_limit", mobile, ip)
-			frappe.throw(
-				_("Too many incorrect codes have been entered from your network. Please try again later."),
-				frappe.RateLimitExceededError,
-			)
+	limit_ip = bool(ip) and not is_trusted_ip(ip, policy.trusted_networks)
+	if limit_ip and _count(f"ipfail:{ip_ref(ip)}") >= FAILED_VERIFICATIONS_PER_IP_PER_HOUR:
+		_refuse_network(mobile, ip)
 
 	state = _load_code(ref)
 	if not state:
-		_register_failure(ref, mobile, ip, reason="no active code")
+		# Nothing to guess against: count it for the network, not against the number, or
+		# anyone could keep a resident locked out without a single code being sent.
+		_register_failure_without_code(ref, mobile, ip)
 		frappe.throw(
 			_("This code is not valid or has expired. Please request a new code."),
 			frappe.AuthenticationError,
 		)
 
+	# Reserve this guess before comparing it. The counters are the gate: simultaneous
+	# guesses each get their own number, and those past a limit are refused uncompared.
+	attempts = _incr_window(f"attempts:{ref}", policy.expiry)
+	failures = _incr_window(f"fail:{ref}", HOUR)
+	ip_failures = _incr_window(f"ipfail:{ip_ref(ip)}", HOUR) if ip else 0
+	if failures > FAILED_VERIFICATIONS_PER_HOUR:
+		_lock_number(ref, mobile, ip, failures)
+		_check_lock(ref, mobile, ip)
+	if limit_ip and ip_failures > FAILED_VERIFICATIONS_PER_IP_PER_HOUR:
+		_refuse_network(mobile, ip)
+	if attempts > policy.max_attempts:
+		_clear_code(ref)
+		_too_many_attempts()
+
 	if not hmac.compare_digest(state["d"], code_digest(mobile, code)):
-		attempts = _incr_window(f"attempts:{ref}", policy.expiry)
-		_register_failure(ref, mobile, ip, reason="wrong code")
+		security_log("otp_verify_failed", mobile, ip, reason="wrong code", failures=failures)
+		_record_failed_sign_in(mobile, "wrong code")
+		if failures >= FAILED_VERIFICATIONS_PER_HOUR:
+			_lock_number(ref, mobile, ip, failures)
 		if attempts >= policy.max_attempts:
 			_clear_code(ref)
-			frappe.throw(
-				_("The code was entered incorrectly too many times. Please request a new code."),
-				frappe.AuthenticationError,
-			)
+			_too_many_attempts()
 		left = policy.max_attempts - attempts
 		frappe.throw(
 			_("The code is incorrect. You have {0} more attempt left.").format(left)
@@ -398,6 +517,11 @@ def verify_code(mobile: str, code: str, kind: str | None = None, ip: str | None 
 			else _("The code is incorrect. You have {0} more attempts left.").format(left),
 			frappe.AuthenticationError,
 		)
+
+	# The right code: the reserved failure was not one.
+	_decrement(f"fail:{ref}")
+	if ip:
+		_decrement(f"ipfail:{ip_ref(ip)}")
 
 	identities = resolve_identities(mobile)
 	if not identities:
@@ -408,10 +532,11 @@ def verify_code(mobile: str, code: str, kind: str | None = None, ip: str | None 
 			frappe.AuthenticationError,
 		)
 
-	kind = _normalise_kind(kind)
 	if kind:
 		identity = next((i for i in identities if i.kind == kind), None)
 		if not identity:
+			# The right code with the wrong portal chosen is not a guess.
+			_decrement(f"attempts:{ref}")
 			frappe.throw(
 				_("This number is not registered for the {0} portal.").format(
 					_("student") if kind == KIND_STUDENT else _("parent")
@@ -419,6 +544,8 @@ def verify_code(mobile: str, code: str, kind: str | None = None, ip: str | None 
 				frappe.AuthenticationError,
 			)
 	elif len(identities) > 1:
+		# The code stays valid for the second call, and asking does not use up an attempt.
+		_decrement(f"attempts:{ref}")
 		return {"ok": False, "choose": [i.kind for i in identities]}
 	else:
 		identity = identities[0]
@@ -464,16 +591,48 @@ def _check_lock(ref: str, mobile: str, ip: str | None) -> None:
 		)
 
 
-def _register_failure(ref: str, mobile: str, ip: str | None, reason: str) -> None:
-	failures = _incr_window(f"fail:{ref}", HOUR)
+def _register_failure_without_code(ref: str, mobile: str, ip: str | None) -> None:
 	if ip:
 		_incr_window(f"ipfail:{ip_ref(ip)}", HOUR)
-	security_log("otp_verify_failed", mobile, ip, reason=reason, failures=failures)
-	_record_failed_sign_in(mobile, reason)
-	if failures >= FAILED_VERIFICATIONS_PER_HOUR:
-		frappe.cache.set(_key(f"lock:{ref}"), "1", ex=LOCKOUT_SECONDS)
-		_clear_code(ref)
+	security_log("otp_verify_failed", mobile, ip, reason="no active code", failures=_count(f"fail:{ref}"))
+	_record_failed_sign_in(mobile, "no active code")
+
+
+def _lock_number(ref: str, mobile: str, ip: str | None, failures: int) -> None:
+	if frappe.cache.set(_key(f"lock:{ref}"), "1", ex=LOCKOUT_SECONDS, nx=True):
 		security_log("otp_number_locked", mobile, ip, failures=failures)
+	_clear_code(ref)
+
+
+def _refuse_network(mobile: str, ip: str | None) -> None:
+	security_log("otp_ip_verify_limit", mobile, ip)
+	frappe.throw(
+		_("Too many incorrect codes have been entered from your network. Please try again later."),
+		frappe.RateLimitExceededError,
+	)
+
+
+def _too_many_attempts() -> None:
+	frappe.throw(
+		_("The code was entered incorrectly too many times. Please request a new code."),
+		frappe.AuthenticationError,
+	)
+
+
+def _decrement(name: str) -> None:
+	key = _key(name)
+	try:
+		if cint(frappe.cache.decr(key)) <= 0:
+			frappe.cache.delete(key)
+	except Exception:
+		# A counter left one too high only makes a limit apply slightly early.
+		frappe.logger("hostel360").warning("Could not adjust a sign-in counter", exc_info=True)
+
+
+def unlock_number(mobile: str) -> None:
+	"""Lift a sign-in lock on a number (for the hostel office, after checking with the owner)."""
+	ref = mobile_ref(_normalise(mobile))
+	_delete(f"lock:{ref}", f"fail:{ref}")
 
 
 def _record_failed_sign_in(mobile: str, reason: str) -> None:

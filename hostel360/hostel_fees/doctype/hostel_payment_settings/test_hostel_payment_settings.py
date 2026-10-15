@@ -66,6 +66,20 @@ class TestHostelPaymentSettings(FeeTestCase):
 
 		doc = frappe.get_single(SETTINGS)
 		doc.run_method("onload")
-		self.assertTrue(
-			doc.get_onload().webhook_url.endswith("/api/method/hostel360.api.payments.razorpay_webhook")
-		)
+		onload = doc.get_onload()
+		self.assertTrue(onload.webhook_url.endswith("/api/method/hostel360.api.payments.razorpay_webhook"))
+		self.assertIn("refund.processed", onload.webhook_events)
+		self.assertTrue(onload.payu_return_url.endswith("/api/method/hostel360.api.payments.payu_return"))
+		self.assertTrue(onload.payu_webhook_url.endswith("/api/method/hostel360.api.payments.payu_webhook"))
+
+	def test_gateway_choice(self):
+		options = frappe.get_meta(SETTINGS).get_field("gateway").options.split("\n")
+		self.assertEqual(options, ["Razorpay", "PayU"])
+		settings = configure_gateway(gateway="PayU")
+		self.assertTrue(is_gateway_configured())
+
+		settings.reload()
+		settings.key_secret = ""
+		settings.gateway = "Razorpay"
+		with self.assertRaises(frappe.ValidationError):
+			settings.save()

@@ -47,3 +47,35 @@ class TestMessExtraCharge(IntegrationTestCase):
 			charge.save(ignore_permissions=True)
 		with self.assertRaises(frappe.ValidationError):
 			charge.delete(ignore_permissions=True)
+
+	def vacate(self):
+		"""What Room Allotment does when the student leaves: the current hostel is cleared."""
+		values = {"current_hostel": None, "status": "Vacated"}
+		if frappe.get_meta("Hostel Student").has_field("last_hostel"):
+			values["last_hostel"] = self.hostel
+		frappe.db.set_value("Hostel Student", self.student, values)
+
+	def test_hostel_is_kept_after_the_student_moves_out(self):
+		charge = self.make_charge()
+		self.vacate()
+		charge.reload()
+		charge.amount = 75
+		charge.save(ignore_permissions=True)
+		self.assertEqual(frappe.db.get_value("Mess Extra Charge", charge.name, "hostel"), self.hostel)
+
+	def test_charge_for_a_vacated_student_uses_their_last_hostel(self):
+		if not frappe.get_meta("Hostel Student").has_field("last_hostel"):
+			self.skipTest("Hostel Student has no last_hostel field on this site")
+		self.vacate()
+		charge = self.make_charge()
+		self.assertEqual((charge.hostel, charge.mess), (self.hostel, self.mess))
+
+	def test_migration_restores_a_lost_hostel(self):
+		from hostel360.hostel_mess.setup import restore_student_hostels
+
+		charge = self.make_charge()
+		frappe.db.set_value("Mess Extra Charge", charge.name, "hostel", None)  # as older saves left it
+		self.vacate()
+		restore_student_hostels()
+		expected = self.hostel if frappe.get_meta("Hostel Student").has_field("last_hostel") else None
+		self.assertEqual(frappe.db.get_value("Mess Extra Charge", charge.name, "hostel"), expected)

@@ -33,6 +33,10 @@ class VerifyResult:
 	created_on: str | None = None
 	extracted_to: str | None = None
 	archive_checksum: str | None = None
+	encrypted: bool = False
+	# SHA-256 of manifest.json: the export's fingerprint, compared with the site's export log.
+	manifest_sha256: str | None = None
+	manifest_summary: dict = field(default_factory=dict)
 
 	def fail(self, message: str) -> None:
 		self.ok = False
@@ -50,6 +54,9 @@ class VerifyResult:
 			"created_on": self.created_on,
 			"extracted_to": self.extracted_to,
 			"archive_checksum": self.archive_checksum,
+			"encrypted": self.encrypted,
+			"manifest_sha256": self.manifest_sha256,
+			"manifest_summary": self.manifest_summary,
 		}
 
 
@@ -80,6 +87,15 @@ def verify_directory(root: str, result: VerifyResult | None = None) -> VerifyRes
 	result.export_name = manifest.get("export_name")
 	result.site = manifest.get("site")
 	result.created_on = manifest.get("created_on")
+	result.manifest_sha256 = _sha256(manifest_path)
+	totals = manifest.get("totals") or {}
+	result.manifest_summary = {
+		"created_by": manifest.get("created_by"),
+		"include_files": bool((manifest.get("files") or {}).get("included")),
+		"doctypes": len(manifest.get("doctypes") or []),
+		"entries": totals.get("entries"),
+		"bytes": totals.get("bytes"),
+	}
 
 	listed = set()
 	real_root = os.path.realpath(root)
@@ -109,7 +125,6 @@ def verify_directory(root: str, result: VerifyResult | None = None) -> VerifyRes
 			if relative != MANIFEST and relative not in listed:
 				result.fail(f"{relative}: present but not listed in the manifest.")
 
-	totals = manifest.get("totals") or {}
 	if totals.get("entries") is not None and totals["entries"] != len(manifest.get("entries") or []):
 		result.fail("The manifest's entry count does not match its list of files.")
 	return result
@@ -153,6 +168,7 @@ def verify_export(path: str, passphrase: str | None = None, extract_to: str | No
 	try:
 		archive = path
 		if crypto.is_encrypted(path):
+			result.encrypted = True
 			if not passphrase:
 				result.fail("The export is encrypted; a passphrase is required.")
 				return result

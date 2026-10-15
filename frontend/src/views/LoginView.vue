@@ -14,7 +14,7 @@ import LanguageSwitch from "@/components/LanguageSwitch.vue";
 import OtpInput from "@/components/OtpInput.vue";
 import { t } from "@/i18n";
 import { safeRedirect } from "@/router/guards";
-import { completeSignIn, useSession } from "@/stores/session";
+import { clearClosedReason, completeSignIn, useSession } from "@/stores/session";
 import { formatMobile, normalizeMobile } from "@/utils/format";
 import { getItem, setItem } from "@/utils/storage";
 
@@ -155,6 +155,14 @@ async function submitCode(kind?: PortalKind) {
 		error.value = t("errors.generic");
 	} catch (caught) {
 		error.value = errorMessage(caught);
+		// The choose step has no Resend or Change number: if the server refused the code
+		// (expired, locked), go back to the code step, where both are, instead of letting
+		// every tap resend a dead code. A dropped connection keeps the still-valid code.
+		const retryable = caught instanceof ApiError && caught.isNetwork;
+		if (step.value === "choose" && !retryable) {
+			choices.value = [];
+			step.value = "code";
+		}
 		if (step.value === "code") {
 			code.value = "";
 			otpRef.value?.clear();
@@ -166,6 +174,7 @@ async function submitCode(kind?: PortalKind) {
 
 function changeNumber() {
 	webOtp?.abort();
+	choices.value = [];
 	step.value = "mobile";
 	code.value = "";
 	error.value = "";
@@ -200,6 +209,20 @@ onBeforeUnmount(() => {
 		</div>
 
 		<main id="main" class="mx-auto -mt-14 w-full max-w-md flex-1 px-4 pb-10">
+			<div
+				v-if="session.closedReason && step === 'mobile'"
+				class="card mb-4 flex items-start gap-3 border-warning bg-warning-soft"
+				role="alert"
+				data-test="closed-reason"
+			>
+				<CircleAlert :size="22" class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+				<div class="min-w-0 flex-1">
+					<p class="font-semibold text-ink">{{ t("login.closedTitle") }}</p>
+					<p class="mt-0.5 text-sm text-muted">{{ session.closedReason }}</p>
+					<button type="button" class="btn-ghost -ml-3 mt-1 min-h-10 px-3 text-sm" @click="clearClosedReason">{{ t("common.dismiss") }}</button>
+				</div>
+			</div>
+
 			<section class="card p-5 sm:p-6" aria-live="off">
 				<!-- Step 1: mobile number -->
 				<form v-if="step === 'mobile'" novalidate @submit.prevent="requestCode()">
@@ -319,6 +342,9 @@ onBeforeUnmount(() => {
 					<p v-if="error" class="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-sm font-medium text-danger" role="alert">
 						<CircleAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />{{ error }}
 					</p>
+					<button type="button" class="btn-ghost -ml-3 mt-4 px-3 text-sm" data-test="choose-change-number" @click="changeNumber">
+						{{ t("login.changeNumber") }}
+					</button>
 				</div>
 			</section>
 

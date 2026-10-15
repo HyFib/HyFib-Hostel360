@@ -52,6 +52,7 @@
   "current_room",
   "current_bed",
   "current_allotment",
+  "last_hostel",
   "verification_tab",
   "validation_section",
   "validation_status",
@@ -353,6 +354,16 @@
    "read_only": 1
   },
   {
+   "description": "The hostel the student lives in or last lived in. Kept after the student vacates, so hostel staff only see their own former residents.",
+   "fieldname": "last_hostel",
+   "fieldtype": "Link",
+   "label": "Last Hostel",
+   "no_copy": 1,
+   "options": "Hostel",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
    "fieldname": "verification_tab",
    "fieldtype": "Tab Break",
    "label": "Verification"
@@ -435,7 +446,7 @@
  "image_field": "photo",
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 19:20:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel People",
  "name": "Hostel Student",
@@ -473,7 +484,6 @@
    "read": 1,
    "report": 1,
    "role": "Deputy Warden",
-   "share": 1,
    "write": 1
   },
   {
@@ -484,7 +494,6 @@
    "read": 1,
    "report": 1,
    "role": "Hostel Office Staff",
-   "share": 1,
    "write": 1
   },
   {

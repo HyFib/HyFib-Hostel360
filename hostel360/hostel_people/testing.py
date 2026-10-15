@@ -113,3 +113,41 @@ def allot(student: str, bed: str, from_date: str | None = None, **values):
 	doc.insert(ignore_permissions=True)
 	doc.submit()
 	return doc
+
+
+def make_staff(designation: str, assignments=(), **values):
+	"""A Hostel Staff record, with a desk login unless ``create_user=0`` is passed.
+
+	``assignments`` holds hostel names, or ``{"hostel": ..., "block": ...}`` rows for block
+	assignments. The record is inserted as the current user, so permissions apply.
+	"""
+	suffix = frappe.generate_hash(length=8)
+	rows = [row if isinstance(row, dict) else {"hostel": row} for row in assignments]
+	return frappe.get_doc(
+		{
+			"doctype": "Hostel Staff",
+			"staff_name": values.pop("staff_name", f"Test Staff {suffix}"),
+			"designation": designation,
+			"email": values.pop("email", f"staff-{suffix}@example.com"),
+			"create_user": values.pop("create_user", 1),
+			"send_welcome_email": 0,
+			"is_active": values.pop("is_active", 1),
+			"assignments": rows,
+			**values,
+		}
+	).insert()
+
+
+def make_desk_user(*roles: str, email: str | None = None) -> str:
+	"""A plain desk account holding ``roles`` (not linked to any Hostel Staff record)."""
+	email = email or f"desk-{frappe.generate_hash(length=8)}@example.com"
+	frappe.get_doc(
+		{
+			"doctype": "User",
+			"email": email,
+			"first_name": "Desk",
+			"send_welcome_email": 0,
+			"roles": [{"role": role} for role in roles],
+		}
+	).insert(ignore_permissions=True)
+	return email

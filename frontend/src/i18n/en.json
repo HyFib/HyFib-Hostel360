@@ -129,7 +129,8 @@
 		"privacyNote": "Your information is used only for hostel administration.",
 		"privacyLink": "Read the privacy notice",
 		"help": "Trouble signing in?",
-		"staff": "Hostel staff? Sign in here"
+		"staff": "Hostel staff? Sign in here",
+		"closedTitle": "You have been signed out"
 	},
 	"home": {
 		"greeting": {
@@ -171,12 +172,23 @@
 		"certificate": "Bonafide certificate",
 		"approvals": "Leave approvals",
 		"notificationsTitle": "Latest updates",
-		"noNotifications": "No updates yet."
+		"noNotifications": "No updates yet.",
+		"duesUnavailable": "Your dues couldn't be loaded right now. Open Fees for the latest figures.",
+		"roomUnavailable": "Room details couldn't be loaded right now.",
+		"menuUnavailable": "Today's menu couldn't be loaded right now.",
+		"pendingUnavailable": "Open requests couldn't be loaded right now.",
+		"restrictedTitle": "Some services are paused",
+		"restrictedBody": "Your hostel record is marked {status}. You can still view and pay your fees; for leave, mess, requests and certificates please contact the hostel office.",
+		"wardRestrictedBody": "{name}'s hostel record is marked {status}. You can still view and pay the fees; for anything else please contact the hostel office.",
+		"wardVerificationPending": "The hostel office is verifying {name}'s registration. Fees, mess, leave and requests for {name} open up once it is verified.",
+		"wardVerificationRejected": "{name}'s registration could not be verified. Please contact the hostel office."
 	},
 	"wards": {
 		"choose": "Choose a student",
 		"switchLabel": "Viewing {name}. Switch student",
-		"switched": "Now showing {name}"
+		"switched": "Now showing {name}",
+		"pendingValidation": "Being verified",
+		"notValidated": "Not verified"
 	},
 	"fees": {
 		"title": "Fees",
@@ -209,10 +221,10 @@
 		"summary": "You are paying",
 		"payButton": "Pay {amount} securely",
 		"preparing": "Preparing payment…",
-		"inCheckout": "Complete the payment in the Razorpay window…",
+		"inCheckout": "Complete the payment in the payment window…",
 		"confirming": "Confirming your payment…",
 		"dontClose": "Please don't close this page while we confirm your payment.",
-		"secure": "Payments are processed securely by Razorpay and go directly to the institution's account. Card and UPI details are never seen by the portal.",
+		"secure": "Payments are processed securely by the institution's payment gateway and go directly to the institution's account. Card and UPI details are never seen by the portal.",
 		"successTitle": "Payment successful",
 		"successBody": "Receipt {receipt} has been issued.",
 		"pendingTitle": "Payment being confirmed",
@@ -227,10 +239,17 @@
 		"downloadReceipt": "Download receipt",
 		"backToFees": "Back to fees",
 		"nothingToPay": "Nothing to pay",
-		"nothingToPayHint": "These invoices are already paid or a payment for them is in progress.",
+		"nothingToPayHint": "These invoices are already paid.",
 		"checkoutClosed": "The payment window was closed. If money was debited, the receipt will appear here automatically within a few minutes; otherwise you can try again.",
 		"noWindow": "Don't see the payment window?",
-		"startAgain": "Start again"
+		"startAgain": "Start again",
+		"redirecting": "Opening the payment page…",
+		"redirectingHint": "You'll be taken to the payment page. After paying you come back to your fees, where the receipt appears.",
+		"resumeButton": "Continue paying {amount}",
+		"resumeHint": "A payment for these invoices was started but not finished. Continuing uses the same payment; you won't be charged twice.",
+		"checking": "Checking…",
+		"checkAgain": "Check again",
+		"returnUnmatched": "We couldn't match the payment page's reply to your payment. If money was debited, it will be confirmed automatically or refunded. Check Receipts in a few minutes."
 	},
 	"receipts": {
 		"title": "Receipts",
@@ -313,8 +332,11 @@
 		"contact": "Contact number during leave",
 		"contactHint": "A number the warden can reach you on.",
 		"messReduction": "Also apply for mess reduction",
-		"messReductionHint": "For leave of {days} days or more, your mess bill is reduced once the leave is approved.",
-		"messReductionTooShort": "Mess reduction needs at least {days} days of leave.",
+		"messReductionHint": "Your mess bill is reduced for the full days you are away (at least {days}) once the leave is approved. A day you leave after {cutoff} or return before {cutoff} is not counted.",
+		"messReductionTooShort": {
+			"one": "This leave covers only {count} full mess day away. Mess reduction needs at least {days}; a day you leave after {cutoff} or return before {cutoff} is not counted.",
+			"other": "This leave covers only {count} full mess days away. Mess reduction needs at least {days}; a day you leave after {cutoff} or return before {cutoff} is not counted."
+		},
 		"leaveInPast": "The leaving time can't be in the past.",
 		"returnBeforeLeave": "The return time must be after the leaving time.",
 		"submit": "Submit leave request",
@@ -335,6 +357,15 @@
 			"returned": "Return to hostel",
 			"overdue": "Return overdue",
 			"cancelled": "Cancelled"
+		},
+		"messReductionCovers": {
+			"one": "This leave covers {count} full mess day away; the mess bill is reduced once the leave is approved.",
+			"other": "This leave covers {count} full mess days away; the mess bill is reduced once the leave is approved."
+		},
+		"siteTimeHint": "Times are India time (IST), the hostel's clock.",
+		"reductionNotApplied": {
+			"one": "Mess reduction was not applied: this leave covered {count} full mess day away, and at least {min} are needed.",
+			"other": "Mess reduction was not applied: this leave covered {count} full mess days away, and at least {min} are needed."
 		}
 	},
 	"approvals": {
@@ -375,7 +406,6 @@
 		"confidentialHint": "Only the warden will see who raised it.",
 		"confidentialShort": "Confidential",
 		"sensitiveNote": "Ragging and harassment complaints are always confidential and go straight to the chief warden. If you are in danger right now, call for help immediately.",
-		"callNow": "Call {phone}",
 		"attachments": "Photos or documents",
 		"attachmentHint": "Up to {count} files: photos or PDF, {size} each. Photos are resized before upload.",
 		"addFile": "Add photo or file",
@@ -407,7 +437,10 @@
 		"ratingRequired": "Please choose a rating from 1 to 5 stars.",
 		"submitRating": "Submit rating",
 		"rated": "Thanks for rating the resolution.",
-		"yourRating": "Your rating"
+		"yourRating": "Your rating",
+		"callOffice": "Call the hostel office: {phone}",
+		"callEmergency": "Emergency (police, ambulance): {phone}",
+		"callAntiRagging": "National anti-ragging helpline (free, 24 hours): {phone}"
 	},
 	"feedback": {
 		"title": "Feedback",
@@ -536,7 +569,8 @@
 			"rights": "You may ask to see, correct or erase your data, withdraw consent where the law allows, and raise a grievance about how it is handled.",
 			"contactTitle": "Contact",
 			"contact": "Contact the hostel office for any privacy request. Questions about the portal itself can go to HyFib support, listed on the Help page."
-		}
+		},
+		"loadFailed": "The privacy notice couldn't be loaded."
 	},
 	"help": {
 		"title": "Help and support",
@@ -550,7 +584,7 @@
 		"ticketTitle": "When you contact support",
 		"ticket1": "Give your register number (or your ward's) and the mobile number you sign in with.",
 		"ticket2": "Say what you were trying to do and what you saw, for example an error message.",
-		"ticket3": "For payments, keep the Razorpay or bank reference number handy.",
+		"ticket3": "For payments, keep the payment reference or bank reference number handy.",
 		"neverShare": "Never share your sign-in code with anyone. Hostel and HyFib staff will never ask for it.",
 		"faqTitle": "Common questions",
 		"faq": {
@@ -619,7 +653,11 @@
 		"Failed": "Failed",
 		"Refunded": "Refunded",
 		"Validated": "Verified",
-		"Active": "Active"
+		"Active": "Active",
+		"Applied": "Applied",
+		"Suspended": "Suspended",
+		"Vacated": "Vacated",
+		"Alumni": "Alumni"
 	},
 	"invoiceTypes": {
 		"Hostel Fee": "Hostel fee",
@@ -701,5 +739,13 @@
 		"Hostel": "Hostel",
 		"Facilities": "Facilities",
 		"General": "General"
+	},
+	"relations": {
+		"Father": "Father",
+		"Mother": "Mother",
+		"Guardian": "Guardian",
+		"Brother": "Brother",
+		"Sister": "Sister",
+		"Other": "Other"
 	}
 }

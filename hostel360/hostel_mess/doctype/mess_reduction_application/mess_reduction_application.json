@@ -59,7 +59,7 @@
    "read_only": 1
   },
   {
-   "fetch_from": "student.current_hostel",
+   "description": "The student's hostel when the record was made; kept after the student moves out.",
    "fieldname": "hostel",
    "fieldtype": "Link",
    "in_standard_filter": 1,
@@ -184,7 +184,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-15 12:00:00.000000",
+ "modified": "2026-10-15 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Mess",
  "name": "Mess Reduction Application",
@@ -221,7 +221,6 @@
    "read": 1,
    "report": 1,
    "role": "Deputy Warden",
-   "share": 1,
    "write": 1
   },
   {
@@ -230,8 +229,7 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Hostel Office Staff",
-   "share": 1
+   "role": "Hostel Office Staff"
   },
   {
    "create": 1,
@@ -249,13 +247,11 @@
    "role": "Mess Staff"
   },
   {
-   "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Institution Auditor",
-   "share": 1
+   "role": "Institution Auditor"
   },
   {
    "create": 1,

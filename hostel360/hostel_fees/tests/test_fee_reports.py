@@ -62,8 +62,9 @@ class TestFeeReports(FeeTestCase):
 
 	def test_fee_dues_ageing(self):
 		self.assertEqual(
-			[bucket_for(d) for d in (-1, 0, 30, 31, 60, 61, 90, 91)],
+			[bucket_for(d) for d in (-1, 0, 1, 30, 31, 60, 61, 90, 91)],
 			[
+				"not_due",
 				"not_due",
 				"range_0_30",
 				"range_0_30",
@@ -81,6 +82,7 @@ class TestFeeReports(FeeTestCase):
 			self.student, 300, posting_date=add_days(nowdate(), -20), due_date=add_days(nowdate(), -10)
 		)
 		future = make_invoice(self.student, 200)
+		due_today = make_invoice(self.student, 150, posting_date=add_days(nowdate(), -5), due_date=nowdate())
 
 		_columns, data, _message, _chart, summary = fee_dues({"as_on_date": nowdate(), "hostel": self.hostel})
 		by_invoice = {row.invoice: row for row in data}
@@ -88,14 +90,19 @@ class TestFeeReports(FeeTestCase):
 		self.assertEqual(by_invoice[old.name].days_past_due, 95)
 		self.assertEqual(by_invoice[recent.name].range_0_30, 300)
 		self.assertEqual(by_invoice[future.name].not_due, 200)
-		self.assertEqual(summary[0]["value"], 1200)
+		# Due today is not overdue yet, as for invoice status and the "Overdue Only" filter.
+		self.assertEqual((by_invoice[due_today.name].not_due, by_invoice[due_today.name].range_0_30), (150, 0))
+		self.assertEqual(summary[0]["value"], 1350)
 		self.assertEqual(summary[1]["value"], 1000)
+
+		overdue_only = fee_dues({"as_on_date": nowdate(), "hostel": self.hostel, "overdue_only": 1})
+		self.assertEqual(overdue_only[4][1]["value"], summary[1]["value"])
 
 		_columns, grouped, *_rest = fee_dues(
 			{"as_on_date": nowdate(), "hostel": self.hostel, "group_by": "Student"}
 		)
 		self.assertEqual(len(grouped), 1)
-		self.assertEqual((grouped[0].invoices, grouped[0].outstanding_amount), (3, 1200))
+		self.assertEqual((grouped[0].invoices, grouped[0].outstanding_amount), (4, 1350))
 
 	def test_daily_collection_summary(self):
 		invoice = make_invoice(self.student, 1000)
@@ -112,6 +119,49 @@ class TestFeeReports(FeeTestCase):
 		self.assertEqual((data[0].mode_of_payment, data[0].receipts, data[0].amount), ("Cash", 1, 600))
 		self.assertEqual((data[0].cancelled_receipts, data[0].cancelled_amount), (1, 100))
 		self.assertEqual(summary[1]["value"], 600)
+
+	def test_cancellation_counts_on_the_day_it_happened(self):
+		yesterday = add_days(nowdate(), -1)
+		invoice = make_invoice(self.student, 5000, posting_date=add_days(nowdate(), -3))
+		monday = make_payment(self.student, [(invoice.name, 5000)], payment_date=yesterday)
+		monday.submit()
+
+		# Tuesday: Monday's receipt is cancelled and the money entered again.
+		monday.cancel()
+		self.assertTrue(monday.cancelled_on)
+		self.assertEqual(monday.cancelled_by, frappe.session.user)
+		make_payment(self.student, [(invoice.name, 5000)]).submit()
+
+		_columns, today, _message, _chart, summary = daily_collection_summary(
+			{"date": nowdate(), "hostel": self.hostel}
+		)
+		self.assertEqual(len(today), 1)
+		self.assertEqual((today[0].receipts, today[0].amount), (1, 5000))
+		self.assertEqual((today[0].cancelled_receipts, today[0].cancelled_amount), (1, 5000))
+		self.assertEqual(summary[1]["value"], 5000)
+
+		# Re-running Monday still shows what was handed over when that counter closed.
+		_columns, past, _message, _chart, past_summary = daily_collection_summary(
+			{"date": yesterday, "hostel": self.hostel}
+		)
+		self.assertEqual(len(past), 1)
+		self.assertEqual((past[0].receipts, past[0].amount, past[0].cancelled_receipts), (1, 5000, 0))
+		self.assertEqual(past_summary[1]["value"], 5000)
+
+	def test_receipts_cancelled_before_time_stamping_use_their_last_change(self):
+		invoice = make_invoice(self.student, 800)
+		receipt = make_payment(self.student, [(invoice.name, 800)])
+		receipt.submit()
+		receipt.cancel()
+		frappe.db.set_value("Hostel Payment", receipt.name, "cancelled_on", None, update_modified=False)
+
+		data = daily_collection_summary({"date": nowdate(), "hostel": self.hostel})[1]
+		self.assertEqual((data[0].receipts, data[0].cancelled_receipts), (0, 1))
+
+		from hostel360.hostel_fees.setup import backfill_cancellation_times
+
+		backfill_cancellation_times()
+		self.assertTrue(frappe.db.get_value("Hostel Payment", receipt.name, "cancelled_on"))
 
 	def test_gateway_reconciliation_runs(self):
 		columns, data, *_rest = gateway_reconciliation(

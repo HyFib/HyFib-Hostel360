@@ -8,8 +8,9 @@ import { session } from "@/stores/session";
 import { readBoot } from "@/utils/boot";
 
 const boot = readBoot();
-const officePhone = computed(() => session.settings.office_phone || "");
-const officeEmail = computed(() => session.settings.office_email || "");
+// The page is open before sign-in too, so the hostel office also comes from the page's boot data.
+const officePhone = computed(() => session.settings.office_phone || boot.office_phone || "");
+const officeEmail = computed(() => session.settings.office_email || boot.office_email || "");
 const supportPhone = computed(() => session.settings.support_phone || boot.support_phone || "+91 96060 60596");
 const supportEmail = computed(() => session.settings.support_email || boot.support_email || "support@hyfib.com");
 const faqs = ["otp", "wrongNumber", "payment", "receipt", "leave", "confidential", "language"] as const;

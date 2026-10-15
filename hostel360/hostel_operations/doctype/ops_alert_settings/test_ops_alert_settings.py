@@ -1,8 +1,11 @@
 # Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe.tests import IntegrationTestCase
+from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from hostel360.hostel_operations import setup
 from hostel360.hostel_operations.tests.helpers import (
@@ -130,6 +133,66 @@ class TestOpsAlertSettings(IntegrationTestCase):
 		after = frappe.get_doc("Ops Alert Settings").get_password("ingest_secret")
 		self.assertNotEqual(before, after)
 		self.assertRaises(frappe.ValidationError, setup.rotate_secret, "heartbeat_url")
+
+
+class TestOpsAlertSettingsUnderLoad(IntegrationTestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.addClassCleanup(clear_settings_cache)
+		super().setUpClass()
+
+	def test_form_stays_saveable_while_the_jobs_run(self):
+		"""The minute and five-minute jobs record their run times on this Single; an operator
+		editing the form for longer than that must still be able to save."""
+		from unittest.mock import patch
+
+		from frappe.desk.form.save import savedocs
+
+		from hostel360.hostel_operations import escalation, health
+
+		configure_settings()
+		form = frappe.get_doc("Ops Alert Settings").as_dict()
+
+		moment = add_to_date(now_datetime(), days=3650, minutes=int(frappe.generate_hash(length=6), 16) % 500_000)
+		with patch.object(escalation, "escalate_open_alerts", return_value={}):
+			self.assertEqual(escalation.run_escalations(now=moment), {})
+		with patch.object(health, "CHECKS", ()), DeliveryRecorder():
+			health._run_and_apply()
+
+		form["critical_renotify_minutes"] = 45
+		savedocs(json.dumps(form, default=str), "Save")
+
+		self.assertEqual(frappe.db.get_single_value("Ops Alert Settings", "critical_renotify_minutes"), 45)
+		# The stale run time the form was opened with is not written back over the job's.
+		self.assertEqual(
+			get_datetime(frappe.db.get_single_value("Ops Alert Settings", "last_escalation_run_on")), moment
+		)
+
+	def test_level_without_contacts_is_flagged_but_saveable(self):
+		from hostel360.hostel_operations import health
+		from hostel360.hostel_operations.settings import get_settings
+
+		settings = configure_settings()
+		settings.escalation_levels[1].notify_emails = ""
+		settings.escalation_levels[1].notify_mobiles = ""
+		frappe.local.message_log = []
+		settings.save()
+		clear_settings_cache()
+		self.assertTrue(
+			any("no e-mail address or mobile number" in str(message) for message in frappe.local.message_log)
+		)
+
+		def check():
+			return health.check_escalation_contacts(
+				frappe._dict(settings=get_settings(), now=now_datetime(), read_only=True)
+			)
+
+		result = check()
+		self.assertEqual(result.status, health.WARN)
+		self.assertIn("level 2", result.message)
+
+		configure_settings()
+		self.assertEqual(check().status, health.OK)
 
 
 def _plain_user() -> str:

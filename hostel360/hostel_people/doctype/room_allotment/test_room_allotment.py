@@ -13,8 +13,9 @@ from hostel360.hostel_people.doctype.room_allotment.room_allotment import (
 	DuplicateAllotmentError,
 	GenderMismatchError,
 )
+from hostel360.hostel_people.doctype.room_allotment.room_allotment import allot_bed
 from hostel360.hostel_people.tasks import close_ended_allotments
-from hostel360.hostel_people.testing import allot, beds_of, make_hostel, make_room, make_student
+from hostel360.hostel_people.testing import allot, beds_of, make_hostel, make_room, make_staff, make_student
 
 
 class TestRoomAllotment(IntegrationTestCase):
@@ -262,3 +263,64 @@ class TestRoomAllotment(IntegrationTestCase):
 		with patch.object(frappe.db, "commit"), patch.object(frappe.db, "rollback"):
 			close_ended_allotments()
 		self.assertFalse(frappe.db.exists("Ops Alert", {"alert_key": ALERT_KEY, "status": ["in", ["Open", "Acknowledged"]]}))
+
+	def test_scoped_user_cannot_transfer_a_student_out_of_another_hostel(self):
+		other_hostel = make_hostel("Male").name
+		other_bed = beds_of(make_room(other_hostel, capacity=1).name)[0]
+		student = make_student("Male").name
+		elsewhere = allot(student, other_bed, from_date=add_days(nowdate(), -5))
+		office = make_staff("Office Staff", [self.hostel.name]).user
+
+		with self.set_user(office):
+			transfer = frappe.get_doc(
+				{
+					"doctype": "Room Allotment",
+					"student": student,
+					"allotment_type": "Transfer",
+					"bed": self.bed_a,
+					"from_date": nowdate(),
+				}
+			)
+			# The transfer rule itself refuses, whatever else the user may see.
+			transfer.previous_allotment = elsewhere.name
+			self.assertRaises(frappe.PermissionError, transfer.validate_previous_allotment)
+			# And so does the whole insert (desk form or REST).
+			transfer.previous_allotment = None
+			self.assertRaises(frappe.PermissionError, transfer.insert)
+
+		self.assertEqual(frappe.db.get_value("Room Allotment", elsewhere.name, "status"), "Active")
+		self.assertEqual(frappe.db.get_value("Hostel Bed", other_bed, "current_allotment"), elsewhere.name)
+		self.assertEqual(frappe.db.get_value("Hostel Student", student, "current_hostel"), other_hostel)
+
+	def test_scoped_user_allots_only_students_they_can_see(self):
+		other_hostel = make_hostel("Male").name
+		other_bed = beds_of(make_room(other_hostel, capacity=1).name)[0]
+		former = make_student("Male").name
+		left = allot(former, other_bed, from_date=add_days(nowdate(), -5))
+		left.vacate_allotment(nowdate(), "Left the hostel")
+		newcomer = make_student("Male").name
+		office = make_staff("Office Staff", [self.hostel.name]).user
+
+		with self.set_user(office):
+			self.assertRaises(frappe.PermissionError, allot_bed, former, self.bed_a)
+			allotment = allot_bed(newcomer, self.bed_b)
+		self.assertEqual(frappe.db.get_value("Room Allotment", allotment, "status"), "Active")
+		self.assertIsNone(frappe.db.get_value("Hostel Bed", self.bed_a, "current_allotment"))
+
+	def test_allotment_files_hostel_less_fee_records_under_the_hostel(self):
+		if not frappe.db.exists("Hostel Fee Head", "Hostel Rent"):
+			self.skipTest("Hostel Fees defaults are not installed")
+		from hostel360.hostel_fees.services import create_invoice
+
+		student = make_student("Male")
+		frappe.db.set_value("Hostel Student", student.name, "validation_status", "Validated")
+		invoice = create_invoice(
+			student.name,
+			[{"fee_head": "Hostel Rent", "amount": 1000}],
+			"Hostel Fee",
+			add_days(nowdate(), 10),
+		)
+		self.assertFalse(frappe.db.get_value("Hostel Fee Invoice", invoice, "hostel"))
+
+		allot(student.name, self.bed_a)
+		self.assertEqual(frappe.db.get_value("Hostel Fee Invoice", invoice, "hostel"), self.hostel.name)

@@ -69,6 +69,8 @@ def get_payments(filters):
 			payment.unallocated_amount,
 		)
 		.where(payment.docstatus == 1)
+		# Test-mode gateway receipts record no real money.
+		.where(payment.is_test == 0)
 		.where(payment.payment_date.between(filters.from_date, filters.to_date))
 		.orderby(payment.payment_date)
 		.orderby(payment.name)

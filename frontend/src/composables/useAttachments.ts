@@ -4,9 +4,10 @@
  */
 import { computed, onBeforeUnmount, reactive } from "vue";
 import { errorMessage } from "@/api/client";
-import { checkAttachment, isImage, prepareUpload } from "@/api/files";
-import { uploadAttachment } from "@/api/portal";
+import { checkAttachment, isImage, prepareUpload, uploadRules } from "@/api/files";
+import { uploadAttachment, type StudentArg } from "@/api/portal";
 import { t } from "@/i18n";
+import { session } from "@/stores/session";
 
 export interface PendingAttachment {
 	id: number;
@@ -20,8 +21,13 @@ export interface PendingAttachment {
 
 let sequence = 0;
 
-export function useAttachments(max: number) {
+/**
+ * `student` gives the ward the form is for (a parent's selected ward): each upload is checked
+ * against that ward on the server, not against whichever ward comes first.
+ */
+export function useAttachments(max: number, student: () => StudentArg = () => undefined) {
 	const items = reactive<PendingAttachment[]>([]);
+	const limits = () => uploadRules(session.settings.upload);
 
 	const uploading = computed(() => items.some((item) => item.status === "uploading"));
 	const fileUrls = computed(() => items.filter((item) => item.status === "done" && item.fileUrl).map((item) => item.fileUrl as string));
@@ -30,9 +36,9 @@ export function useAttachments(max: number) {
 	async function uploadOne(entry: PendingAttachment, file: File) {
 		try {
 			const prepared = await prepareUpload(file);
-			const problem = checkAttachment(prepared);
+			const problem = checkAttachment(prepared, limits());
 			if (problem) throw new Error(problem);
-			const result = await uploadAttachment(prepared);
+			const result = await uploadAttachment(prepared, student());
 			entry.fileUrl = result.file_url;
 			entry.size = prepared.size;
 			entry.status = "done";
@@ -51,7 +57,7 @@ export function useAttachments(max: number) {
 				break;
 			}
 			// Type is checked up front; size is checked after shrinking, since a large photo usually becomes small.
-			const problem = checkAttachment(new File([], file.name, { type: file.type }));
+			const problem = checkAttachment(new File([], file.name, { type: file.type }), limits());
 			if (problem) {
 				problems.push(`${file.name}: ${problem}`);
 				continue;

@@ -14,6 +14,10 @@ DEFAULT_TIMEOUT = 10
 CONNECT_TIMEOUT = 5
 ERROR_TEXT_LIMIT = 500
 FAILURE_COUNTER_TTL = 6 * 60 * 60
+# How long sign-in codes skip a provider that keeps failing before one is let through again.
+BREAKER_SECONDS = 60
+ALERT_METHOD = "hostel360.hostel_communication.providers.base.raise_provider_alert"
+RESOLVE_METHOD = "hostel360.hostel_communication.providers.base.resolve_provider_alert"
 
 # HTTP statuses that are worth retrying later; everything else in 4xx is a request or
 # configuration problem that will fail the same way again.
@@ -106,8 +110,20 @@ def _failure_key(provider: str) -> bytes:
 	return frappe.cache.make_key(f"hostel360:messaging:consecutive_failures:{provider}")
 
 
+def _breaker_key(provider: str) -> bytes:
+	return frappe.cache.make_key(f"hostel360:messaging:breaker:{provider}")
+
+
+def _probe_key(provider: str) -> bytes:
+	return frappe.cache.make_key(f"hostel360:messaging:breaker_probe:{provider}")
+
+
+def _slug(provider: str) -> str:
+	return "".join(ch if ch.isalnum() else "-" for ch in provider.lower())
+
+
 def _alert_key(provider: str) -> str:
-	return "messaging-" + "".join(ch if ch.isalnum() else "-" for ch in provider.lower()) + "-failing"
+	return f"messaging-{_slug(provider)}-failing"
 
 
 def record_outcome(result: DeliveryResult, *, allow_alert: bool = True) -> None:
@@ -116,6 +132,12 @@ def record_outcome(result: DeliveryResult, *, allow_alert: bool = True) -> None:
 	Skipped messages (test mode, missing address) say nothing about provider health and
 	are ignored. ``allow_alert`` is False for messages that are themselves operations
 	alerts, so a broken channel cannot trigger an alert storm about itself.
+
+	Retryable failures (timeouts, 5xx, throttling) past the alert threshold also open the
+	provider's circuit breaker (see ``provider_paused``). Alerts are raised and resolved in
+	a job of their own, after the current transaction commits: a delivery job holds its
+	transaction across slow provider calls, and creating an Ops Alert inside it would hold
+	the alert series lock for as long, blocking every other alert on the site.
 	"""
 	if result.skipped or not result.provider:
 		return
@@ -124,9 +146,13 @@ def record_outcome(result: DeliveryResult, *, allow_alert: bool = True) -> None:
 		if result.ok:
 			previous = cint(frappe.cache.get(key))
 			if previous:
-				frappe.cache.delete(key)
+				frappe.cache.delete(key, _breaker_key(result.provider), _probe_key(result.provider))
 				if previous >= _threshold():
-					_resolve_alert(result.provider)
+					_queue(
+						RESOLVE_METHOD,
+						f"hostel360-messaging-resolve-{_slug(result.provider)}",
+						provider=result.provider,
+					)
 			return
 
 		count = cint(frappe.cache.incr(key))
@@ -136,8 +162,42 @@ def record_outcome(result: DeliveryResult, *, allow_alert: bool = True) -> None:
 		return
 
 	threshold = _threshold()
+	if count >= threshold and result.retryable:
+		_open_breaker(result.provider)
 	if allow_alert and count >= threshold and (count - threshold) % threshold == 0:
-		_raise_alert(result.provider, count, threshold, result.error)
+		_queue(
+			ALERT_METHOD,
+			f"hostel360-messaging-alert-{_slug(result.provider)}",
+			provider=result.provider,
+			count=count,
+			threshold=threshold,
+			error=truncate(result.error, 300),
+		)
+
+
+def provider_paused(provider: str) -> bool:
+	"""Should a time-critical send (a sign-in code) skip this provider right now?
+
+	True while the provider's breaker is open, except for one caller per
+	``BREAKER_SECONDS`` window, which goes through as a probe. Any successful send, the
+	probe's or a background message's, closes the breaker.
+	"""
+	if not provider:
+		return False
+	try:
+		if not frappe.cache.get(_breaker_key(provider)):
+			return False
+		return not frappe.cache.set(_probe_key(provider), "1", nx=True, ex=BREAKER_SECONDS)
+	except Exception:
+		return False
+
+
+def _open_breaker(provider: str) -> None:
+	try:
+		frappe.cache.set(_breaker_key(provider), "1", ex=BREAKER_SECONDS)
+	except Exception:
+		# Without Redis the breaker stays closed: codes are still tried, within their timeout.
+		frappe.logger("hostel360").warning(f"Could not pause {provider} for sign-in codes", exc_info=True)
 
 
 def _threshold() -> int:
@@ -148,7 +208,23 @@ def _threshold() -> int:
 	return max(value or 5, 1)
 
 
-def _raise_alert(provider: str, count: int, threshold: int, error: str | None) -> None:
+def _queue(method: str, job_id: str, **kwargs) -> None:
+	try:
+		frappe.enqueue(
+			method,
+			queue="short",
+			job_id=job_id,
+			deduplicate=not frappe.in_test,
+			enqueue_after_commit=not frappe.in_test,
+			now=frappe.in_test,
+			**kwargs,
+		)
+	except Exception:
+		frappe.log_error(title="Hostel360: could not queue messaging alert", message=frappe.get_traceback())
+
+
+def raise_provider_alert(provider: str, count: int, threshold: int, error: str | None = None) -> None:
+	"""Background job: open (or bump) the Ops Alert for a failing provider."""
 	if frappe.flags.hostel360_raising_messaging_alert:
 		return
 	try:
@@ -162,7 +238,7 @@ def _raise_alert(provider: str, count: int, threshold: int, error: str | None) -
 		raise_alert(
 			key=_alert_key(provider),
 			title=f"{provider} messages are failing",
-			severity="Critical" if count >= threshold * 4 else "Warning",
+			severity="Critical" if cint(count) >= cint(threshold) * 4 else "Warning",
 			category="Messaging",
 			source="App",
 			description=(
@@ -177,7 +253,8 @@ def _raise_alert(provider: str, count: int, threshold: int, error: str | None) -
 		frappe.flags.hostel360_raising_messaging_alert = False
 
 
-def _resolve_alert(provider: str) -> None:
+def resolve_provider_alert(provider: str) -> None:
+	"""Background job: close the Ops Alert once the provider delivers again."""
 	try:
 		from hostel360.hostel_operations.alerts import resolve_alert
 	except ImportError:

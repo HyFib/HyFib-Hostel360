@@ -5,12 +5,21 @@ from unittest.mock import patch
 
 import frappe
 import requests
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, now_datetime, nowdate
 
 from hostel360.hostel_fees.constants import INVOICE, PAYMENT, TRANSACTION
 from hostel360.hostel_fees.gateways import GatewayError, GatewayNotConfiguredError, get_gateway
 from hostel360.hostel_fees.reconciliation import daily_reconciliation, reconcile_pending_transactions
-from hostel360.hostel_fees.services import confirm_checkout, create_payment_order
+from hostel360.hostel_fees.report.fee_collection.fee_collection import execute as fee_collection
+from hostel360.hostel_fees.report.gateway_reconciliation.gateway_reconciliation import (
+	execute as gateway_reconciliation,
+)
+from hostel360.hostel_fees.services import (
+	confirm_checkout,
+	create_payment_order,
+	get_fee_summary,
+	online_payment_available,
+)
 from hostel360.hostel_fees.tests import fixtures as fee_fixtures
 from hostel360.hostel_fees.tests.fixtures import (
 	TEST_KEY_ID,
@@ -197,6 +206,7 @@ class TestHostelPaymentTransaction(FeeTestCase):
 	# -- checkout confirmation ---------------------------------------------------------------
 
 	def test_confirm_checkout_issues_one_receipt(self):
+		configure_gateway(live=True)
 		result = self.start()
 		payment = self.api.pay(result["checkout"]["order_id"])
 		payload = self.checkout_payload(result, payment)
@@ -227,6 +237,7 @@ class TestHostelPaymentTransaction(FeeTestCase):
 			("Success", receipt.name, payment["id"], "upi"),
 		)
 		self.assertNotIn("payer@example.com", tx.gateway_response or "")
+		self.assertEqual(receipt.is_test, 0)
 		self.assertTrue(self.notified("payment_received", receipt.name))
 
 	def test_confirm_checkout_rejects_amount_mismatch(self):
@@ -282,7 +293,11 @@ class TestHostelPaymentTransaction(FeeTestCase):
 		)
 		outcome = confirm_checkout(result["transaction"], self.checkout_payload(result, payment))
 		self.assertEqual((outcome["status"], outcome["receipt_number"]), ("Failed", None))
-		self.assertEqual(frappe.db.get_value(TRANSACTION, result["transaction"], "status"), "Failed")
+		# Razorpay lets the payer retry on the same order, so the transaction stays open.
+		self.assertEqual(
+			frappe.db.get_value(TRANSACTION, result["transaction"], ["status", "failure_reason"]),
+			("Pending", "Card declined"),
+		)
 
 	# -- webhook -----------------------------------------------------------------------------
 
@@ -323,7 +338,13 @@ class TestHostelPaymentTransaction(FeeTestCase):
 		)
 		self.deliver("payment.failed", failed)
 		tx = frappe.get_doc(TRANSACTION, result["transaction"])
-		self.assertEqual((tx.status, tx.failure_reason), ("Failed", "Payment was cancelled by the user"))
+		# The order can still be paid: the transaction stays open and a new request reuses it
+		# instead of creating a second order, while the portal still lets the payer try again.
+		self.assertEqual((tx.status, tx.failure_reason), ("Pending", "Payment was cancelled by the user"))
+		invoice = next(i for i in get_fee_summary(self.student)["invoices"] if i.name == self.invoice.name)
+		self.assertFalse(invoice.payment_in_progress)
+		self.assertEqual(self.start()["transaction"], result["transaction"])
+		self.assertEqual(len(self.calls("POST", "/v1/orders")), 1)
 
 		captured = self.api.pay(order_id)
 		self.deliver("payment.captured", captured)
@@ -407,16 +428,44 @@ class TestHostelPaymentTransaction(FeeTestCase):
 			("Failed", "Insufficient balance"),
 		)
 
-	def test_reconciliation_skips_when_disabled(self):
+	def test_switching_payments_off_still_confirms_payments_in_flight(self):
+		paid = self.start()
+		payment = self.api.pay(paid["checkout"]["order_id"])
+		other = make_invoice(self.student, 300)
+		missed = self.start([other.name])
+		self.api.pay(missed["checkout"]["order_id"])
+		self.age(missed["transaction"], 30)
+
+		configure_gateway(enabled=0)
+		outcome = confirm_checkout(paid["transaction"], self.checkout_payload(paid, payment))
+		self.assertEqual(outcome["status"], "Success")
+		self.assertTrue(outcome["receipt_number"])
+
+		result = reconcile_pending_transactions()
+		self.assertEqual(result["checked"], 1)
+		self.assertEqual(frappe.db.get_value(TRANSACTION, missed["transaction"], "status"), "Success")
+		self.assertGreaterEqual(daily_reconciliation()["verified"], 2)
+
+		# New payments stay closed while collection is switched off.
+		with self.assertRaises(GatewayNotConfiguredError):
+			self.start([make_invoice(self.student, 100).name])
+
+	def test_reconciliation_skips_without_keys(self):
 		result = self.start()
 		self.age(result["transaction"], 120)
-		configure_gateway(enabled=0)
+		configure_gateway(enabled=0, key_secret="", payu_salt="")
 		self.api.calls.clear()
 
 		self.assertEqual(reconcile_pending_transactions(), {"skipped": True})
 		self.assertEqual(daily_reconciliation()["verified"], 0)
 		self.assertEqual(self.api.calls, [])
 		self.assertEqual(frappe.db.get_value(TRANSACTION, result["transaction"], "status"), "Initiated")
+
+		# Without keys nothing can be checked, so the payer is not promised an automatic receipt.
+		payment = payment_entity(result["checkout"]["order_id"], 150000)
+		outcome = confirm_checkout(result["transaction"], self.checkout_payload(result, payment))
+		self.assertEqual(outcome["status"], "Pending")
+		self.assertNotIn("automatically", outcome["message"])
 
 	def test_daily_reconciliation(self):
 		result = self.start()
@@ -442,3 +491,244 @@ class TestHostelPaymentTransaction(FeeTestCase):
 		tx = frappe.get_doc(TRANSACTION, result["transaction"])
 		tx.mark_refunded("Refund rfnd_123 processed on request")
 		self.assertEqual(frappe.db.get_value(TRANSACTION, tx.name, "status"), "Refunded")
+
+	# -- payments arriving after a transaction was closed ------------------------------------
+
+	def test_capture_after_local_close_is_receipted(self):
+		result = self.start()
+		order_id = result["checkout"]["order_id"]
+		self.api.pay(order_id, status="failed", error_description="Insufficient balance")
+		self.age(result["transaction"], 120)
+		reconcile_pending_transactions()
+		self.assertEqual(frappe.db.get_value(TRANSACTION, result["transaction"], "status"), "Failed")
+
+		# The payer retries in the checkout that is still open; the callback and webhook are lost.
+		self.api.pay(order_id)
+		reconcile_pending_transactions()
+		self.assertEqual(
+			frappe.db.get_value(TRANSACTION, result["transaction"], "status"),
+			"Failed",
+			"a transaction checked within the hour is not asked again yet",
+		)
+
+		frappe.db.set_value(
+			TRANSACTION, result["transaction"], "last_checked_on", add_to_date(now_datetime(), hours=-2)
+		)
+		outcome = reconcile_pending_transactions()
+		self.assertEqual(outcome.get("recovered"), 1)
+		self.assertEqual(frappe.db.get_value(TRANSACTION, result["transaction"], "status"), "Success")
+		self.assertEqual(len(self.receipts_for(result["transaction"])), 1)
+		self.assertEqual(frappe.db.get_value(INVOICE, self.invoice.name, "status"), "Paid")
+
+	def test_staff_can_check_a_closed_transaction(self):
+		result = self.start()
+		self.age(result["transaction"], 120)
+		reconcile_pending_transactions()
+		tx = frappe.get_doc(TRANSACTION, result["transaction"])
+		self.assertEqual(tx.status, "Expired")
+
+		self.assertEqual(tx.check_with_gateway()["status"], "Expired")
+		self.api.pay(result["checkout"]["order_id"])
+		outcome = tx.check_with_gateway()
+		self.assertEqual(outcome["status"], "Success")
+		self.assertTrue(outcome["payment"])
+
+	def test_authorised_payment_on_closed_transaction_is_not_captured(self):
+		result = self.start()
+		self.age(result["transaction"], 120)
+		reconcile_pending_transactions()
+		payment = self.api.pay(result["checkout"]["order_id"], status="authorized")
+		frappe.get_doc(TRANSACTION, result["transaction"]).check_with_gateway()
+
+		self.assertEqual(self.calls("POST", f"/payments/{payment['id']}/capture"), [])
+		self.assertEqual(frappe.db.get_value(TRANSACTION, result["transaction"], "status"), "Expired")
+		self.assertIn(f"payment-authorised-not-captured-{result['transaction']}", self.alert_keys())
+
+	def test_payer_told_when_authorised_payment_hit_a_closed_request(self):
+		result = self.start()
+		self.age(result["transaction"], 120)
+		reconcile_pending_transactions()
+		late = self.api.pay(result["checkout"]["order_id"], status="authorized")
+
+		outcome = confirm_checkout(result["transaction"], self.checkout_payload(result, late))
+		self.assertEqual(outcome["status"], "Expired")
+		self.assertIn("returned", outcome["message"])
+		self.assertEqual(self.calls("POST", f"/payments/{late['id']}/capture"), [])
+
+	def test_checkout_closes_before_the_transaction_expires(self):
+		checkout = self.start()["checkout"]
+		self.assertGreater(checkout["timeout"], 0)
+		self.assertLessEqual(checkout["timeout"], 60 * 60)
+
+	# -- concurrent and repeated confirmations -----------------------------------------------
+
+	def test_successful_delivery_resolves_earlier_webhook_error(self):
+		result = self.start()
+		payment = self.api.pay(result["checkout"]["order_id"])
+		self.deliver("payment.captured", payment)
+		resolved = [call.args[0] for call in self.resolved.call_args_list if call.args]
+		self.assertIn(f"payment-webhook-error-{result['transaction']}", resolved)
+
+	def test_second_capture_on_a_paid_order_is_alerted_not_ignored(self):
+		result = self.start()
+		order_id = result["checkout"]["order_id"]
+		first = self.api.pay(order_id)
+		self.deliver("payment.captured", first)
+		receipt = self.receipts_for(result["transaction"])[0]
+
+		second = self.api.pay(order_id)
+		status, response = self.deliver("payment.captured", second)
+		self.assertEqual((status, response["result"]), (200, "Success"))
+		self.assertEqual(self.receipts_for(result["transaction"]), [receipt])
+
+		alert = next(
+			call
+			for call in self.alerts.call_args_list
+			if call.args and call.args[0] == f"payment-multiple-captures-{result['transaction']}"
+		)
+		self.assertEqual(alert.kwargs["details"]["receipted_payment_id"], first["id"])
+		self.assertEqual(alert.kwargs["details"]["extra_payment_id"], second["id"])
+		self.assertTrue(
+			frappe.db.exists(
+				"Comment",
+				{"reference_name": result["transaction"], "content": ("like", f"%{second['id']}%")},
+			)
+		)
+
+		# The second payer's own callback gets the existing receipt, and raises the same alert.
+		self.alerts.reset_mock()
+		outcome = confirm_checkout(result["transaction"], self.checkout_payload(result, second))
+		self.assertEqual(outcome["receipt_number"], receipt)
+		self.assertIn(f"payment-multiple-captures-{result['transaction']}", self.alert_keys())
+
+	def test_authorised_second_payment_is_never_captured(self):
+		result = self.start()
+		order_id = result["checkout"]["order_id"]
+		self.deliver("payment.captured", self.api.pay(order_id))
+		late = self.api.pay(order_id, status="authorized")
+
+		outcome = confirm_checkout(result["transaction"], self.checkout_payload(result, late))
+		self.assertEqual(outcome["status"], "Success")
+		self.assertEqual(self.calls("POST", f"/payments/{late['id']}/capture"), [])
+
+	def test_capture_skipped_when_order_already_has_a_captured_payment(self):
+		result = self.start()
+		order_id = result["checkout"]["order_id"]
+		authorised = self.api.pay(order_id, status="authorized")
+		self.api.pay(order_id)  # captured, but neither its callback nor its webhook arrived yet
+
+		outcome = confirm_checkout(result["transaction"], self.checkout_payload(result, authorised))
+		self.assertEqual(self.calls("POST", f"/payments/{authorised['id']}/capture"), [])
+		self.assertEqual(outcome["status"], "Pending")
+		self.assertIn(f"payment-authorised-not-captured-{result['transaction']}", self.alert_keys())
+
+	def test_daily_verification_finds_extra_capture_and_refunds(self):
+		result = self.start()
+		order_id = result["checkout"]["order_id"]
+		first = self.api.pay(order_id)
+		self.deliver("payment.captured", first)
+		self.api.pay(order_id)  # an extra capture whose webhook never arrived
+
+		self.alerts.reset_mock()
+		daily_reconciliation()
+		self.assertFalse(frappe.db.get_value(TRANSACTION, result["transaction"], "reconciled_on"))
+		self.assertIn(f"payment-multiple-captures-{result['transaction']}", self.alert_keys())
+
+		# A partial refund from the dashboard leaves the payment "captured" at Razorpay.
+		other = make_invoice(self.student, 500)
+		refunded = self.start([other.name])
+		partly = self.api.pay(refunded["checkout"]["order_id"], amount_refunded=10000, refund_status="partial")
+		self.deliver("payment.captured", partly)
+		self.alerts.reset_mock()
+		daily = daily_reconciliation()
+		self.assertGreaterEqual(daily["issues"], 1)
+		tx = frappe.get_doc(TRANSACTION, refunded["transaction"])
+		self.assertEqual((tx.refunded_amount, tx.reconciled_on), (100, None))
+		self.assertIn(f"payment-refunded-{refunded['transaction']}", self.alert_keys())
+
+	def test_refund_webhook_is_recorded(self):
+		result = self.start()
+		payment = self.api.pay(result["checkout"]["order_id"])
+		self.deliver("payment.captured", payment)
+
+		payment.update(amount_refunded=50000, refund_status="partial")
+		status, response = self.deliver("refund.processed", payment)
+		self.assertEqual((status, response["status"]), (200, "ok"))
+		self.assertEqual(frappe.db.get_value(TRANSACTION, result["transaction"], "refunded_amount"), 500)
+		self.assertIn(f"payment-refunded-{result['transaction']}", self.alert_keys())
+
+		rows = gateway_reconciliation({"from_date": nowdate(), "to_date": nowdate(), "only_issues": 1})[1]
+		row = next(r for r in rows if r.transaction == result["transaction"])
+		self.assertIn("refunded", row.issue)
+
+	# -- orders that can no longer be read ---------------------------------------------------
+
+	def test_test_mode_order_closes_after_switching_to_live_keys(self):
+		result = self.start()
+		self.age(result["transaction"], 120)
+		configure_gateway(live=True)
+		self.api.calls.clear()
+
+		outcome = reconcile_pending_transactions()
+		self.assertEqual(outcome["errors"], 0)
+		self.assertEqual(self.api.calls, [], "a test order is never looked up with live keys")
+		self.assertEqual(frappe.db.get_value(TRANSACTION, result["transaction"], "status"), "Expired")
+		self.assertNotIn("payment-gateway-unreachable", self.alert_keys())
+
+	def test_unreadable_order_is_flagged_not_counted_as_outage(self):
+		result = self.start()
+		self.age(result["transaction"], 30)
+		self.api.unreadable_orders[result["checkout"]["order_id"]] = FakeResponse(
+			400, {"error": {"code": "BAD_REQUEST_ERROR", "description": "The id provided does not exist"}}
+		)
+		outcome = reconcile_pending_transactions()
+		self.assertGreaterEqual(outcome["unreadable"], 1)
+		self.assertEqual(outcome["unreachable"], 0)
+		tx = frappe.get_doc(TRANSACTION, result["transaction"])
+		self.assertEqual(tx.status, "Initiated")
+		self.assertTrue(tx.last_checked_on)
+		self.assertIn("does not exist", tx.failure_reason)
+		self.assertIn(f"payment-order-unreadable-{tx.name}", self.alert_keys())
+
+		tx.close_as_expired("Checked the dashboard: no payment on this order")
+		self.assertEqual(frappe.db.get_value(TRANSACTION, tx.name, "status"), "Expired")
+
+	def test_unreachable_gateway_raises_one_alert(self):
+		for amount in (100, 200, 300):
+			self.age(self.start([make_invoice(self.student, amount).name])["transaction"], 30)
+
+		def timeout(*args, **kwargs):
+			raise requests.Timeout("read timed out")
+
+		with patch("hostel360.hostel_fees.gateways.razorpay.requests.request", side_effect=timeout):
+			outcome = reconcile_pending_transactions()
+		self.assertGreaterEqual(outcome["unreachable"], 3)
+		self.assertIn("payment-gateway-unreachable", self.alert_keys())
+
+	# -- test-mode payments ------------------------------------------------------------------
+
+	def test_test_mode_payments_limited_to_test_payers(self):
+		user = frappe.get_doc(
+			{"doctype": "User", "email": f"{frappe.generate_hash(length=8)}@example.com", "first_name": "Payer"}
+		).insert(ignore_permissions=True)
+		with patch("hostel360.hostel_fees.services.assert_can_access_student"):
+			with self.assertRaises(frappe.ValidationError):
+				create_payment_order(self.student, [self.invoice.name], user.name)
+			self.assertFalse(online_payment_available(self.student, user.name))
+
+			configure_gateway(test_payers=[self.student])
+			self.assertTrue(online_payment_available(self.student, user.name))
+			result = create_payment_order(self.student, [self.invoice.name], user.name)
+
+		self.deliver("payment.captured", self.api.pay(result["checkout"]["order_id"]))
+		receipt = frappe.get_doc(PAYMENT, self.receipts_for(result["transaction"])[0])
+		self.assertEqual(receipt.is_test, 1)
+		self.assertFalse(self.notified("payment_received", receipt.name))
+		html = frappe.get_print(PAYMENT, receipt.name, print_format="Hostel Fee Receipt")
+		self.assertIn("not a valid receipt", html)
+		collected = fee_collection({"from_date": nowdate(), "to_date": nowdate(), "student": self.student})[1]
+		self.assertNotIn(receipt.name, [row["payment"] for row in collected])
+
+		# Live payments are open to every student.
+		configure_gateway(live=True)
+		self.assertTrue(online_payment_available(make_student(), user.name))

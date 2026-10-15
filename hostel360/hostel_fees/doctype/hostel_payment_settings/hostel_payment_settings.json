@@ -17,6 +17,13 @@
   "column_break_keys",
   "webhook_secret",
   "webhook_help",
+  "section_payu",
+  "payu_merchant_key",
+  "payu_merchant_salt",
+  "column_break_payu",
+  "payu_help",
+  "section_test_payers",
+  "test_payers",
   "section_reminders",
   "send_fee_reminders",
   "reminder_days_before_due",
@@ -41,16 +48,17 @@
    "fieldname": "gateway",
    "fieldtype": "Select",
    "label": "Payment Gateway",
-   "options": "Razorpay",
+   "options": "Razorpay\nPayU",
    "default": "Razorpay",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Gateway for new payments. Payments already started are confirmed by the gateway that took them, so keep the old gateway's keys until its payments are settled."
   },
   {
    "fieldname": "test_mode",
    "fieldtype": "Check",
    "label": "Test Mode",
    "default": "1",
-   "description": "Use the gateway's test keys (rzp_test_...). No real money is collected."
+   "description": "Use the gateway's test credentials (Razorpay rzp_test_... keys, PayU test merchant). No real money is collected, so only the test payers below can pay."
   },
   {
    "fieldname": "column_break_gateway",
@@ -73,7 +81,8 @@
   {
    "fieldname": "section_keys",
    "fieldtype": "Section Break",
-   "label": "API Keys"
+   "label": "Razorpay",
+   "depends_on": "eval:doc.gateway=='Razorpay'"
   },
   {
    "fieldname": "key_id",
@@ -93,12 +102,52 @@
    "fieldname": "webhook_secret",
    "fieldtype": "Password",
    "label": "Webhook Secret",
-   "description": "Secret entered while creating the webhook in the gateway dashboard."
+   "description": "Secret entered while creating the webhook in the Razorpay dashboard."
   },
   {
    "fieldname": "webhook_help",
    "fieldtype": "HTML",
    "label": "Webhook Setup"
+  },
+  {
+   "fieldname": "section_payu",
+   "fieldtype": "Section Break",
+   "label": "PayU",
+   "depends_on": "eval:doc.gateway=='PayU'"
+  },
+  {
+   "fieldname": "payu_merchant_key",
+   "fieldtype": "Data",
+   "label": "Merchant Key",
+   "description": "From PayU Dashboard > Developers > Key and Salt."
+  },
+  {
+   "fieldname": "payu_merchant_salt",
+   "fieldtype": "Password",
+   "label": "Merchant Salt",
+   "description": "Salt (version 1). Used to sign payment forms and to verify PayU's responses and webhooks."
+  },
+  {
+   "fieldname": "column_break_payu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payu_help",
+   "fieldtype": "HTML",
+   "label": "PayU Setup"
+  },
+  {
+   "fieldname": "section_test_payers",
+   "fieldtype": "Section Break",
+   "label": "Test Payers",
+   "depends_on": "eval:doc.test_mode",
+   "description": "While Test Mode is on, only these students can pay online, so test payments never clear real students' dues."
+  },
+  {
+   "fieldname": "test_payers",
+   "fieldtype": "Table MultiSelect",
+   "label": "Test Payers",
+   "options": "Hostel Payment Test Payer"
   },
   {
    "fieldname": "section_reminders",
@@ -129,20 +178,20 @@
    "label": "Days Between Reminders",
    "default": "3",
    "non_negative": 1,
-   "description": "An invoice is reminded at most once in this many days."
+   "description": "A family is reminded at most once in this many days, with one message covering all their dues."
   },
   {
    "fieldname": "max_reminders_per_invoice",
    "fieldtype": "Int",
    "label": "Maximum Reminders per Invoice",
-   "default": "0",
+   "default": "10",
    "non_negative": 1,
-   "description": "0 means no limit."
+   "description": "Reminders stop after this many for an invoice. 0 means no limit."
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-15 16:30:00.000000",
+ "modified": "2026-10-15 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Fees",
  "name": "Hostel Payment Settings",

@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory, type Router, type RouterHistory } from "vue-router";
 import { t } from "@/i18n";
-import { loadSession, session } from "@/stores/session";
+import { loadSession, session, useSession } from "@/stores/session";
 import { showToast } from "@/stores/toast";
 import { decideNavigation } from "./guards";
 import { routes } from "./routes";
@@ -19,6 +19,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory(PORTAL
 		},
 	});
 
+	const { effectiveValidationStatus, studentStatus } = useSession();
 	router.beforeEach(async (to) => {
 		await loadSession();
 		// Unreachable server: let the shell render its offline screen instead of guessing.
@@ -28,7 +29,8 @@ export function createAppRouter(history: RouterHistory = createWebHistory(PORTAL
 			kind: session.kind,
 			consentRequired: session.consentRequired,
 			profileConfirmed: session.profileConfirmed,
-			validationStatus: session.validationStatus,
+			validationStatus: effectiveValidationStatus.value,
+			studentStatus: studentStatus.value,
 		});
 	});
 

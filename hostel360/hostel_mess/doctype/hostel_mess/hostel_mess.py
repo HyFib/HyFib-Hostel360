@@ -15,6 +15,12 @@ class HostelMess(Document):
 		self.validate_hostels()
 		self.validate_manager()
 
+	def before_save(self):
+		# billed_upto is maintained by bill runs under the books lock. A form opened before a
+		# publish still carries the old date; keep the stored one so it cannot move back.
+		if not self.is_new():
+			self.billed_upto = frappe.db.get_value("Hostel Mess", self.name, "billed_upto", for_update=True)
+
 	def validate_hostels(self):
 		hostels = [row.hostel for row in self.hostels if row.hostel]
 		duplicates = {h for h in hostels if hostels.count(h) > 1}

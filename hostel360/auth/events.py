@@ -2,7 +2,11 @@
 
 Portal users (students and parents) are Website Users that only ever reach the portal
 SPA at /hostel. They must never hold a desk role, and they cannot sign in while their
-portal is switched off or their hostel record has been rejected or closed.
+portal is switched off, while the hostel office has not validated their registration
+(tender 3.1; for parents: while none of their wards is a validated resident, 4.1), or
+once their record has been rejected or closed. A portal user may exist before
+validation (bulk import and the desk can create one early); this hook is what keeps it
+closed until then.
 """
 
 import frappe
@@ -49,8 +53,12 @@ def on_login(login_manager) -> None:
 
 
 def portal_login_blocked_reason(user: str, roles: set[str] | None = None) -> str | None:
-	"""Why this portal user may not sign in right now, or None."""
-	from hostel360.auth.otp import portal_enabled
+	"""Why this portal user may not sign in (or keep using the portal) right now, or None.
+
+	The portal API can ask the same question for a session that already exists, to show
+	the user the reason instead of a bare permission error.
+	"""
+	from hostel360.auth.otp import guardian_has_portal_ward, portal_enabled, student_may_sign_in
 
 	roles = roles if roles is not None else set(frappe.get_roles(user))
 	if STUDENT_ROLE in roles:
@@ -71,6 +79,11 @@ def portal_login_blocked_reason(user: str, roles: set[str] | None = None) -> str
 			return _(
 				"Portal access for this hostel record has been closed. Please contact the hostel office."
 			)
+		if not student_may_sign_in(student):
+			return _(
+				"Your hostel registration has not been validated by the hostel office yet. "
+				"You can sign in once it has been validated."
+			)
 		return None
 
 	if PARENT_ROLE in roles:
@@ -90,6 +103,11 @@ def portal_login_blocked_reason(user: str, roles: set[str] | None = None) -> str
 		if guardian.validation_status == "Rejected":
 			return _(
 				"Portal access for this parent record has been closed. Please contact the hostel office."
+			)
+		if not guardian_has_portal_ward(guardian.name):
+			return _(
+				"The parent portal opens once your ward's hostel registration has been validated "
+				"by the hostel office."
 			)
 	return None
 

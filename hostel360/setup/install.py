@@ -90,6 +90,7 @@ def after_install():
 	apply_settings("Website Settings", WEBSITE_SETTINGS)
 	sync_roles()
 	enforce_log_retention()
+	enable_languages()
 	run_module_setup()
 	frappe.db.commit()  # nosemgrep
 
@@ -97,6 +98,7 @@ def after_install():
 def after_migrate():
 	sync_roles()
 	enforce_log_retention()
+	enable_languages()
 	run_module_setup()
 
 
@@ -143,6 +145,13 @@ def sync_roles() -> None:
 	for role_name in TWO_FACTOR_CORE_ROLES:
 		if frappe.db.exists("Role", role_name):
 			frappe.db.set_value("Role", role_name, "two_factor_auth", 1, update_modified=False)
+
+
+def enable_languages() -> None:
+	"""The portal and desk are offered in English and Tamil."""
+	for code in ("en", "ta"):
+		if frappe.db.exists("Language", code):
+			frappe.db.set_value("Language", code, "enabled", 1, update_modified=False)
 
 
 def enforce_log_retention() -> None:

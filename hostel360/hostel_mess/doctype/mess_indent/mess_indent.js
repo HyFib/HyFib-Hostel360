@@ -2,6 +2,8 @@
 // For license information, please see license.txt
 
 const MESS_INDENT_APPROVERS = ["Mess Manager", "Hostel Administrator", "Hostel Warden", "System Manager"];
+// May decide indents they raised themselves.
+const MESS_INDENT_SENIOR_APPROVERS = ["Hostel Administrator", "Hostel Warden", "System Manager"];
 const MESS_INDENT_BUYERS = ["Mess Manager", "Hostel Administrator", "System Manager"];
 
 frappe.ui.form.on("Mess Indent", {
@@ -9,15 +11,21 @@ frappe.ui.form.on("Mess Indent", {
 		frm.set_query("mess", () => ({ filters: { is_active: 1 } }));
 		frm.set_query("supplier", () => ({ filters: { is_active: 1 } }));
 		frm.set_query("item", "items", () => ({ filters: { is_active: 1 } }));
+		frm.set_query("mess_menu", () => ({ filters: { mess: frm.doc.mess } }));
 	},
 
 	refresh(frm) {
+		frm.events.show_menu(frm);
 		if (frm.doc.docstatus === 0 && frm.doc.mess) {
 			frm.add_custom_button(__("Get Items Below Reorder Level"), () => frm.events.get_low_stock_items(frm));
 		}
 		if (frm.doc.docstatus !== 1) return;
 
-		if (frm.doc.status === "Pending Approval" && frappe.user.has_role(MESS_INDENT_APPROVERS)) {
+		const raised_it = [frm.doc.owner, frm.doc.requested_by].includes(frappe.session.user);
+		const may_decide =
+			frappe.user.has_role(MESS_INDENT_APPROVERS) &&
+			(!raised_it || frappe.user.has_role(MESS_INDENT_SENIOR_APPROVERS));
+		if (frm.doc.status === "Pending Approval" && may_decide) {
 			frm.add_custom_button(__("Approve"), () => frm.events.decide(frm, "approve"), __("Decision"));
 			frm.add_custom_button(__("Reject"), () => frm.events.decide(frm, "reject"), __("Decision"));
 			frm.page.set_inner_btn_group_as_primary(__("Decision"));
@@ -40,6 +48,34 @@ frappe.ui.form.on("Mess Indent", {
 
 	mess(frm) {
 		(frm.doc.items || []).forEach((row) => row.item && mess_indent_fetch_item(frm, row.doctype, row.name));
+	},
+
+	mess_menu(frm) {
+		frm.events.show_menu(frm);
+	},
+
+	show_menu(frm) {
+		const wrapper = frm.get_field("menu_preview")?.$wrapper;
+		if (!wrapper) return;
+		wrapper.empty();
+		if (!frm.doc.mess_menu || frm.is_new()) return;
+		frm.call({ doc: frm.doc, method: "get_menu_preview" }).then((r) => {
+			const menu = r.message;
+			if (!menu || !menu.days.length) return;
+			const esc = frappe.utils.escape_html;
+			const rows = menu.days
+				.map(
+					(day) =>
+						`<tr><td class="text-muted" style="white-space:nowrap">${esc(day.label)}</td><td>${day.meals
+							.map((m) => `<b>${esc(__(m.meal))}</b>: ${esc(m.dishes || "")}${m.is_special ? " ★" : ""}`)
+							.join("<br>")}</td></tr>`
+				)
+				.join("");
+			wrapper.html(
+				`<div class="text-muted small" style="margin-bottom:6px">${esc(menu.week)} · ${esc(__(menu.status))}</div>
+				<table class="table table-bordered table-condensed small">${rows}</table>`
+			);
+		});
 	},
 
 	get_low_stock_items(frm) {

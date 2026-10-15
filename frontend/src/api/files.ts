@@ -4,11 +4,42 @@
 import { t } from "@/i18n";
 import { formatBytes } from "@/utils/format";
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/**
+ * The server's limits for portal uploads (hostel360.security.files: 5 MB; PDF, JPG, PNG,
+ * WEBP). get_session sends the live values; these are only the fallback before it answers.
+ * Checking first means a file the server would refuse is never sent over mobile data.
+ */
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const DEFAULT_UPLOAD_EXTENSIONS = ["pdf", "jpg", "jpeg", "png", "webp"] as const;
 export const MAX_IMAGE_DIMENSION = 1600;
 const JPEG_QUALITY = 0.82;
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"]);
-const ALLOWED_EXTENSIONS = /\.(jpe?g|png|webp|gif|pdf)$/i;
+const MIME_TYPES: Record<string, string> = {
+	pdf: "application/pdf",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	png: "image/png",
+	webp: "image/webp",
+};
+
+export interface UploadLimits {
+	maxBytes: number;
+	extensions: string[];
+}
+
+/** Limits from get_session, or the defaults when the server has not said. */
+export function uploadRules(rules?: Readonly<{ max_bytes?: number; extensions?: readonly string[] }> | null): UploadLimits {
+	const maxBytes = Number(rules?.max_bytes) > 0 ? Number(rules?.max_bytes) : MAX_UPLOAD_BYTES;
+	const extensions = (Array.isArray(rules?.extensions) && rules.extensions.length ? rules.extensions : DEFAULT_UPLOAD_EXTENSIONS)
+		.map((extension) => String(extension).toLowerCase().replace(/^\./, ""))
+		.filter(Boolean);
+	return { maxBytes, extensions };
+}
+
+/** Value for <input type="file" accept>, so the picker offers only files the server takes. */
+export function acceptAttribute(limits: UploadLimits = uploadRules()): string {
+	const types = new Set(limits.extensions.map((extension) => MIME_TYPES[extension]).filter(Boolean));
+	return [...types].join(",");
+}
 
 /**
  * Save or show a downloaded file. A temporary link with `download` works on Android Chrome,
@@ -33,12 +64,20 @@ export function isImage(file: Blob & { name?: string }): boolean {
 	return file.type.startsWith("image/") || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name || "");
 }
 
+function extensionOf(name: string): string {
+	const match = /\.([A-Za-z0-9]+)$/.exec(name || "");
+	return match ? match[1].toLowerCase() : "";
+}
+
 /** Reason the file cannot be attached, or null when it is fine. */
-export function checkAttachment(file: File): string | null {
-	const typeOk = ALLOWED_TYPES.has(file.type) || (!file.type && ALLOWED_EXTENSIONS.test(file.name));
+export function checkAttachment(file: File, limits: UploadLimits = uploadRules()): string | null {
+	const allowedTypes = new Set(limits.extensions.map((extension) => MIME_TYPES[extension]).filter(Boolean));
+	const extensionOk = limits.extensions.includes(extensionOf(file.name));
+	// The server goes by the file name's extension; the browser's type must not contradict it.
+	const typeOk = extensionOk && (!file.type || allowedTypes.has(file.type));
 	if (!typeOk) return t("errors.fileType");
-	if (file.size > MAX_UPLOAD_BYTES) {
-		return t("errors.fileTooLarge", { name: file.name, size: formatBytes(MAX_UPLOAD_BYTES) });
+	if (file.size > limits.maxBytes) {
+		return t("errors.fileTooLarge", { name: file.name, size: formatBytes(limits.maxBytes) });
 	}
 	return null;
 }

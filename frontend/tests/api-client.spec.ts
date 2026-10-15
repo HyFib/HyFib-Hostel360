@@ -39,7 +39,13 @@ beforeEach(() => {
 	vi.stubGlobal("fetch", fetchMock);
 	document.head.innerHTML = '<meta name="csrf-token" content="token-123">';
 	initCsrf();
-	configureApi({ onNetworkStatus: undefined, onForbidden: undefined });
+	configureApi({
+		onNetworkStatus: undefined,
+		onForbidden: undefined,
+		onSessionEnded: undefined,
+		onAccessClosed: undefined,
+		onConsentRequired: undefined,
+	});
 });
 
 function lastRequest(index = 0) {
@@ -59,7 +65,8 @@ describe("CSRF token", () => {
 		expect(init.credentials).toBe("include");
 		expect(headers["X-Frappe-CSRF-Token"]).toBe("token-123");
 		expect(headers["Content-Type"]).toBe("application/json");
-		expect(JSON.parse(String(init.body))).toEqual({ name: "LV-1" });
+		// `_lang` keeps the server's messages in the language on screen.
+		expect(JSON.parse(String(init.body))).toEqual({ name: "LV-1", _lang: "en" });
 	});
 
 	it("is not sent with GET requests, whose arguments go in the query string", async () => {
@@ -67,7 +74,7 @@ describe("CSRF token", () => {
 		await call("hostel360.api.portal.list_leaves", { student: "REG001", skip: undefined }, { method: "GET" });
 
 		const { url, headers } = lastRequest();
-		expect(url).toBe("/api/method/hostel360.api.portal.list_leaves?student=REG001");
+		expect(url).toBe("/api/method/hostel360.api.portal.list_leaves?student=REG001&_lang=en");
 		expect(headers["X-Frappe-CSRF-Token"]).toBeUndefined();
 	});
 
@@ -94,7 +101,7 @@ describe("CSRF token", () => {
 
 		expect(result).toEqual({ name: "GRV-1" });
 		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(lastRequest(1).url).toBe("/api/method/hostel360.api.auth.get_csrf_token");
+		expect(lastRequest(1).url).toBe("/api/method/hostel360.api.auth.get_csrf_token?_lang=en");
 		expect(lastRequest(2).headers["X-Frappe-CSRF-Token"]).toBe("renewed");
 		expect(getCsrfToken()).toBe("renewed");
 	});
@@ -210,5 +217,94 @@ describe("parseServerMessages", () => {
 		expect(parseServerMessages("not json")).toEqual([]);
 		expect(parseServerMessages(undefined)).toEqual([]);
 		expect(parseServerMessages(JSON.stringify(["plain text"]))).toEqual(["plain text"]);
+	});
+});
+
+describe("server language", () => {
+	it("asks for Tamil server messages while the portal is in Tamil, also for uploads", async () => {
+		const { locale } = await import("@/i18n");
+		locale.value = "ta";
+		fetchMock.mockImplementation(() => Promise.resolve(json({ message: { ok: true } })));
+
+		await call("hostel360.api.portal.cancel_leave", { name: "LV-1" });
+		await call("hostel360.api.portal.list_leaves", {}, { method: "GET" });
+		const form = new FormData();
+		form.append("purpose", "grievance");
+		await call("hostel360.api.portal.upload_attachment", form);
+
+		expect(JSON.parse(String(lastRequest(0).init.body))._lang).toBe("ta");
+		expect(lastRequest(1).url).toContain("_lang=ta");
+		expect((lastRequest(2).init.body as FormData).get("_lang")).toBe("ta");
+	});
+});
+
+describe("session refusals", () => {
+	it("ends the session on a 401 SessionExpired, but not on a wrong sign-in code", async () => {
+		const onSessionEnded = vi.fn();
+		configureApi({ onSessionEnded });
+		fetchMock
+			.mockResolvedValueOnce(json({ session_expired: 1, exc_type: "SessionExpired" }, 401))
+			.mockResolvedValueOnce(json({ exc_type: "AuthenticationError", _server_messages: serverMessages("The code is incorrect.") }, 401));
+
+		const expired = await failure(call("hostel360.api.portal.apply_leave"));
+		expect(expired.message).toBe("Your session has ended. Please sign in again.");
+		expect(onSessionEnded).toHaveBeenCalledTimes(1);
+
+		await failure(call("hostel360.api.auth.verify_otp"));
+		expect(onSessionEnded).toHaveBeenCalledTimes(1);
+	});
+
+	it("never shows Frappe's 'not whitelisted' text once the session turns out to have ended", async () => {
+		configureApi({ onForbidden: async () => true });
+		fetchMock.mockResolvedValueOnce(
+			json(
+				{
+					exc_type: "PermissionError",
+					_server_messages: serverMessages(
+						"You are not permitted to access this resource. Login to accessFunction <strong>hostel360.api.portal.apply_leave</strong> is not whitelisted.",
+					),
+				},
+				403,
+			),
+		);
+		const error = await failure(call("hostel360.api.portal.apply_leave"));
+		expect(error.message).toBe("Your session has ended. Please sign in again.");
+		expect(error.message).not.toContain("whitelisted");
+	});
+
+	it("does not re-check the session for refusals about one feature or ward", async () => {
+		const onForbidden = vi.fn();
+		configureApi({ onForbidden });
+		fetchMock.mockResolvedValueOnce(
+			json({ exc_type: "PortalValidationPending", _server_messages: serverMessages("Bala's registration is waiting for validation.") }, 403),
+		);
+		const error = await failure(call("hostel360.api.portal.get_dashboard"));
+		expect(error.message).toBe("Bala's registration is waiting for validation.");
+		expect(onForbidden).not.toHaveBeenCalled();
+	});
+
+	it("sends the user to a privacy notice published while they were signed in", async () => {
+		const onConsentRequired = vi.fn();
+		const onForbidden = vi.fn();
+		configureApi({ onConsentRequired, onForbidden });
+		fetchMock.mockResolvedValueOnce(
+			json({ exc_type: "PortalConsentRequired", _server_messages: serverMessages("Please read and accept the privacy notice to continue.") }, 403),
+		);
+		const error = await failure(call("hostel360.api.portal.get_fees"));
+		expect(onConsentRequired).toHaveBeenCalledWith(error);
+		expect(onForbidden).not.toHaveBeenCalled();
+	});
+
+	it("hands a closed account's reason to the app", async () => {
+		const onAccessClosed = vi.fn();
+		const onForbidden = vi.fn();
+		configureApi({ onAccessClosed, onForbidden });
+		fetchMock.mockResolvedValueOnce(
+			json({ exc_type: "PortalAccessClosed", _server_messages: serverMessages("Portal access for this hostel record has been closed.") }, 403),
+		);
+		const error = await failure(call("hostel360.api.portal.get_session"));
+		expect(onAccessClosed).toHaveBeenCalledWith(error);
+		expect(onForbidden).not.toHaveBeenCalled();
+		expect(error.message).toBe("Portal access for this hostel record has been closed.");
 	});
 });

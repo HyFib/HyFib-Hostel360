@@ -16,8 +16,10 @@ declare module "vue-router" {
 		guestOnly?: boolean;
 		/** Only for this kind of portal user. */
 		kind?: PortalKind;
-		/** Needs a registration the hostel office has verified. */
+		/** Needs a registration the hostel office has verified (and, unless `dues`, an Active resident). */
 		requiresValidated?: boolean;
+		/** Fees and receipts: open to a validated student who is not Active (Applied, Suspended…). */
+		dues?: boolean;
 		/** Allowed while the privacy notice or profile confirmation is still pending. */
 		firstRun?: boolean;
 		/** Page title key. */
@@ -32,7 +34,10 @@ export interface GuardState {
 	kind: PortalKind | null;
 	consentRequired: boolean;
 	profileConfirmed: boolean;
+	/** Validation of the student being viewed (for a parent: the selected ward). */
 	validationStatus: string;
+	/** Hostel Student status of the student being viewed; empty when not known. */
+	studentStatus?: string;
 }
 
 /** Only same-app paths are accepted as a post-login destination (no open redirects). */
@@ -73,6 +78,10 @@ export function decideNavigation(to: RouteLocationNormalized, state: GuardState)
 
 	if (meta.requiresValidated && state.validationStatus !== "Validated") {
 		return { name: "home", query: { notice: "verification" } };
+	}
+
+	if (meta.requiresValidated && !meta.dues && state.studentStatus && state.studentStatus !== "Active") {
+		return { name: "home", query: { notice: "restricted" } };
 	}
 
 	return true;

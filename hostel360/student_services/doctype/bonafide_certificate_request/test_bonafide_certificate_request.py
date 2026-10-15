@@ -7,6 +7,8 @@ from io import BytesIO
 from unittest.mock import patch
 
 import frappe
+from frappe.client import insert as client_insert
+from frappe.client import set_value as client_set_value
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, getdate, nowdate
 
@@ -18,6 +20,7 @@ from hostel360.student_services.testing import (
 	make_hostel,
 	make_student,
 	make_user,
+	run_form_action,
 	scope_to_hostel,
 	set_hostel_settings,
 )
@@ -235,3 +238,91 @@ class TestBonafideCertificateRequest(IntegrationTestCase):
 		self.assertEqual(rows[0]["name"], doc.name)
 		self.assertTrue(rows[0]["can_download"])
 		self.assertFalse(rows[0]["is_expired"])
+
+	# ------------------------------------------------------------------ forged decisions
+
+	def as_user(self, user, fn, *args, **kwargs):
+		frappe.set_user(user)
+		try:
+			return fn(*args, **kwargs)
+		finally:
+			frappe.set_user("Administrator")
+
+	FORGED = {
+		"status": "Approved",
+		"certificate_number": "BC/2026/99999",
+		"verification_code": "AAAAAAAAAAAAAAAA",
+		"valid_till": "2099-12-31",
+		"approved_by": "Administrator",
+	}
+
+	def test_office_staff_cannot_approve_by_saving(self):
+		name = self.request()
+		office = make_user([OFFICE_ROLE])
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(office, client_set_value, DOCTYPE, name, self.FORGED)
+		self.assertEqual(frappe.db.get_value(DOCTYPE, name, "status"), "Pending")
+		self.assertEqual(verification.lookup_certificate("AAAAAAAAAAAAAAAA")["state"], "not_found")
+
+		# A rejected request cannot be turned round either
+		frappe.get_doc(DOCTYPE, name).reject_by("Fee dues pending", self.warden)
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(office, client_set_value, DOCTYPE, name, self.FORGED)
+		self.assertEqual(frappe.db.get_value(DOCTYPE, name, "status"), "Rejected")
+
+	def test_an_approved_certificate_cannot_be_altered(self):
+		doc = self.approved()
+		office = make_user([OFFICE_ROLE])
+		for values in (
+			{"valid_till": "2099-12-31"},
+			{"verification_code": "BBBBBBBBBBBBBBBB"},
+			{"year_of_study": "4"},
+			{"status": "Issued"},
+		):
+			with self.assertRaises(frappe.PermissionError):
+				self.as_user(office, client_set_value, DOCTYPE, doc.name, values)
+		self.assertEqual(
+			frappe.db.get_value(DOCTYPE, doc.name, ["valid_till", "verification_code", "status"]),
+			(getdate(doc.valid_till), doc.verification_code, "Approved"),
+		)
+		# Handing it over is still an action office staff may take
+		self.as_user(office, run_form_action, frappe.get_doc(DOCTYPE, doc.name), "mark_issued")
+		self.assertEqual(frappe.db.get_value(DOCTYPE, doc.name, "issued_by"), office)
+
+	def test_a_new_request_carries_no_decision(self):
+		office = make_user([OFFICE_ROLE])
+		saved = self.as_user(
+			office,
+			client_insert,
+			{"doctype": DOCTYPE, "student": self.student.name, "purpose": "Passport", **self.FORGED},
+		)
+		self.assertEqual(saved["status"], "Pending")
+		self.assertFalse(saved["verification_code"])
+		self.assertFalse(saved["certificate_number"])
+		self.assertEqual(verification.lookup_certificate("AAAAAAAAAAAAAAAA")["state"], "not_found")
+
+	def test_form_actions_work_on_the_stored_request(self):
+		other = make_student(make_hostel())
+		name = self.request(student=other)
+		deputy = make_user([DEPUTY_WARDEN_ROLE])
+		scope_to_hostel(deputy, self.hostel)
+		form_copy = frappe.get_doc(DOCTYPE, name)
+		form_copy.hostel = self.hostel
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(deputy, run_form_action, form_copy, "approve")
+		self.assertEqual(frappe.db.get_value(DOCTYPE, name, ["status", "hostel"]), ("Pending", other.hostel))
+
+		form_copy = frappe.get_doc(DOCTYPE, name)
+		self.as_user(self.warden, form_copy.approve)
+		self.assertEqual(form_copy.status, "Approved")
+
+	def test_scoped_staff_cannot_move_a_request_into_their_hostel(self):
+		other = make_student(make_hostel())
+		name = self.request(student=other)
+		office = make_user([OFFICE_ROLE])
+		scope_to_hostel(office, self.hostel)
+		for hostel in (self.hostel, ""):
+			with self.assertRaises(frappe.PermissionError):
+				self.as_user(office, client_set_value, DOCTYPE, name, {"hostel": hostel})
+		self.assertEqual(frappe.db.get_value(DOCTYPE, name, "hostel"), other.hostel)
+

@@ -14,6 +14,9 @@ from hostel360.utils.validation import normalize_mobile
 # System Manager given by IT) are never touched.
 MANAGED_ROLES = frozenset(role for roles in DESIGNATION_ROLES.values() for role in roles)
 
+# Roles Frappe gives every account; they say nothing about what the account may do.
+AUTOMATIC_ROLES = frozenset({"All", "Guest", "Desk User"})
+
 
 class HostelStaff(Document):
 	def validate(self):
@@ -50,7 +53,10 @@ class HostelStaff(Document):
 		if not self.user:
 			if not DESIGNATION_ROLES.get(self.designation):
 				frappe.throw(
-					_("{0} staff do not use the desk, so a login cannot be created.").format(_(self.designation))
+					_(
+						"{0} staff are recorded for contact purposes only and do not get a desk login. Untick Create Desk Login."
+					).format(_(self.designation)),
+					title=_("No Desk Login for {0}").format(_(self.designation)),
 				)
 			if not self.email:
 				frappe.throw(_("Enter an e-mail address to create a desk login."))
@@ -71,8 +77,7 @@ class HostelStaff(Document):
 
 	def on_trash(self):
 		if self.user:
-			frappe.db.set_value("User", self.user, "enabled", 0)
-			remove_hostel_permissions(self.user)
+			revoke_staff_access(self.user)
 
 	def get_or_create_user(self) -> str:
 		existing = frappe.db.get_value(
@@ -97,6 +102,7 @@ class HostelStaff(Document):
 						frappe.bold(existing.name)
 					)
 				)
+			check_can_link(existing.name)
 			return existing.name
 
 		first_name, _sep, last_name = self.staff_name.partition(" ")
@@ -117,9 +123,18 @@ class HostelStaff(Document):
 		return user.name
 
 	def sync_user(self) -> None:
-		"""Roles follow the designation; the login is disabled while the staff is inactive."""
+		"""Roles follow the designation; the login is disabled while the staff is inactive.
+
+		A designation without desk roles (Security, Housekeeping, Other) leaves the login
+		with nothing to do, so it is disabled too. An account that also holds roles this
+		record does not manage, and that the current user may not edit, is never disabled:
+		it only gains or loses the hostel roles.
+		"""
 		user = frappe.get_doc("User", self.user)
+		protected = is_protected_account(self.user)
 		desired = set(DESIGNATION_ROLES.get(self.designation, []))
+		if protected and not self.is_active:
+			desired = set()
 		current = {row.role for row in user.roles}
 
 		changed = False
@@ -131,14 +146,18 @@ class HostelStaff(Document):
 			user.append("roles", {"role": role})
 			changed = True
 
-		enabled = 1 if self.is_active else 0
-		if user.enabled != enabled:
-			user.enabled = enabled
-			changed = True
+		was_enabled = user.enabled
+		if not protected:
+			enabled = 1 if self.is_active and desired else 0
+			if user.enabled != enabled:
+				user.enabled = enabled
+				changed = True
 
 		if changed:
 			user.flags.ignore_permissions = True
 			user.save()
+		if was_enabled and not user.enabled:
+			end_sessions(self.user)
 
 	def sync_user_permissions(self) -> None:
 		"""Restrict hostel-scoped designations to their assigned hostels."""
@@ -146,6 +165,16 @@ class HostelStaff(Document):
 			desired = sorted({row.hostel for row in self.assignments})
 		else:
 			desired = []
+		if desired and is_protected_account(self.user):
+			# A hostel restriction would also narrow what the account's other roles may see.
+			frappe.msgprint(
+				_(
+					"Hostel access of {0} was not changed because the account has other roles. Ask a System Manager to update it."
+				).format(frappe.bold(self.user)),
+				alert=True,
+				indicator="orange",
+			)
+			return
 		set_hostel_permissions(self.user, desired)
 
 	@frappe.whitelist(methods=["POST"])
@@ -155,6 +184,85 @@ class HostelStaff(Document):
 			frappe.throw(_("This staff member has no desk login yet."))
 		user = frappe.get_doc("User", self.user)
 		user.send_welcome_mail_to_user()
+
+
+@frappe.whitelist()
+def get_designation_rules() -> dict:
+	"""Which designations get a desk login and which are limited to their hostels (for the form)."""
+	frappe.has_permission("Hostel Staff", "read", throw=True)
+	return {"login": sorted(DESIGNATION_ROLES), "scoped": sorted(HOSTEL_SCOPED_DESIGNATIONS)}
+
+
+def other_roles(user: str) -> set[str]:
+	"""Roles of the account that no Hostel Staff designation grants."""
+	return set(frappe.get_roles(user)) - MANAGED_ROLES - AUTOMATIC_ROLES
+
+
+def is_protected_account(user: str) -> bool:
+	"""An account with roles beyond the staff roles, which the current user may not edit.
+
+	A Hostel Administrator manages hostel staff logins but has no rights on User; the
+	staff record must not become a way to disable or restrict, say, a System Manager.
+	"""
+	return bool(other_roles(user)) and not frappe.has_permission("User", "write", doc=user)
+
+
+def check_can_link(user: str) -> None:
+	"""Refuse to attach an existing account with other roles unless the user may edit it."""
+	if is_protected_account(user):
+		frappe.throw(
+			_(
+				"{0} already has a login with other roles ({1}). Ask a System Manager to link it to this staff record."
+			).format(frappe.bold(user), ", ".join(sorted(other_roles(user)))),
+			frappe.PermissionError,
+		)
+
+
+def revoke_staff_access(user_name: str) -> None:
+	"""Take back what a deleted staff record gave its login.
+
+	The hostel roles and the hostel restriction go; the login is disabled and signed out
+	everywhere unless it is a protected account (see ``is_protected_account``). Going
+	through the User controller rather than the database keeps the audit trail and the
+	role cache right.
+	"""
+	if not frappe.db.exists("User", user_name):
+		return
+	user = frappe.get_doc("User", user_name)
+	protected = is_protected_account(user_name)
+	for row in list(user.roles):
+		if row.role in MANAGED_ROLES:
+			user.remove(row)
+	if not protected:
+		user.enabled = 0
+	user.flags.ignore_permissions = True
+	user.save()
+	if not user.enabled:
+		end_sessions(user_name)
+	remove_hostel_permissions(user_name)
+
+
+def end_sessions(user: str) -> None:
+	"""Sign the user out on every device.
+
+	Frappe does this itself only when a disabled user is saved inside a web request, and
+	an open session is never re-checked against ``User.enabled``. Background jobs, bench
+	commands and data import need it done here. The rows go in this transaction; the
+	cached copies are dropped now and again after commit, in case a request of this user
+	puts its session back in the cache meanwhile.
+	"""
+	sessions = frappe.qb.DocType("Sessions")
+	sids = frappe.qb.from_(sessions).select(sessions.sid).where(sessions.user == user).run(pluck=True)
+	if not sids:
+		return
+	frappe.db.delete("Sessions", {"user": user})
+
+	def drop_cached_sessions():
+		for sid in sids:
+			frappe.cache.hdel("session", sid)
+
+	drop_cached_sessions()
+	frappe.db.after_commit.add(drop_cached_sessions)
 
 
 def set_hostel_permissions(user: str, hostels: list[str]) -> None:

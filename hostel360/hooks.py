@@ -74,17 +74,61 @@ extend_bootinfo = "hostel360.setup.boot.extend_bootinfo"
 
 # Permissions
 # -----------
-# Deputy wardens and mess staff are scoped to their hostels through User Permissions
-# that are synchronised from Hostel Staff assignments. Portal users (students and
-# parents) never get DocType permissions; they only use the whitelisted portal API.
+# Deputy wardens, office and mess staff are scoped to their hostels (and optionally blocks)
+# through User Permissions synchronised from Hostel Staff assignments. These hooks add
+# row-level rules on top: block scoping, confidential grievances and messages, vacated
+# students (scoped by the hostel they last lived in) and messes serving permitted hostels.
+# Portal users (students and parents) never get DocType permissions; they only use the
+# whitelisted portal API.
 
 permission_query_conditions = {
 	"Hostel Grievance": "hostel360.student_services.permissions.grievance_query_conditions",
+	"Hostel Student": "hostel360.hostel_people.permissions.student_query_conditions",
+	"Room Allotment": "hostel360.hostel_people.permissions.allotment_query_conditions",
+	"Hostel Guardian": "hostel360.hostel_people.permissions.guardian_query_conditions",
+	"Message Log": "hostel360.hostel_communication.permissions.message_log_query_conditions",
+	"Hostel Mess": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Menu": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Stock Entry": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Stock Ledger Entry": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Indent": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Expense": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Bill Run": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Bill": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Extra Charge": "hostel360.hostel_mess.permissions.mess_query_conditions",
+	"Mess Reduction Application": "hostel360.hostel_mess.permissions.mess_query_conditions",
 }
 
 has_permission = {
 	"Hostel Grievance": "hostel360.student_services.permissions.grievance_has_permission",
+	"Home Visit Leave": "hostel360.student_services.permissions.hostel_scoped_has_permission",
+	"Bonafide Certificate Request": "hostel360.student_services.permissions.hostel_scoped_has_permission",
+	"Hostel Feedback": "hostel360.student_services.permissions.hostel_scoped_has_permission",
+	"Hostel Student": "hostel360.hostel_people.permissions.student_has_permission",
+	"Room Allotment": "hostel360.hostel_people.permissions.allotment_has_permission",
+	"Hostel Guardian": "hostel360.hostel_people.permissions.guardian_has_permission",
+	"Message Log": "hostel360.hostel_communication.permissions.message_log_has_permission",
+	"Hostel Mess": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Menu": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Stock Entry": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Stock Ledger Entry": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Indent": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Expense": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Bill Run": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Bill": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Extra Charge": "hostel360.hostel_mess.permissions.mess_has_permission",
+	"Mess Reduction Application": "hostel360.hostel_mess.permissions.mess_has_permission",
 }
+
+# Upload checks run before Frappe writes any bytes to disk
+override_doctype_class = {
+	"File": "hostel360.security.files.HostelFile",
+}
+
+# Request Events
+# --------------
+# Portal users may only upload through hostel360.api.portal.upload_attachment
+before_request = ["hostel360.security.files.block_portal_generic_upload"]
 
 # Document Events
 # ---------------
@@ -100,6 +144,10 @@ doc_events = {
 	# A HyFib reply on a Support Ticket counts as the first response straight away
 	"Comment": {
 		"after_insert": "hostel360.hostel_operations.support.on_comment",
+	},
+	# Keeps Mess Bill.fee_invoice pointing at an invoice amended by the office
+	"Hostel Fee Invoice": {
+		"on_submit": "hostel360.hostel_mess.billing.sync_amended_invoice",
 	},
 }
 

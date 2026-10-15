@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Enrol a desk user's authenticator app for two-factor sign-in, from the server.
+#
+#   h360-2fa-enrol <user>            show the user's authenticator key, confirm it with a code
+#   h360-2fa-enrol --reset <user>    issue a new key (lost or replaced phone); the old one
+#                                    stops working at once
+#
+# Two-factor authentication ("OTP App") is enforced for System Managers, the Administrator
+# and every Hostel360 desk role. Frappe normally e-mails a QR code at the user's first
+# sign-in, which cannot work before outgoing e-mail is configured - and configuring e-mail
+# needs a desk sign-in. This command is the way in for the Administrator on a new site, and
+# for anyone who cannot receive that e-mail: it prints the key (and a QR code when qrencode
+# is installed) for the authenticator app, and marks the enrolment complete only after the
+# user has typed a valid code from the app, so a mistyped key never locks them out.
+#
+# The key is shown on this terminal only; run it in an interactive session (SSH through the
+# Bastion) with the user present, never with output redirected to a file or log.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-2fa-enrol
+h360_require_root
+h360_require_cmd docker
+
+reset=0
+case "${1:-}" in
+	--reset)
+		reset=1
+		shift
+		;;
+	-h | --help | "")
+		sed -n '2,/^set -Eeuo/p' "$0" | sed '$d; s/^# \{0,1\}//'
+		[[ -n "${1:-}" ]] && exit 0
+		exit 64
+		;;
+esac
+user="${1:-}"
+[[ -n "${user}" && $# -eq 1 ]] || die "usage: h360-2fa-enrol [--reset] <user>"
+
+site="$(h360_stack_value SITE_NAME)"
+[[ -n "${site}" ]] || die "SITE_NAME is not set in the stack configuration"
+backend="$(h360_container backend)"
+[[ -n "${backend}" ]] || die "the backend container is not running (systemctl start hostel360-stack)"
+
+# site_python <mode> [stdin]: runs one step inside the backend container. Arguments that
+# are not secret go on the command line; codes travel over standard input.
+site_python() {
+	docker exec -i -w /home/frappe/frappe-bench/sites "${backend}" /home/frappe/frappe-bench/env/bin/python -c '
+import sys
+
+import pyotp
+
+import frappe
+from frappe.twofactor import (
+	clear_default,
+	delete_qrimage,
+	get_default,
+	get_otpsecret_for_,
+	set_default,
+	two_factor_is_enabled_for_,
+)
+
+site, user, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+	frappe.set_user("Administrator")
+	if not frappe.db.exists("User", user) or not frappe.db.get_value("User", user, "enabled"):
+		print(f"error: there is no enabled user {user!r} on {site}")
+		sys.exit(3)
+	if mode == "reset":
+		clear_default(user + "_otpsecret")
+		clear_default(user + "_otplogin")
+		frappe.db.commit()
+		print("reset")
+	elif mode == "show":
+		settings = frappe.get_cached_doc("System Settings")
+		if not settings.enable_two_factor_auth or not two_factor_is_enabled_for_(user):
+			print(f"note: two-factor sign-in is not required for {user} at the moment")
+		if settings.two_factor_method != "OTP App":
+			print(f"note: the site uses {settings.two_factor_method!r}, not an authenticator app")
+		secret = get_otpsecret_for_(user)
+		issuer = settings.otp_issuer_name or "Hostel360"
+		print("enrolled=" + ("yes" if get_default(user + "_otplogin") else "no"))
+		print("secret=" + secret)
+		print("uri=" + pyotp.TOTP(secret).provisioning_uri(user, issuer_name=issuer))
+	elif mode == "confirm":
+		code = sys.stdin.readline().strip()
+		secret = get_otpsecret_for_(user)
+		# One step either side, like a phone whose clock is a few seconds out.
+		if code.isdigit() and pyotp.TOTP(secret).verify(code, valid_window=1):
+			set_default(user + "_otplogin", 1)
+			delete_qrimage(user)
+			frappe.db.commit()
+			print("confirmed")
+		else:
+			print("mismatch")
+finally:
+	frappe.destroy()
+' "${site}" "${user}" "$@"
+}
+
+if [[ "${reset}" == 1 ]]; then
+	result="$(site_python reset </dev/null)"
+	[[ "${result}" == reset ]] || die "${result}"
+	log_notice "authenticator key of ${user} on ${site} reset; the previous key no longer works"
+fi
+
+details="$(site_python show </dev/null)" || die "$(tail -n 1 <<<"${details}")"
+secret="$(sed -n 's/^secret=//p' <<<"${details}")"
+uri="$(sed -n 's/^uri=//p' <<<"${details}")"
+enrolled="$(sed -n 's/^enrolled=//p' <<<"${details}")"
+[[ -n "${secret}" && -n "${uri}" ]] || die "could not read the authenticator key for ${user}"
+grep '^note: ' <<<"${details}" | sed 's/^note: /Note: /' || true
+
+if [[ "${enrolled}" == yes && "${reset}" == 0 ]]; then
+	printf '\n%s already confirmed an authenticator app. To move to a new phone, run:\n  h360-2fa-enrol --reset %s\n\n' \
+		"${user}" "${user}"
+	exit 0
+fi
+
+printf '\nAuthenticator key for %s on %s\n\n' "${user}" "${site}"
+if command -v qrencode >/dev/null 2>&1; then
+	qrencode -t ansiutf8 -m 2 "${uri}"
+	printf '\nScan the QR code with the authenticator app, or type the key in by hand:\n'
+else
+	printf 'Add an account in the authenticator app with this key (time-based, 6 digits):\n'
+fi
+# Groups of four, as authenticator apps display and accept them.
+printf '\n  %s\n\n' "$(sed -E 's/(.{4})/\1 /g; s/ $//' <<<"${secret}")"
+
+for attempt in 1 2 3; do
+	read -r -p "Code now shown in the app for ${user}: " code || die "no code entered; enrolment not confirmed"
+	code="${code//[[:space:]]/}"
+	result="$(printf '%s\n' "${code}" | site_python confirm)"
+	if [[ "${result}" == confirmed ]]; then
+		log_notice "authenticator app confirmed for ${user} on ${site}"
+		printf '\nDone. %s signs in with the password and the code from the app.\n' "${user}"
+		exit 0
+	fi
+	printf 'That code does not match (attempt %s of 3). Check the key and the phone'"'"'s time setting.\n' "${attempt}"
+done
+die "enrolment of ${user} not confirmed; run h360-2fa-enrol again"

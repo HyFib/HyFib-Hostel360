@@ -7,13 +7,19 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, flt, getdate, nowdate
 
-from hostel360.hostel_mess.stock import NegativeStockError, get_stock_balance, get_stock_levels
+from hostel360.hostel_mess.stock import (
+	NegativeStockError,
+	StockChangedError,
+	get_stock_balance,
+	get_stock_levels,
+)
 from hostel360.hostel_mess.testing import (
 	EXTERNAL_DEPENDENCIES,
 	make_hostel,
 	make_item,
 	make_mess,
 	make_stock_entry,
+	purge_committed_records,
 )
 
 IGNORE_TEST_RECORD_DEPENDENCIES = EXTERNAL_DEPENDENCIES
@@ -178,3 +184,93 @@ class TestMessStockEntry(IntegrationTestCase):
 					"actual_qty": 100,
 				}
 			).insert(ignore_permissions=True)
+
+
+def has_snapshot_isolation_setting() -> bool:
+	return bool(frappe.db.sql("show variables like 'innodb_snapshot_isolation'"))
+
+
+class TestConcurrentStockPosting(IntegrationTestCase):
+	"""Two people posting the same item at the same moment, each on their own connection.
+
+	The fixtures are committed so that the second connection can see them, and purged after
+	each test.
+	"""
+
+	def setUp(self):
+		self.hostel = make_hostel()
+		self.mess = make_mess([self.hostel])
+		self.rice = make_item("Kg")
+		day = add_days(nowdate(), -1)
+		self.receipt = make_stock_entry(self.mess, "Receipt", [(self.rice, 10, 50)], day, "09:00:00").name
+		self.first = make_stock_entry(self.mess, "Issue", [(self.rice, 8)], day, submit=False).name
+		self.second = make_stock_entry(self.mess, "Issue", [(self.rice, 8)], day, submit=False).name
+		frappe.db.commit()
+		self.addCleanup(purge_committed_records, messes=[self.mess], items=[self.rice], hostels=[self.hostel])
+
+	def open_late_request(self, doc_name, snapshot_isolation=True):
+		"""Load a document on the second connection the way a request would before submitting."""
+		with self.secondary_connection():
+			if not snapshot_isolation:
+				frappe.db.sql("set session innodb_snapshot_isolation = OFF")
+			doc = frappe.get_doc("Mess Stock Entry", doc_name)
+			self.assertEqual(get_stock_balance(self.mess, self.rice).qty, 10)
+		return doc
+
+	def submit_first_issue(self):
+		with self.primary_connection():
+			frappe.get_doc("Mess Stock Entry", self.first).submit()
+			frappe.db.commit()
+
+	def assert_late_submit_refused(self, late):
+		with self.secondary_connection():
+			try:
+				with self.assertRaises(StockChangedError):
+					late.submit()
+			finally:
+				frappe.db.rollback()
+			# Submitting again reads the ledger afresh and sees what is really left.
+			try:
+				with self.assertRaises(NegativeStockError):
+					frappe.get_doc("Mess Stock Entry", self.second).submit()
+			finally:
+				frappe.db.rollback()
+		with self.primary_connection():
+			self.assertEqual(get_stock_balance(self.mess, self.rice).qty, 2)
+			self.assertEqual(frappe.db.get_value("Mess Stock Entry", self.second, "docstatus"), 0)
+
+	def test_concurrent_issues_cannot_both_take_the_same_stock(self):
+		late = self.open_late_request(self.second)
+		self.submit_first_issue()
+		self.assert_late_submit_refused(late)
+
+	def test_stale_snapshot_is_caught_without_snapshot_isolation(self):
+		if not has_snapshot_isolation_setting():
+			self.skipTest("The database server has no innodb_snapshot_isolation setting")
+		late = self.open_late_request(self.second, snapshot_isolation=False)
+		self.submit_first_issue()
+		self.assert_late_submit_refused(late)
+
+	def test_cancelling_a_receipt_consumed_meanwhile_is_refused(self):
+		with self.secondary_connection():
+			receipt = frappe.get_doc("Mess Stock Entry", self.receipt)
+			self.assertEqual(get_stock_balance(self.mess, self.rice).qty, 10)
+		self.submit_first_issue()
+		with self.secondary_connection():
+			try:
+				with self.assertRaises(StockChangedError):
+					receipt.cancel()
+			finally:
+				frappe.db.rollback()
+		with self.primary_connection():
+			self.assertEqual(frappe.db.get_value("Mess Stock Entry", self.receipt, "docstatus"), 1)
+			self.assertEqual(get_stock_balance(self.mess, self.rice).qty, 2)
+
+	def test_unrelated_reads_do_not_block_a_posting(self):
+		late = self.open_late_request(self.second)
+		with self.secondary_connection():
+			try:
+				late.submit()
+				self.assertEqual(get_stock_balance(self.mess, self.rice).qty, 2)
+			finally:
+				frappe.db.rollback()

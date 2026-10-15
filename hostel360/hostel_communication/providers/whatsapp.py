@@ -101,7 +101,13 @@ def send_template(
 
 
 def send_authentication_code(
-	mobile: str, template_name: str | None, language: str | None, code: str, *, settings=None
+	mobile: str,
+	template_name: str | None,
+	language: str | None,
+	code: str,
+	*,
+	settings=None,
+	timeout: tuple[float, float] | None = None,
 ) -> DeliveryResult:
 	settings = settings or get_settings()
 	if not cint(settings.get("whatsapp_enabled")):
@@ -112,10 +118,10 @@ def send_authentication_code(
 		return DeliveryResult.failed(PROVIDER, "The WhatsApp authentication template name is not set.")
 	if is_test_mode(settings):
 		return test_mode_result(PROVIDER)
-	return _post(settings, build_authentication_payload(mobile, template_name, language, code))
+	return _post(settings, build_authentication_payload(mobile, template_name, language, code), timeout)
 
 
-def _post(settings, payload: dict) -> DeliveryResult:
+def _post(settings, payload: dict, timeout: tuple[float, float] | None = None) -> DeliveryResult:
 	token = get_secret(settings, "whatsapp_access_token")
 	if not token or not settings.get("whatsapp_phone_number_id"):
 		return DeliveryResult.failed(PROVIDER, "The WhatsApp phone number ID or access token is not set.")
@@ -123,7 +129,7 @@ def _post(settings, payload: dict) -> DeliveryResult:
 	headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 	try:
 		response = requests.post(
-			messages_url(settings), json=payload, headers=headers, timeout=get_timeout(settings)
+			messages_url(settings), json=payload, headers=headers, timeout=timeout or get_timeout(settings)
 		)
 	except requests.RequestException as e:
 		return request_failure(PROVIDER, e)

@@ -35,3 +35,15 @@ class TestMessItem(IntegrationTestCase):
 		item.reorder_level = -1
 		with self.assertRaises(frappe.ValidationError):
 			item.save()
+
+	def test_old_form_does_not_wind_back_the_stock_revision(self):
+		item = frappe.get_doc("Mess Item", make_item("Kg"))  # form opened before the postings
+		mess = make_mess([make_hostel()])
+		make_stock_entry(mess, "Receipt", [(item.name, 10, 5)], add_days(nowdate(), -1))
+		make_stock_entry(mess, "Issue", [(item.name, 4)], add_days(nowdate(), -1))
+		revision = frappe.db.get_value("Mess Item", item.name, "stock_revision")
+		self.assertGreater(revision, 0)
+
+		item.reorder_level = 5
+		item.save()
+		self.assertEqual(frappe.db.get_value("Mess Item", item.name, "stock_revision"), revision)

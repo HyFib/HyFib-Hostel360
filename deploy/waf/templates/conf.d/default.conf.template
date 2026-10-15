@@ -5,10 +5,19 @@
 #   ${PORT}      plain HTTP for a load balancer backend set without re-encryption
 # Clients never connect here directly: the load balancer terminates the public certificate
 # and redirects port 80 to 443, and the host firewall admits only the LB subnet.
+#
+#   443, 80      the stack's own containers. The portal host name is an alias of this
+#                container on the internal network (compose.yml), so when the backend or a
+#                worker renders a print PDF, wkhtmltopdf fetches the logo and other /files and
+#                /assets URLs of the site's public URL (host_name) here, on the scheme and
+#                port that URL uses, instead of leaving the host for the load balancer.
+#                These ports are not published on the host.
 
 server {
 	listen ${PORT} default_server;
 	listen ${SSL_PORT} ssl default_server;
+	listen 443 ssl;
+	listen 80;
 	server_name ${SERVER_NAME};
 
 	ssl_certificate ${SSL_CERT_FILE};

@@ -5,22 +5,31 @@ from datetime import datetime
 from unittest.mock import patch
 
 import frappe
+from frappe.client import insert as client_insert
+from frappe.client import set_value as client_set_value
 from frappe.tests import IntegrationTestCase
-from frappe.utils import add_to_date, get_datetime, now_datetime
+from frappe.utils import add_to_date, get_datetime, getdate, now_datetime, nowdate
 
-from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, OFFICE_ROLE, WARDEN_ROLE
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE, OFFICE_ROLE, WARDEN_ROLE
 from hostel360.student_services import services
 from hostel360.student_services.leave_tasks import mark_overdue_returns
+from hostel360.student_services.permissions import hostel_scoped_has_permission
 from hostel360.student_services.testing import (
 	capture_notifications,
 	leave_data,
+	make_block_deputy,
+	make_block_room,
 	make_guardian,
 	make_hostel,
+	make_linked_reduction,
 	make_student,
 	make_user,
+	put_in_room,
+	run_form_action,
 	scope_to_hostel,
 	set_hostel_settings,
 )
+from hostel360.student_services.utils import people_service
 
 IGNORE_TEST_RECORD_DEPENDENCIES = [
 	"Hostel Student",
@@ -380,3 +389,191 @@ class TestHomeVisitLeave(IntegrationTestCase):
 			frappe.flags.hostel360_migration = False
 		self.assertEqual(leave.status, "Returned")
 		self.assertEqual(sent, [])
+
+	# ------------------------------------------------------------------ server-owned fields
+
+	def as_user(self, user, fn, *args, **kwargs):
+		frappe.set_user(user)
+		try:
+			return fn(*args, **kwargs)
+		finally:
+			frappe.set_user("Administrator")
+
+	def other_hostel_leave(self):
+		set_hostel_settings(leave_requires_parent_approval=0)
+		other = make_student(make_hostel())
+		return other, services.apply_leave(other.name, leave_data(), "Student", other.user)
+
+	def test_scoped_staff_cannot_move_a_leave_into_their_hostel(self):
+		other, name = self.other_hostel_leave()
+		office = make_user([OFFICE_ROLE])
+		scope_to_hostel(office, self.hostel)
+		leave = frappe.get_doc("Home Visit Leave", name)
+		self.assertFalse(frappe.has_permission("Home Visit Leave", "read", doc=leave, user=office))
+
+		for hostel in (self.hostel, ""):
+			with self.assertRaises(frappe.PermissionError):
+				self.as_user(office, client_set_value, "Home Visit Leave", name, {"hostel": hostel})
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", name, "hostel"), other.hostel)
+
+		# Nor create one for another hostel's student by naming their own hostel
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(
+				office,
+				client_insert,
+				{"doctype": "Home Visit Leave", "student": other.name, "hostel": self.hostel, "applied_by": "Warden", **leave_data()},
+			)
+
+		# Stored hostel decides, whatever the in-memory copy says
+		leave.hostel = self.hostel
+		self.assertFalse(hostel_scoped_has_permission(leave, "read", office))
+
+	def test_an_ordinary_save_cannot_decide_a_leave(self):
+		name = self.apply()
+		office = make_user([OFFICE_ROLE])
+		decision = {"status": "Approved", "parent_approval_status": "Approved", "warden_approval_status": "Approved"}
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(office, client_set_value, "Home Visit Leave", name, decision)
+		# Not even a warden can skip the parent's consent by saving the form
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(self.warden, client_set_value, "Home Visit Leave", name, {**decision, "warden_user": self.warden})
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", name, "status"), "Pending Parent Approval")
+
+		# Ordinary details can still be corrected while the leave is pending
+		self.as_user(office, client_set_value, "Home Visit Leave", name, {"destination": "Sivaganga"})
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", name, "destination"), "Sivaganga")
+
+	def test_a_new_leave_carries_no_decision(self):
+		leave = frappe.get_doc(
+			{
+				"doctype": "Home Visit Leave",
+				"student": self.student.name,
+				"applied_by": "Warden",
+				"status": "Approved",
+				"warden_approval_status": "Approved",
+				"warden_user": self.warden,
+				"checked_out_on": now_datetime(),
+				**leave_data(),
+			}
+		).insert()
+		self.assertEqual(leave.status, "Pending Warden Approval")
+		self.assertEqual(leave.warden_approval_status, "Pending")
+		self.assertFalse(leave.warden_user)
+		self.assertFalse(leave.checked_out_on)
+
+	def test_form_actions_work_on_the_stored_leave(self):
+		name = self.apply()
+		# A warden's form claims the parent has already approved
+		form_copy = frappe.get_doc("Home Visit Leave", name)
+		form_copy.status = "Pending Warden Approval"
+		with self.assertRaises(frappe.ValidationError):
+			self.as_user(self.warden, run_form_action, form_copy, "warden_approve", remarks="ok")
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", name, "status"), "Pending Parent Approval")
+
+		# A deputy of another hostel rewrites the hostel on the form's copy
+		other, other_leave = self.other_hostel_leave()
+		form_copy = frappe.get_doc("Home Visit Leave", other_leave)
+		form_copy.hostel = self.hostel
+		with self.assertRaises(frappe.PermissionError):
+			self.as_user(self.deputy, run_form_action, form_copy, "warden_approve", remarks="ok")
+		self.assertEqual(
+			frappe.db.get_value("Home Visit Leave", other_leave, ["status", "hostel"]),
+			("Pending Warden Approval", other.hostel),
+		)
+
+		# The genuine action still works and refreshes the form's copy
+		form_copy = frappe.get_doc("Home Visit Leave", other_leave)
+		self.as_user(self.warden, form_copy.warden_approve, "Safe journey")
+		self.assertEqual(form_copy.status, "Approved")
+
+	# ------------------------------------------------------------------ cancelling with a reduction
+
+	def test_office_can_cancel_a_leave_with_a_mess_reduction(self):
+		leave = self.approved_leave()
+		reduction = make_linked_reduction(leave.name, status="Pending")
+		office = make_user([OFFICE_ROLE])
+		self.assertFalse(frappe.has_permission("Mess Reduction Application", "write", user=office))
+
+		self.as_user(office, run_form_action, frappe.get_doc("Home Visit Leave", leave.name), "cancel_leave")
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", leave.name, "status"), "Cancelled")
+		self.assertEqual(frappe.db.get_value("Mess Reduction Application", reduction, "status"), "Cancelled")
+
+	def test_cancelling_a_started_leave_withdraws_its_reduction(self):
+		start = get_datetime(nowdate()).replace(hour=0, minute=30)
+		name = services.apply_leave(
+			self.student.name,
+			{**leave_data(), "from_datetime": start, "to_datetime": add_to_date(start, days=4)},
+			"Warden",
+			self.warden,
+		)
+		services.warden_decision(name, True, None, self.warden)
+		reduction = make_linked_reduction(name, from_date=nowdate(), status="Approved")
+
+		services.cancel_leave(name, self.student.user)
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", name, "status"), "Cancelled")
+		self.assertEqual(frappe.db.get_value("Mess Reduction Application", reduction, "status"), "Cancelled")
+
+	def test_reduction_that_cannot_be_withdrawn_is_reported(self):
+		leave = self.approved_leave()
+		reduction = make_linked_reduction(leave.name, status="Approved")
+		mess_manager = make_user([MESS_MANAGER_ROLE])
+
+		def billed(*args, **kwargs):
+			frappe.throw("Mess bills are published up to the end of the month.")
+
+		with patch("hostel360.hostel_mess.services.cancel_mess_reduction", side_effect=billed):
+			services.cancel_leave(leave.name, self.student.user)
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", leave.name, "status"), "Cancelled")
+		self.assertEqual(frappe.db.get_value("Mess Reduction Application", reduction, "status"), "Approved")
+		self.assertTrue(
+			frappe.db.exists(
+				"Comment",
+				{"reference_doctype": "Home Visit Leave", "reference_name": leave.name, "content": ["like", "%published up to%"]},
+			)
+		)
+		alerted = set(
+			frappe.get_all(
+				"Notification Log",
+				filters={"document_type": "Mess Reduction Application", "document_name": reduction},
+				pluck="for_user",
+			)
+		)
+		self.assertIn(self.warden, alerted)
+		self.assertIn(self.deputy, alerted)
+		self.assertIn(mess_manager, alerted)
+
+	# ------------------------------------------------------------------ hostels and blocks
+
+	def test_vacated_student_keeps_their_last_hostel_on_records(self):
+		if not frappe.get_meta("Hostel Student").has_field("last_hostel"):
+			self.skipTest("Hostel Student has no last_hostel on this site")
+		from hostel360.student_services.utils import get_student_hostel
+
+		vacated = make_student(None)
+		frappe.db.set_value("Hostel Student", vacated.name, "last_hostel", self.hostel, update_modified=False)
+		self.assertEqual(get_student_hostel(vacated.name), self.hostel)
+
+	def test_block_deputies_decide_only_for_their_blocks(self):
+		if not people_service("staff_covers_student"):
+			self.skipTest("Hostel People does not provide block scoping on this site")
+		set_hostel_settings(leave_requires_parent_approval=0)
+		east, west = make_block_room(self.hostel), make_block_room(self.hostel)
+		put_in_room(self.student.name, east.room)
+		westerner = make_student(self.hostel)
+		put_in_room(westerner.name, west.room)
+		east_deputy = make_block_deputy(self.hostel, [east.block])
+
+		with capture_notifications() as sent:
+			mine = self.apply()
+			theirs = services.apply_leave(westerner.name, leave_data(), "Student", westerner.user)
+		told = {m["reference_name"]: {r.get("user") for r in m["recipients"]} for m in sent if m["event"] == "leave_warden_approval_required"}
+		self.assertIn(east_deputy, told[mine])
+		self.assertNotIn(east_deputy, told[theirs])
+		# A deputy assigned to the whole hostel hears about both
+		self.assertIn(self.deputy, told[theirs])
+
+		with self.assertRaises(frappe.PermissionError):
+			services.warden_decision(theirs, True, None, east_deputy)
+		services.warden_decision(mine, True, None, east_deputy)
+		self.assertEqual(frappe.db.get_value("Home Visit Leave", mine, "status"), "Approved")
+

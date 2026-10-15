@@ -365,6 +365,9 @@ def check_ticket_slas(now=None) -> dict:
 					description=description,
 					is_outage=ticket.category == "Outage",
 				)
+				# raise_alert commits on its own connection. Commit here too so the reads and
+				# writes below see that row instead of this transaction's older snapshot.
+				_commit()
 				if name and frappe.db.get_value("Ops Alert", name, "last_notified_on") == notified_before:
 					# The alert was already at this severity, so raising it again told nobody.
 					_send_breach_notice(name, now, notification)

@@ -6,11 +6,13 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, nowdate
 
+from hostel360.hostel_mess.permissions import assert_mess_access
 from hostel360.hostel_mess.utils import assert_period_open, in_migration
 
 
 class MessExpense(Document):
 	def validate(self):
+		assert_mess_access(self.mess, doctype=self.doctype)
 		self.amount = flt(self.amount, 2)
 		if self.amount <= 0:
 			frappe.throw(_("Amount must be greater than zero."))
@@ -20,7 +22,7 @@ class MessExpense(Document):
 			assert_period_open(self.mess, self.posting_date, _("Mess expenses"))
 
 	def before_submit(self):
-		assert_period_open(self.mess, self.posting_date, _("Mess expenses"))
+		assert_period_open(self.mess, self.posting_date, _("Mess expenses"), lock=True)
 
 	def before_cancel(self):
-		assert_period_open(self.mess, self.posting_date, _("Mess expenses"))
+		assert_period_open(self.mess, self.posting_date, _("Mess expenses"), lock=True)

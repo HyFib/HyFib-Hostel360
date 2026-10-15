@@ -10,12 +10,14 @@ import frappe
 from frappe import _
 from frappe.utils import flt, getdate, now_datetime, nowdate
 
+from hostel360.hostel_mess.billing import get_bill_invoices, get_current_invoice
 from hostel360.hostel_mess.utils import (
 	MEAL_ORDER,
 	WEEKDAYS,
 	assert_period_open,
 	get_mess_for_hostel,
 	get_reduction_decider_roles,
+	get_student_hostel,
 	get_week_start,
 	send_notification,
 	student_recipients,
@@ -133,20 +135,15 @@ def list_mess_bills(student: str) -> list[dict]:
 		],
 		order_by="from_date desc",
 	)
-	invoices = {}
-	invoice_names = [b.fee_invoice for b in bills if b.fee_invoice]
-	if invoice_names and frappe.db.table_exists("Hostel Fee Invoice"):
-		invoices = {
-			row.name: row
-			for row in frappe.get_all(
-				"Hostel Fee Invoice",
-				filters={"name": ["in", invoice_names]},
-				fields=["name", "status", "outstanding_amount", "due_date"],
-			)
-		}
+	# The office may have cancelled a bill's invoice and amended it; show the one that stands.
+	invoices = {
+		bill: get_current_invoice(rows) for bill, rows in get_bill_invoices([b.name for b in bills]).items()
+	}
 	result = []
 	for bill in bills:
-		invoice = invoices.get(bill.fee_invoice) or {}
+		invoice = invoices.get(bill.name) or {}
+		if invoice:
+			bill.fee_invoice = invoice.name
 		result.append(
 			{
 				"name": bill.name,
@@ -230,7 +227,7 @@ def apply_mess_reduction(
 	doc.update(
 		{
 			"student": student,
-			"hostel": frappe.db.get_value("Hostel Student", student, "current_hostel"),
+			"hostel": get_student_hostel(student),
 			"from_date": getdate(from_date),
 			"to_date": getdate(to_date),
 			"reason": reason,
@@ -258,7 +255,9 @@ def cancel_mess_reduction(name: str, user: str) -> None:
 		frappe.throw(_("This application is already {0}.").format(_(doc.status).lower()))
 
 	if is_staff(user):
-		if not frappe.has_permission(REDUCTION, "write", doc=doc, user=user):
+		if not frappe.has_permission(REDUCTION, "write", doc=doc, user=user) or not staff_covers_student(
+			user, doc.student
+		):
 			frappe.throw(_("You are not permitted to cancel this application."), frappe.PermissionError)
 	else:
 		assert_can_access_student(doc.student, user)
@@ -268,7 +267,7 @@ def cancel_mess_reduction(name: str, user: str) -> None:
 			)
 
 	if doc.status == "Approved":
-		assert_period_open(doc.mess, doc.from_date, _("Mess reductions"))
+		assert_period_open(doc.mess, doc.from_date, _("Mess reductions"), lock=True)
 
 	doc.status = "Cancelled"
 	doc.flags.status_change = True
@@ -281,7 +280,22 @@ def can_decide_mess_reduction(doc, user: str) -> bool:
 		return True
 	if not set(frappe.get_roles(user)) & get_reduction_decider_roles():
 		return False
-	return bool(frappe.has_permission(REDUCTION, "write", doc=doc, user=user))
+	if not frappe.has_permission(REDUCTION, "write", doc=doc, user=user):
+		return False
+	return staff_covers_student(user, doc.student)
+
+
+def staff_covers_student(user: str, student: str) -> bool:
+	"""Whether the staff member looks after the student (their hostel and, if assigned, block).
+
+	A deputy warden assigned to some blocks of a hostel decides only for those blocks. The
+	hostel itself is already enforced through User Permissions.
+	"""
+	try:
+		from hostel360.hostel_people.services import staff_covers_student as people_staff_covers_student
+	except ImportError:
+		return True
+	return bool(people_staff_covers_student(user, student))
 
 
 def decide_mess_reduction(name: str, approve: bool, remarks: str | None, user: str) -> None:
@@ -297,7 +311,7 @@ def decide_mess_reduction(name: str, approve: bool, remarks: str | None, user: s
 	approve = _as_bool(approve)
 	remarks = (remarks or "").strip() or None
 	if approve:
-		assert_period_open(doc.mess, doc.from_date, _("Mess reductions"))
+		assert_period_open(doc.mess, doc.from_date, _("Mess reductions"), lock=True)
 	elif not remarks:
 		frappe.throw(_("Please give a reason for rejecting the application."))
 

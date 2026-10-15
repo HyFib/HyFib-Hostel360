@@ -53,9 +53,13 @@ def send_sms(
 	variables: dict | None = None,
 	parameters: list[str] | None = None,
 	settings=None,
+	timeout: tuple[float, float] | None = None,
 ) -> DeliveryResult:
+	"""Send one SMS. ``timeout`` (connect, read) overrides Messaging Settings for callers
+	that must answer quickly, such as sign-in codes."""
 	settings = settings or get_settings()
 	provider = settings.get("sms_provider") or MSG91
+	timeout = timeout or get_timeout(settings)
 
 	if not cint(settings.get("sms_enabled")):
 		return DeliveryResult.skip(provider, "SMS is not enabled in Messaging Settings.")
@@ -67,11 +71,13 @@ def send_sms(
 		return test_mode_result(provider)
 
 	if provider == GENERIC_HTTP:
-		return _send_generic(settings, mobile, body, dlt_template_id)
+		return _send_generic(settings, mobile, body, dlt_template_id, timeout)
 	if msg91_template_id:
-		return _send_msg91_flow(settings, mobile, msg91_template_id, variables or {}, parameters or [])
+		return _send_msg91_flow(
+			settings, mobile, msg91_template_id, variables or {}, parameters or [], timeout
+		)
 	if dlt_template_id:
-		return _send_msg91_text(settings, mobile, body, dlt_template_id)
+		return _send_msg91_text(settings, mobile, body, dlt_template_id, timeout)
 	return DeliveryResult.failed(
 		MSG91, "Set the MSG91 Flow template ID or the DLT template ID on this message template."
 	)
@@ -97,7 +103,7 @@ def build_msg91_payload(
 	return payload
 
 
-def _send_msg91_flow(settings, mobile, template_id, variables, parameters) -> DeliveryResult:
+def _send_msg91_flow(settings, mobile, template_id, variables, parameters, timeout=None) -> DeliveryResult:
 	auth_key = get_secret(settings, "sms_auth_key")
 	if not auth_key:
 		return DeliveryResult.failed(MSG91, "The MSG91 auth key is not set in Messaging Settings.")
@@ -106,7 +112,7 @@ def _send_msg91_flow(settings, mobile, template_id, variables, parameters) -> De
 	payload = build_msg91_payload(settings, mobile, template_id, variables, parameters)
 	headers = {"authkey": auth_key, "accept": "application/json", "content-type": "application/json"}
 	try:
-		response = requests.post(url, json=payload, headers=headers, timeout=get_timeout(settings))
+		response = requests.post(url, json=payload, headers=headers, timeout=timeout or get_timeout(settings))
 	except requests.RequestException as e:
 		return request_failure(MSG91, e)
 
@@ -128,7 +134,7 @@ def build_msg91_text_request(settings, mobile: str, body: str, dlt_template_id: 
 	return data
 
 
-def _send_msg91_text(settings, mobile, body, dlt_template_id) -> DeliveryResult:
+def _send_msg91_text(settings, mobile, body, dlt_template_id, timeout=None) -> DeliveryResult:
 	if not body:
 		return DeliveryResult.failed(MSG91, "The message is empty.")
 	auth_key = get_secret(settings, "sms_auth_key")
@@ -140,7 +146,7 @@ def _send_msg91_text(settings, mobile, body, dlt_template_id) -> DeliveryResult:
 			MSG91_SENDHTTP_URL,
 			data=data,
 			headers={"accept": "application/json"},
-			timeout=get_timeout(settings),
+			timeout=timeout or get_timeout(settings),
 		)
 	except requests.RequestException as e:
 		return request_failure(MSG91, e)
@@ -208,7 +214,7 @@ def build_generic_request(
 	return request
 
 
-def _send_generic(settings, mobile, body, dlt_template_id) -> DeliveryResult:
+def _send_generic(settings, mobile, body, dlt_template_id, timeout=None) -> DeliveryResult:
 	if not settings.get("sms_api_url"):
 		return DeliveryResult.failed(GENERIC_HTTP, "The SMS API URL is not set in Messaging Settings.")
 	if not body:
@@ -218,7 +224,7 @@ def _send_generic(settings, mobile, body, dlt_template_id) -> DeliveryResult:
 		settings, mobile, body, dlt_template_id, get_secret(settings, "sms_auth_key")
 	)
 	try:
-		response = requests.request(timeout=get_timeout(settings), **request)
+		response = requests.request(timeout=timeout or get_timeout(settings), **request)
 	except requests.RequestException as e:
 		return request_failure(GENERIC_HTTP, e)
 

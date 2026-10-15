@@ -2,13 +2,15 @@
 # For license information, please see license.txt
 
 import inspect
+import time
 
 import frappe
 from frappe import _
-from frappe.model.document import Document
+from frappe.model.document import DOCUMENT_LOCK_EXPIRY, Document
 from frappe.utils import (
 	add_days,
 	cint,
+	file_lock,
 	flt,
 	format_date,
 	get_last_day,
@@ -17,18 +19,31 @@ from frappe.utils import (
 	nowdate,
 	strip_html,
 )
+from frappe.utils.scheduler import is_scheduler_inactive
 
 from hostel360.hostel_mess import billing
+from hostel360.hostel_mess.permissions import assert_mess_access
 from hostel360.hostel_mess.utils import (
+	BooksChangedError,
 	get_mess_settings,
 	in_migration,
+	lock_mess_books,
 	send_notification,
+	start_books_transaction,
 	student_recipients,
 )
 from hostel360.utils.jinja import format_inr
 
-# Above this many residents the bills are computed by a background worker.
+RUN_MODULE = "hostel360.hostel_mess.doctype.mess_bill_run.mess_bill_run"
+
+# Above this many residents (or bills) the work runs in a background worker: computing the
+# bills, and publishing or cancelling them (one fee invoice per bill).
 BACKGROUND_THRESHOLD = 250
+# Attempts a background publish or cancel makes when the books change under it.
+JOB_ATTEMPTS = 3
+# Progress is reported for runs at least this large, every PROGRESS_STEP bills.
+PROGRESS_MIN_BILLS = 50
+PROGRESS_STEP = 25
 
 BILL_FIELDS = [
 	"name",
@@ -47,6 +62,8 @@ BILL_FIELDS = [
 	"status",
 ]
 
+ACTION_LABELS = {"submit": "publish", "cancel": "cancel"}
+
 
 class MessBillRun(Document):
 	def validate(self):
@@ -57,6 +74,7 @@ class MessBillRun(Document):
 			)
 		if flt(self.other_credits) < 0:
 			frappe.throw(_("Other credits cannot be negative."))
+		assert_mess_access(self.mess, doctype=self.doctype)
 		self.validate_overlap()
 
 		if self.docstatus == 0:
@@ -97,19 +115,17 @@ class MessBillRun(Document):
 			)
 
 	def onload(self):
-		if self.docstatus == 1 and frappe.db.table_exists("Hostel Fee Invoice"):
-			summary = frappe.db.sql(
-				"""
-				select i.status, count(*) as count, sum(i.outstanding_amount) as outstanding
-				from `tabMess Bill` b
-				inner join `tabHostel Fee Invoice` i on i.name = b.fee_invoice
-				where b.mess_bill_run = %(run)s
-				group by i.status
-				""",
-				{"run": self.name},
-				as_dict=True,
-			)
-			self.set_onload("invoice_summary", summary)
+		self.set_onload("runs_in_background", self.should_run_in_background())
+		self.set_onload("action_queued", self.is_action_queued())
+		if self.docstatus == 1:
+			summary = {}
+			for invoice in self.get_current_invoices().values():
+				row = summary.setdefault(
+					invoice.status, frappe._dict(status=invoice.status, count=0, outstanding=0.0)
+				)
+				row.count += 1
+				row.outstanding = flt(row.outstanding + flt(invoice.outstanding_amount), 2)
+			self.set_onload("invoice_summary", list(summary.values()))
 
 	# ------------------------------------------------------------------ compute
 
@@ -175,7 +191,23 @@ class MessBillRun(Document):
 			self.save(ignore_permissions=True)
 		finally:
 			self.flags.from_compute = False
+		self.report_enrolment_changes(result)
 		return result
+
+	def report_enrolment_changes(self, result):
+		"""Point out residents whose mess enrolment changed during (or after) the period."""
+		changed = sorted(result.enrolment_changes)
+		if not changed:
+			return
+		names = ", ".join(frappe.bold(s) for s in changed[:10])
+		more = _(" and {0} more").format(len(changed) - 10) if len(changed) > 10 else ""
+		frappe.msgprint(
+			_(
+				"The mess enrolment of {0} resident(s) changed on or after {1}: {2}{3}. They are charged only for the days they were enrolled; please check their bills before publishing."
+			).format(len(changed), format_date(self.from_date), names, more),
+			title=_("Enrolment Changes"),
+			indicator="orange",
+		)
 
 	def verify_computation(self):
 		"""Refuse to publish bills that no longer match the books."""
@@ -221,17 +253,98 @@ class MessBillRun(Document):
 				title=_("Recompute Required"),
 			)
 
-	# ------------------------------------------------------------------ publish
+	# ------------------------------------------------------------------ publish and cancel
 
-	def before_submit(self):
+	@frappe.whitelist()
+	def submit(self):
+		"""Publish the bills: in a background job for large runs, otherwise right away."""
+		return self.run_publishing_action("submit")
+
+	@frappe.whitelist()
+	def cancel(self):
+		"""Withdraw the bills and their invoices: in a background job for large runs."""
+		return self.run_publishing_action("cancel")
+
+	def run_publishing_action(self, action: str):
+		if self.should_run_in_background():
+			return self.queue_publishing_action(action)
+		# Read the books afresh under the exclusive books lock (see utils.start_books_transaction).
+		start_books_transaction(self.mess)
+		return getattr(self, f"_{action}")()
+
+	def is_action_queued(self) -> bool:
+		"""Whether a publish or cancel is waiting for (or running in) a background worker.
+
+		Reads the document lock directly: Document.is_locked may also add the viewer as a
+		follower, which must not happen while a form is merely being opened.
+		"""
+		if not self.creation:
+			return False
+		signature = self.get_signature()
+		return file_lock.lock_exists(signature) and file_lock.lock_age(signature) <= DOCUMENT_LOCK_EXPIRY
+
+	def should_run_in_background(self) -> bool:
+		if self.flags.in_background_job or not self.creation:
+			return False
+		return cint(self.bills_count) > BACKGROUND_THRESHOLD and not is_scheduler_inactive(verbose=False)
+
+	def queue_publishing_action(self, action: str) -> dict:
+		"""Check what can be checked now, then hand the work to a worker on the long queue."""
+		stored = frappe.get_doc(self.doctype, self.name)
+		if action == "submit":
+			if stored.docstatus != 0:
+				frappe.throw(_("This bill run is already {0}.").format(_(stored.status).lower()))
+			stored.check_permission("submit")
+			stored.check_ready_to_publish()
+		else:
+			if stored.docstatus != 1:
+				frappe.throw(_("Only a published bill run can be cancelled."))
+			stored.check_permission("cancel")
+			stored.check_invoices_unpaid()
+		stored.check_if_locked()
+		stored.lock()
+		frappe.enqueue(
+			f"{RUN_MODULE}.run_publishing_action_in_background",
+			queue="long",
+			timeout=3600,
+			job_id=f"mess-bill-run::{self.name}",
+			deduplicate=True,
+			enqueue_after_commit=True,
+			name=self.name,
+			mess=self.mess,
+			action=action,
+			user=frappe.session.user,
+		)
+		# The caller (for example the desk's save handler) sends this document back to the
+		# browser; it must show the run as it is until the worker has finished.
+		self.docstatus = stored.docstatus
+		self.status = stored.status
+		frappe.msgprint(
+			_(
+				"{0} {1} bills in the background. You can leave this page; it refreshes when the work is done."
+			).format(_("Publishing") if action == "submit" else _("Cancelling"), cint(stored.bills_count)),
+			indicator="blue",
+			alert=True,
+		)
+		return {"queued": True}
+
+	def check_ready_to_publish(self):
 		if self.status != "Computed" or not cint(self.bills_count):
 			frappe.throw(_("Compute the bills before publishing."))
+
+	def before_submit(self):
+		# Exclusive books lock: entries being posted for this mess finish first, later ones
+		# wait for this publish and then find the period closed.
+		lock_mess_books(self.mess, exclusive=True)
+		self.validate_overlap()
+		self.check_ready_to_publish()
 		self.verify_computation()
 		self.due_date = add_days(nowdate(), cint(get_mess_settings().bill_due_days))
 		self.status = "Published"
 
 	def on_submit(self):
 		self.publish_bills()
+		self.update_billed_upto()
 
 	def publish_bills(self):
 		bills = frappe.get_all(
@@ -251,7 +364,7 @@ class MessBillRun(Document):
 		pass_hostel = bool(create_invoice) and "hostel" in inspect.signature(create_invoice).parameters
 
 		published = []
-		for bill in bills:
+		for done, bill in enumerate(bills, start=1):
 			invoice = bill.fee_invoice
 			if not invoice and flt(bill.total_amount) > 0:
 				extra = {"hostel": bill.hostel} if pass_hostel and bill.hostel else {}
@@ -273,10 +386,30 @@ class MessBillRun(Document):
 				self.mark_extras_billed(bill)
 			bill.fee_invoice = invoice
 			published.append(bill)
+			self.report_progress(done, len(bills), _("Publishing mess bills"))
 
 		for bill in published:
 			if flt(bill.total_amount) > 0:
 				self.notify_student(bill)
+
+	def report_progress(self, done: int, total: int, title: str) -> None:
+		if total < PROGRESS_MIN_BILLS or (done % PROGRESS_STEP and done != total):
+			return
+		frappe.publish_progress(
+			done * 100 / total,
+			title=title,
+			doctype=self.doctype,
+			docname=self.name,
+			description=_("{0} of {1} bills").format(done, total),
+		)
+
+	def update_billed_upto(self):
+		"""Record on the mess the last day its published bill runs cover (under the books lock)."""
+		upto = frappe.db.sql(
+			"select max(to_date) from `tabMess Bill Run` where mess = %(mess)s and docstatus = 1",
+			{"mess": self.mess},
+		)[0][0]
+		frappe.db.set_value("Hostel Mess", self.mess, "billed_upto", upto, update_modified=False)
 
 	def get_invoice_items(self, bill) -> list[dict]:
 		"""Invoice lines: mess charges and extras. Bill rounding rides on the larger line."""
@@ -351,9 +484,8 @@ class MessBillRun(Document):
 
 	# ------------------------------------------------------------------ cancel
 
-	def before_cancel(self):
-		invoices = self.get_invoices()
-		paid = billing.get_invoice_payment_state(invoices)
+	def check_invoices_unpaid(self):
+		paid = billing.get_invoice_payment_state(self.get_invoices())
 		if paid:
 			names = ", ".join(row.name for row in paid[:10])
 			more = _(" and {0} more").format(len(paid) - 10) if len(paid) > 10 else ""
@@ -364,6 +496,10 @@ class MessBillRun(Document):
 				).format(len(paid), names, more),
 				title=_("Invoices Already Paid"),
 			)
+
+	def before_cancel(self):
+		lock_mess_books(self.mess, exclusive=True)
+		self.check_invoices_unpaid()
 		self.status = "Cancelled"
 
 	def on_cancel(self):
@@ -371,11 +507,9 @@ class MessBillRun(Document):
 		invoices = self.get_invoices()
 		if invoices:
 			cancel_invoice = billing.get_fees_service("cancel_invoice")
-			open_invoices = frappe.get_all(
-				"Hostel Fee Invoice", filters={"name": ["in", invoices], "docstatus": ["!=", 2]}, pluck="name"
-			)
-			for invoice in open_invoices:
+			for done, invoice in enumerate(invoices, start=1):
 				cancel_invoice(invoice)
+				self.report_progress(done, len(invoices), _("Cancelling mess bill invoices"))
 
 		bill_names = frappe.get_all("Mess Bill", filters={"mess_bill_run": self.name}, pluck="name")
 		if bill_names:
@@ -388,17 +522,31 @@ class MessBillRun(Document):
 				.set(charge.mess_bill, None)
 				.where(charge.mess_bill.isin(bill_names))
 			).run()
+		self.update_billed_upto()
 
 	def on_trash(self):
 		if self.docstatus == 0:
 			frappe.db.delete("Mess Bill", {"mess_bill_run": self.name, "status": "Draft"})
 
 	def get_invoices(self) -> list[str]:
-		return frappe.get_all(
-			"Mess Bill",
-			filters={"mess_bill_run": self.name, "fee_invoice": ["is", "set"]},
-			pluck="fee_invoice",
+		"""Invoices of this run that are not cancelled, including amendments made by the office."""
+		bills = frappe.get_all("Mess Bill", filters={"mess_bill_run": self.name}, pluck="name")
+		return sorted(
+			invoice.name
+			for rows in billing.get_bill_invoices(bills).values()
+			for invoice in rows
+			if invoice.docstatus != 2
 		)
+
+	def get_current_invoices(self, bill_names: list[str] | None = None) -> dict[str, frappe._dict]:
+		"""``{bill: invoice}``: the invoice that stands for each bill of the run now."""
+		if bill_names is None:
+			bill_names = frappe.get_all("Mess Bill", filters={"mess_bill_run": self.name}, pluck="name")
+		return {
+			bill: current
+			for bill, rows in billing.get_bill_invoices(bill_names).items()
+			if (current := billing.get_current_invoice(rows))
+		}
 
 	# ------------------------------------------------------------------ print helpers
 
@@ -406,12 +554,20 @@ class MessBillRun(Document):
 		return billing.get_cost_breakdown(self.mess, self.from_date, self.to_date)
 
 	def get_bills(self) -> list[dict]:
-		return frappe.get_all(
+		"""Bills the viewer may see. get_list applies role and hostel User Permissions, so
+		hostel-scoped staff (deputy wardens, office staff) see only their hostels' rows."""
+		bills = frappe.get_list(
 			"Mess Bill",
 			filters={"mess_bill_run": self.name},
 			fields=BILL_FIELDS,
 			order_by="hostel asc, student asc",
+			limit=0,
 		)
+		current = self.get_current_invoices([b.name for b in bills])
+		for bill in bills:
+			if bill.name in current:
+				bill.fee_invoice = current[bill.name].name
+		return bills
 
 
 @frappe.whitelist(methods=["POST"])
@@ -421,10 +577,11 @@ def compute(name: str) -> dict:
 	run.check_permission("write")
 	if run.docstatus != 0:
 		frappe.throw(_("Bills can be computed only while the bill run is a draft."))
+	assert_mess_access(run.mess, doctype=run.doctype)
 
 	if billing.count_residents(run.mess, run.from_date, run.to_date) > BACKGROUND_THRESHOLD:
 		frappe.enqueue(
-			"hostel360.hostel_mess.doctype.mess_bill_run.mess_bill_run.compute_in_background",
+			f"{RUN_MODULE}.compute_in_background",
 			queue="long",
 			timeout=1800,
 			job_id=f"mess-bill-run-compute::{name}",
@@ -445,7 +602,7 @@ def compute_in_background(name: str, user: str | None = None) -> None:
 	frappe.db.savepoint(savepoint)
 	try:
 		run = frappe.get_doc("Mess Bill Run", name)
-		run.compute_bills()
+		result = run.compute_bills()
 	except frappe.ValidationError as e:
 		frappe.db.rollback(save_point=savepoint)
 		frappe.publish_realtime(
@@ -472,7 +629,103 @@ def compute_in_background(name: str, user: str | None = None) -> None:
 		raise
 	frappe.publish_realtime(
 		"mess_bill_run_computed",
-		{"name": name, "bills_count": run.bills_count, "daily_rate": run.daily_rate},
+		{
+			"name": name,
+			"bills_count": run.bills_count,
+			"daily_rate": run.daily_rate,
+			"enrolment_changes": len(result.enrolment_changes),
+		},
 		user=user,
 		after_commit=True,
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def start_action(name: str, action: str) -> dict:
+	"""Publish (submit) or cancel a bill run from the form, queueing large runs."""
+	if action not in ACTION_LABELS:
+		frappe.throw(_("Unknown action {0}.").format(action))
+	run = frappe.get_doc("Mess Bill Run", name)
+	result = run.submit() if action == "submit" else run.cancel()
+	if isinstance(result, dict):
+		return result
+	return {"queued": False, "status": run.status}
+
+
+def run_publishing_action_in_background(name: str, mess: str, action: str, user: str | None = None) -> None:
+	"""Worker: publish or cancel a bill run, reporting progress and the outcome in real time.
+
+	Each attempt starts a new transaction whose first statement is the exclusive books lock,
+	so the bills are verified against everything committed before the lock. When the books
+	change under an attempt anyway (a deadlock, or snapshot isolation refusing a row), the
+	work is rolled back and tried again.
+	"""
+	if action not in ACTION_LABELS:
+		return
+	for attempt in range(1, JOB_ATTEMPTS + 1):
+		try:
+			# Nothing of this job is pending at this point; end whatever the worker read while
+			# starting up so the lock below opens the transaction and every read follows it.
+			frappe.db.commit()
+			lock_mess_books(mess, exclusive=True)
+			run = frappe.get_doc("Mess Bill Run", name)
+			run.unlock()
+			run.flags.in_background_job = True
+			getattr(run, f"_{action}")()
+			frappe.db.commit()
+		except BooksChangedError, frappe.QueryDeadlockError:
+			frappe.db.rollback()
+			if attempt < JOB_ATTEMPTS:
+				time.sleep(attempt)
+				continue
+			report_background_failure(
+				name,
+				action,
+				user,
+				_("The mess books kept changing while the bills were being processed. Please try again."),
+			)
+			return
+		except (frappe.ValidationError, frappe.PermissionError) as e:
+			frappe.db.rollback()
+			report_background_failure(name, action, user, strip_html(str(e)))
+			return
+		except Exception:
+			frappe.db.rollback()
+			frappe.log_error(
+				title=f"Mess bill run {name}: {ACTION_LABELS[action]} failed",
+				reference_doctype="Mess Bill Run",
+				reference_name=name,
+			)
+			report_background_failure(
+				name,
+				action,
+				user,
+				_("The work failed unexpectedly. The error has been logged for support."),
+			)
+			return
+		frappe.publish_realtime(
+			"mess_bill_run_action_done",
+			{"name": name, "action": action, "status": run.status},
+			user=user,
+		)
+		run.notify_update()
+		return
+
+
+def report_background_failure(name: str, action: str, user: str | None, error: str) -> None:
+	"""Tell the user now, and leave a note on the run for anyone who opens it later.
+
+	Called after the failed work has been rolled back; commits the note (and any error log).
+	"""
+	if frappe.db.exists("Mess Bill Run", name):
+		run = frappe.get_doc("Mess Bill Run", name)
+		run.unlock()
+		label = _("Publishing the bills failed") if action == "submit" else _("Cancelling the bills failed")
+		run.add_comment("Comment", f"{label}: {frappe.utils.escape_html(error)}")
+		frappe.db.commit()
+		run.notify_update()
+	frappe.publish_realtime(
+		"mess_bill_run_action_failed",
+		{"name": name, "action": action, "error": error or _("The work could not be completed.")},
+		user=user,
 	)

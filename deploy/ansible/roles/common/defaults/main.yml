@@ -27,6 +27,8 @@ h360_base_packages:
   - python3
   - python3-debian
   - python3-venv
+  # QR codes on the terminal for h360-2fa-enrol (authenticator app enrolment)
+  - qrencode
   - rsync
   - sysstat
   - unattended-upgrades

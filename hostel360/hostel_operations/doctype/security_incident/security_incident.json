@@ -1,0 +1,286 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 20:00:00.000000",
+ "description": "A cyber security incident that may have to be reported to CERT-In and the institution within six hours of detection.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "title",
+  "category",
+  "severity",
+  "column_break_main",
+  "status",
+  "cert_in_reportable",
+  "personal_data_involved",
+  "ops_alert",
+  "deadline_section",
+  "detected_on",
+  "cert_in_deadline",
+  "reporting_sla_breached",
+  "column_break_deadline",
+  "reported_to_certin_on",
+  "cert_in_reference",
+  "reported_to_institution_on",
+  "institution_contact",
+  "reported_by",
+  "procedure_section",
+  "reporting_procedure",
+  "details_section",
+  "description",
+  "affected_systems",
+  "actions_taken",
+  "closure_section",
+  "assessment_notes",
+  "column_break_closure",
+  "closed_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SINC-.YYYY.-.#####",
+   "default": "SINC-.YYYY.-.#####",
+   "reqd": 1,
+   "hidden": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1,
+   "in_list_view": 1,
+   "bold": 1,
+   "description": "A short description of what happened, e.g. \"Web shell found in an uploaded file\"."
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "label": "CERT-In Category",
+   "options": "\nTargeted scanning or probing of critical networks or systems\nCompromise of critical systems or information\nUnauthorised access to IT systems or data\nWebsite defacement or intrusion\nMalicious code (virus, worm, trojan, bot, spyware, ransomware, cryptominer)\nAttack on servers or network devices (database, mail, DNS, routers)\nIdentity theft, spoofing or phishing\nDenial of service (DoS or DDoS)\nAttack on critical infrastructure, SCADA, operational technology or wireless networks\nAttack on applications (e-governance, e-commerce and similar)\nData breach\nData leak\nAttack on IoT devices and associated systems\nAttack on digital payment systems\nMalicious mobile app\nFake mobile app\nUnauthorised access to social media accounts\nAttack on cloud computing systems or applications\nAttack on big data, blockchain, virtual asset, robotics, 3D/4D printing or drone systems\nAttack on machine-learning systems",
+   "reqd": 1,
+   "in_standard_filter": 1,
+   "description": "Type of cyber security incident as listed in Annexure I of the CERT-In directions of 28 April 2022."
+  },
+  {
+   "fieldname": "severity",
+   "fieldtype": "Select",
+   "label": "Severity",
+   "options": "Low\nMedium\nHigh\nCritical",
+   "default": "High",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nReported\nClosed\nNot Reportable",
+   "default": "Open",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "description": "Becomes Reported automatically once both reports are recorded. Close the incident once it is contained and the follow-up is done."
+  },
+  {
+   "fieldname": "cert_in_reportable",
+   "fieldtype": "Check",
+   "label": "Reportable to CERT-In",
+   "default": "1",
+   "description": "Clear only after assessing that this is not a reportable incident (for example, a false positive); explain why in the assessment notes."
+  },
+  {
+   "fieldname": "personal_data_involved",
+   "fieldtype": "Check",
+   "label": "Personal Data Involved",
+   "description": "Students' or parents' personal data may have been exposed. The Data Protection Board and the affected persons must also be informed (DPDP Act 2023)."
+  },
+  {
+   "fieldname": "ops_alert",
+   "fieldtype": "Link",
+   "label": "Ops Alert",
+   "options": "Ops Alert",
+   "search_index": 1,
+   "description": "The alert that led to this incident, if any."
+  },
+  {
+   "fieldname": "deadline_section",
+   "fieldtype": "Section Break",
+   "label": "Reporting Deadline"
+  },
+  {
+   "fieldname": "detected_on",
+   "fieldtype": "Datetime",
+   "label": "Detected On",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1,
+   "description": "When the incident was first noticed. The six-hour reporting clock starts here."
+  },
+  {
+   "fieldname": "cert_in_deadline",
+   "fieldtype": "Datetime",
+   "label": "Report By",
+   "read_only": 1,
+   "bold": 1,
+   "description": "Detected On plus six hours: CERT-In and the institution must both be informed by then."
+  },
+  {
+   "fieldname": "reporting_sla_breached",
+   "fieldtype": "Check",
+   "label": "Reporting Deadline Missed",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_deadline",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reported_to_certin_on",
+   "fieldtype": "Datetime",
+   "label": "Reported to CERT-In On",
+   "description": "When the report was sent to incident@cert-in.org.in (or through the CERT-In incident reporting form)."
+  },
+  {
+   "fieldname": "cert_in_reference",
+   "fieldtype": "Data",
+   "label": "CERT-In Reference",
+   "description": "Acknowledgement or incident number received from CERT-In."
+  },
+  {
+   "fieldname": "reported_to_institution_on",
+   "fieldtype": "Datetime",
+   "label": "Reported to Institution On"
+  },
+  {
+   "fieldname": "institution_contact",
+   "fieldtype": "Data",
+   "label": "Institution Contact Informed",
+   "description": "Name and designation of the ACGCET official informed, e.g. the Hostel Administrator or the Principal."
+  },
+  {
+   "fieldname": "reported_by",
+   "fieldtype": "Link",
+   "label": "Reported By",
+   "options": "User"
+  },
+  {
+   "fieldname": "procedure_section",
+   "fieldtype": "Section Break",
+   "label": "How to Report",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "reporting_procedure",
+   "fieldtype": "HTML",
+   "label": "Reporting Procedure"
+  },
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Incident Details"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description",
+   "reqd": 1,
+   "description": "What was observed, how it was detected, and what is known about the cause and the impact."
+  },
+  {
+   "fieldname": "affected_systems",
+   "fieldtype": "Small Text",
+   "label": "Affected Systems",
+   "description": "Hosts, services, URLs or accounts involved."
+  },
+  {
+   "fieldname": "actions_taken",
+   "fieldtype": "Text Editor",
+   "label": "Actions Taken",
+   "description": "Containment, evidence preserved (logs, quarantined files, maldet reports) and recovery steps, with times."
+  },
+  {
+   "fieldname": "closure_section",
+   "fieldtype": "Section Break",
+   "label": "Assessment and Closure"
+  },
+  {
+   "fieldname": "assessment_notes",
+   "fieldtype": "Small Text",
+   "label": "Assessment Notes",
+   "description": "Required when the incident is marked not reportable or closed."
+  },
+  {
+   "fieldname": "column_break_closure",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Operations",
+ "name": "Security Incident",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "write": 1
+  },
+  {
+   "role": "HyFib Operations",
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "write": 1
+  },
+  {
+   "role": "Institution Auditor",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "Hostel Administrator",
+   "print": 1,
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "show_title_field_in_link": 1,
+ "track_changes": 1
+}

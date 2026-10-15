@@ -33,8 +33,11 @@ IGNORE_TEST_RECORD_DEPENDENCIES = [
 ]
 
 TEST_KEY_ID = "rzp_test_H360UnitTests"
+LIVE_KEY_ID = "rzp_live_H360UnitTests"
 TEST_KEY_SECRET = "unit-test-key-secret"  # noqa: S105
 TEST_WEBHOOK_SECRET = "unit-test-webhook-secret"  # noqa: S105
+PAYU_KEY = "h360UTkey"
+PAYU_SALT = "h360-unit-test-salt"  # noqa: S105
 
 
 def unique(prefix: str = "") -> str:
@@ -180,20 +183,33 @@ def make_payment(student: str, allocations: list[tuple[str, float]], mode: str =
 	return doc
 
 
-def configure_gateway(enabled: int = 1, webhook_secret: str | None = TEST_WEBHOOK_SECRET, expiry: int = 60):
+def configure_gateway(
+	enabled: int = 1,
+	webhook_secret: str | None = TEST_WEBHOOK_SECRET,
+	expiry: int = 60,
+	live: bool = False,
+	gateway: str = "Razorpay",
+	test_payers: list[str] | None = None,
+	key_secret: str | None = TEST_KEY_SECRET,
+	payu_salt: str | None = PAYU_SALT,
+):
+	"""Hostel Payment Settings for tests. ``live`` uses live-mode credentials (real money)."""
 	settings = frappe.get_single(SETTINGS)
 	settings.update(
 		{
 			"enabled": enabled,
-			"gateway": "Razorpay",
-			"test_mode": 1,
-			"key_id": TEST_KEY_ID,
-			"key_secret": TEST_KEY_SECRET,
+			"gateway": gateway,
+			"test_mode": 0 if live else 1,
+			"key_id": LIVE_KEY_ID if live else TEST_KEY_ID,
+			"key_secret": key_secret or "",
 			"webhook_secret": webhook_secret or "",
+			"payu_merchant_key": PAYU_KEY,
+			"payu_merchant_salt": payu_salt or "",
 			"transaction_expiry_minutes": expiry,
 			"merchant_display_name": "Test Hostels",
 		}
 	)
+	settings.set("test_payers", [{"student": student} for student in test_payers or []])
 	settings.flags.ignore_permissions = True
 	settings.save()
 	frappe.clear_document_cache(SETTINGS, SETTINGS)
@@ -270,6 +286,8 @@ class FakeRazorpay:
 		self.orders = {}
 		self.payments = {}
 		self.fail_next = None
+		# {order_id: response} for orders the API cannot read
+		self.unreadable_orders = {}
 
 	def __call__(self, method, url, auth=None, json=None, params=None, timeout=None, headers=None):
 		self.calls.append(
@@ -296,6 +314,8 @@ class FakeRazorpay:
 			return FakeResponse(200, self.orders[order_id])
 		if method == "GET" and path.startswith("/orders/") and path.endswith("/payments"):
 			order_id = path.split("/")[2]
+			if order_id in self.unreadable_orders:
+				return self.unreadable_orders[order_id]
 			items = [p for p in self.payments.values() if p["order_id"] == order_id]
 			return FakeResponse(200, {"entity": "collection", "count": len(items), "items": items})
 		if method == "GET" and path.startswith("/payments/"):
@@ -356,3 +376,148 @@ class FeeTestCase(IntegrationTestCase):
 
 	def alerts_in(self, category: str) -> list:
 		return [call for call in self.alerts.call_args_list if call.kwargs.get("category") == category]
+
+
+# -- PayU ------------------------------------------------------------------------------------
+# Hashes are computed here from PayU's published formulas, independently of the adapter, so the
+# tests check the adapter against the specification rather than against itself.
+
+UDFS = tuple(f"udf{i}" for i in range(1, 11))
+
+
+def payu_sha512(*parts) -> str:
+	return hashlib.sha512("|".join(str(part) for part in parts).encode()).hexdigest()
+
+
+def payu_request_hash(fields: dict, salt: str = PAYU_SALT) -> str:
+	return payu_sha512(
+		fields["key"],
+		fields["txnid"],
+		fields["amount"],
+		fields["productinfo"],
+		fields["firstname"],
+		fields["email"],
+		*(fields.get(name, "") for name in UDFS),
+		salt,
+	)
+
+
+def payu_response_hash(fields: dict, salt: str = PAYU_SALT) -> str:
+	parts = [
+		salt,
+		fields["status"],
+		*(fields.get(name, "") for name in reversed(UDFS)),
+		fields["email"],
+		fields["firstname"],
+		fields["productinfo"],
+		fields["amount"],
+		fields["txnid"],
+		fields["key"],
+	]
+	if fields.get("additionalCharges"):
+		parts.insert(0, fields["additionalCharges"])
+	return payu_sha512(*parts)
+
+
+class FakePayU:
+	"""Minimal in-memory PayU merchant API (``postservice.php?form=2``) used through ``requests.post``.
+
+	Rejects calls whose command hash is wrong, as PayU does, and records every call in ``calls``.
+	"""
+
+	def __init__(self, key: str = PAYU_KEY, salt: str = PAYU_SALT):
+		self.key = key
+		self.salt = salt
+		self.calls = []
+		self.transactions = {}
+		self.fail_next = None
+
+	def __call__(self, url, data=None, timeout=None, headers=None):
+		data = dict(data or {})
+		self.calls.append({"url": url, "data": data, "timeout": timeout})
+		if self.fail_next:
+			failure, self.fail_next = self.fail_next, None
+			if isinstance(failure, Exception):
+				raise failure
+			return failure
+		expected = payu_sha512(data.get("key"), data.get("command"), data.get("var1"), self.salt)
+		if data.get("key") != self.key or data.get("hash") != expected:
+			return FakeResponse(200, {"status": 0, "msg": "Invalid Hash."})
+		var1 = data.get("var1")
+		if data.get("command") == "verify_payment":
+			record = self.transactions.get(var1) or {"mihpayid": "Not Found", "status": "Not Found"}
+			found = 0 if record.get("status") == "Not Found" else 1
+			return FakeResponse(
+				200,
+				{
+					"status": found,
+					"msg": f"{found} out of 1 Transactions Fetched Successfully",
+					"transaction_details": {var1: record},
+				},
+			)
+		if data.get("command") == "check_payment":
+			record = next((t for t in self.transactions.values() if t["mihpayid"] == var1), None)
+			if not record:
+				return FakeResponse(200, {"status": 0, "msg": "No transaction found", "transaction_details": {}})
+			return FakeResponse(200, {"status": 1, "msg": "Transaction Fetched", "transaction_details": record})
+		return FakeResponse(200, {"status": 0, "msg": "Unknown command"})
+
+	def pay(
+		self,
+		checkout: dict,
+		status: str = "success",
+		unmapped: str = "captured",
+		amount: str | None = None,
+		**extra,
+	) -> dict:
+		"""Record a PayU transaction for the posted checkout form; returns the verify API record."""
+		fields = checkout["fields"]
+		record = {
+			"mihpayid": str(random.randint(10**11, 10**12 - 1)),
+			"txnid": fields["txnid"],
+			"amt": amount or fields["amount"],
+			"transaction_amount": amount or fields["amount"],
+			"status": status,
+			"unmappedstatus": unmapped,
+			"mode": "UPI",
+			"bankcode": "UPI",
+			"PG_TYPE": "UPI-PG",
+			"bank_ref_num": str(random.randint(10**9, 10**10 - 1)),
+			"productinfo": fields["productinfo"],
+			"firstname": fields["firstname"],
+			"udf1": fields.get("udf1", ""),
+			"error_code": "E000" if status == "success" else "E308",
+			"error_Message": "NO ERROR" if status == "success" else "Transaction declined",
+			"addedon": time.strftime("%Y-%m-%d %H:%M:%S"),
+			**extra,
+		}
+		self.transactions[fields["txnid"]] = record
+		return record
+
+	def return_fields(
+		self, checkout: dict, record: dict | None = None, status: str | None = None, **overrides
+	) -> dict:
+		"""What PayU posts to surl/furl for ``record``, signed with the merchant salt."""
+		sent = checkout["fields"]
+		record = record or {}
+		fields = {
+			"mihpayid": record.get("mihpayid", "403993715500000000"),
+			"mode": record.get("mode", "UPI"),
+			"status": status or record.get("status", "success"),
+			"unmappedstatus": record.get("unmappedstatus", "captured"),
+			"key": sent["key"],
+			"txnid": sent["txnid"],
+			"amount": sent["amount"],
+			"productinfo": sent["productinfo"],
+			"firstname": sent["firstname"],
+			"email": sent["email"],
+			"phone": sent["phone"],
+			"udf1": sent.get("udf1", ""),
+			"field9": record.get("error_Message", ""),
+			"error": record.get("error_code", "E000"),
+			"error_Message": record.get("error_Message", "NO ERROR"),
+			"bank_ref_num": record.get("bank_ref_num", ""),
+		}
+		fields.update(overrides)
+		fields["hash"] = payu_response_hash(fields, self.salt)
+		return fields

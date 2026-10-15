@@ -8,6 +8,8 @@ from frappe import _
 from frappe.query_builder.functions import Sum
 from frappe.utils import add_days, add_months, date_diff, flt, format_date, get_first_day, getdate, nowdate
 
+from hostel360.hostel_mess.permissions import assert_mess_access, get_permitted_messes
+
 MAX_DAILY_COLUMNS = 62
 
 
@@ -85,7 +87,15 @@ def get_issues(filters, from_date, to_date):
 		.groupby(ledger.item, item.local_name, item.category, item.uom, ledger.posting_date)
 	)
 	if filters.mess:
+		assert_mess_access(filters.mess, doctype="Mess Stock Ledger Entry")
 		query = query.where(ledger.mess == filters.mess)
+	else:
+		# Staff limited to some hostels see only the messes serving them.
+		permitted = get_permitted_messes(doctype="Mess Stock Ledger Entry")
+		if permitted is not None:
+			if not permitted:
+				return []
+			query = query.where(ledger.mess.isin(sorted(permitted)))
 	if filters.item:
 		query = query.where(ledger.item == filters.item)
 	if filters.category:

@@ -23,6 +23,7 @@ import type {
 	Ok,
 	PortalNotification,
 	PortalSession,
+	PrivacyNotice,
 	Profile,
 	ProfileUpdates,
 	UploadResult,
@@ -33,14 +34,21 @@ import type {
 const PORTAL = "hostel360.api.portal";
 const m = (name: string) => `${PORTAL}.${name}`;
 
-type StudentArg = string | null | undefined;
+export type StudentArg = string | null | undefined;
 const forStudent = (student: StudentArg) => (student ? { student } : {});
 
 // Session and consent
 
 export const getSession = () => call<PortalSession>(m("get_session"));
 
+/** The institution's notice (readable before sign-in too) and, when signed in, what was accepted. */
+export const getPrivacyNotice = () => call<PrivacyNotice>(m("get_privacy_notice"), undefined, { method: "GET" });
+
 export const acceptPrivacyNotice = (version: string) => call<Ok>(m("accept_privacy_notice"), { version });
+
+/** Keep the server's messages and notifications in the language chosen on screen. */
+export const setLanguage = (lang: "en" | "ta") =>
+	call<{ ok: boolean; language: string }>(m("set_language"), { lang });
 
 export const getDashboard = (student?: StudentArg) => call<Dashboard>(m("get_dashboard"), forStudent(student));
 
@@ -68,6 +76,10 @@ export const verifyPayment = (transaction: string, response: CheckoutResponse) =
 		razorpay_order_id: response.razorpay_order_id,
 		razorpay_signature: response.razorpay_signature,
 	});
+
+/** Outcome of a payment, asked after a redirect checkout (PayU) brings the payer back. */
+export const getPaymentStatus = (transaction: string) =>
+	call<VerifyPaymentResult>(m("get_payment_status"), { transaction });
 
 export const downloadReceipt = (payment: string): Promise<DownloadedFile> =>
 	callFile(m("download_receipt"), { payment }, `${payment}.pdf`);
@@ -121,10 +133,12 @@ export const reopenGrievance = (name: string, reason: string) => call<Ok>(m("reo
 export const rateGrievance = (name: string, rating: number, feedback?: string) =>
 	call<Ok>(m("rate_grievance"), { name, rating, feedback: feedback || undefined });
 
-export function uploadAttachment(file: File, purpose: "grievance" = "grievance"): Promise<UploadResult> {
+/** For a parent, `student` is the ward the grievance is for: the upload is checked against that ward. */
+export function uploadAttachment(file: File, student?: StudentArg, purpose: "grievance" = "grievance"): Promise<UploadResult> {
 	const form = new FormData();
 	form.append("file", file, file.name);
 	form.append("purpose", purpose);
+	if (student) form.append("student", student);
 	return upload<UploadResult>(m("upload_attachment"), form);
 }
 

@@ -24,17 +24,80 @@ frappe.ui.form.on("Mess Bill Run", {
 					message: __("{0} bills computed at {1} per day", [data.bills_count, format_currency(data.daily_rate)]),
 					indicator: "green",
 				});
+				if (data.enrolment_changes) {
+					frappe.msgprint({
+						title: __("Enrolment Changes"),
+						message: __(
+							"The mess enrolment of {0} resident(s) changed during or after this period. They are charged only for the days they were enrolled; please check their bills before publishing.",
+							[data.enrolment_changes]
+						),
+						indicator: "orange",
+					});
+				}
 				frm.reload_doc();
 			});
 			frappe.realtime.on("mess_bill_run_compute_failed", (data) => {
 				if (data.name !== frm.doc.name) return;
 				frappe.msgprint({ title: __("Could Not Compute Bills"), message: data.error, indicator: "red" });
 			});
+			frappe.realtime.on("mess_bill_run_action_done", (data) => {
+				if (data.name !== frm.doc.name) return;
+				frappe.show_alert({
+					message:
+						data.action === "submit"
+							? __("Mess bills published.")
+							: __("Bill run cancelled and its invoices withdrawn."),
+					indicator: "green",
+				});
+				frm.reload_doc();
+			});
+			frappe.realtime.on("mess_bill_run_action_failed", (data) => {
+				if (data.name !== frm.doc.name) return;
+				frappe.msgprint({
+					title: data.action === "submit" ? __("Could Not Publish Bills") : __("Could Not Cancel Bill Run"),
+					message: data.error,
+					indicator: "red",
+				});
+				frm.reload_doc();
+			});
 		}
+	},
+
+	before_submit(frm) {
+		return frm.events.run_in_background(frm, "submit");
+	},
+
+	before_cancel(frm) {
+		return frm.events.run_in_background(frm, "cancel");
+	},
+
+	run_in_background(frm, action) {
+		// Large runs create or cancel one invoice per bill, which takes too long for a page
+		// request: hand them to a background worker instead of the standard submit/cancel.
+		if (!frm.doc.__onload?.runs_in_background) return;
+		frappe.validated = false;
+		// Resolve whatever happens, so the form re-enables its buttons after an error message.
+		return new Promise((resolve) => {
+			frappe.call({
+				method: `${MESS_BILL_RUN_METHOD}.start_action`,
+				args: { name: frm.doc.name, action },
+				freeze: true,
+				callback: () => frm.reload_doc(),
+				always: () => resolve(),
+			});
+		});
 	},
 
 	refresh(frm) {
 		frm.events.show_summary(frm);
+
+		if (frm.doc.__onload?.action_queued) {
+			frm.set_intro(
+				__("Bills are being published or cancelled in the background. This page refreshes when it is done."),
+				"blue"
+			);
+			return;
+		}
 
 		if (frm.doc.docstatus === 0 && !frm.is_new()) {
 			const button = frm.add_custom_button(__("Compute Bills"), () => frm.events.compute(frm));

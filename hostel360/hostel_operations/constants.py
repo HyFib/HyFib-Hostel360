@@ -62,6 +62,12 @@ EVENT_LABELS = {
 	"test": "Test notification",
 }
 
+# CERT-In directions of 28 April 2022: reportable incidents are reported within six hours
+# of being noticed. Security Incidents warn at four hours and flag a breach at six.
+CERT_IN_REPORTING_HOURS = 6
+CERT_IN_WARNING_HOURS = 4
+SECURITY_INCIDENT_DOCTYPE = "Security Incident"
+
 # A key that is resolved and raised again within this window re-opens the same alert
 # (and stays quiet) instead of paging people for a flapping check.
 REOPEN_WINDOW_MINUTES = 15

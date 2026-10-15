@@ -23,6 +23,7 @@ const invoices = [
 	invoice("INV-2026-00002", 2500, { invoice_type: "Mess Bill", status: "Overdue" }),
 	invoice("INV-2026-00003", 800, { payment_in_progress: true }),
 	invoice("INV-2026-00004", 0),
+	invoice("INV-2026-00005", 600, { status: "Cancelled" }),
 ];
 
 function mountList() {
@@ -41,10 +42,18 @@ describe("InvoiceList selection", () => {
 	it("offers checkboxes only for invoices that can be paid now", () => {
 		wrapper = mountList();
 		const boxes = wrapper.findAll('input[type="checkbox"]');
-		expect(boxes).toHaveLength(2);
-		expect(wrapper.find('[data-invoice="INV-2026-00003"] input[type="checkbox"]').exists()).toBe(false);
+		expect(boxes).toHaveLength(3);
 		expect(wrapper.find('[data-invoice="INV-2026-00004"] input[type="checkbox"]').exists()).toBe(false);
+		expect(wrapper.find('[data-invoice="INV-2026-00005"] input[type="checkbox"]').exists()).toBe(false);
 		expect(wrapper.find('[data-test="selected-total"]').exists()).toBe(false);
+	});
+
+	it("keeps an invoice whose checkout was abandoned payable, marked as in progress", () => {
+		// The server hands back the same open order, so the payer is never locked out for an hour.
+		wrapper = mountList();
+		const row = wrapper.find('[data-invoice="INV-2026-00003"]');
+		expect(row.find('input[type="checkbox"]').exists()).toBe(true);
+		expect(row.text()).toContain("Payment in progress");
 	});
 
 	it("adds up the outstanding amounts of the selected invoices", async () => {
@@ -63,9 +72,9 @@ describe("InvoiceList selection", () => {
 	it("selects all payable invoices at once and pays them", async () => {
 		wrapper = mountList();
 		await wrapper.find('[data-test="select-all"]').trigger("click");
-		expect(wrapper.props("modelValue")).toEqual(["INV-2026-00001", "INV-2026-00002"]);
+		expect(wrapper.props("modelValue")).toEqual(["INV-2026-00001", "INV-2026-00002", "INV-2026-00003"]);
 
 		await wrapper.find('[data-test="pay-selected"]').trigger("click");
-		expect(wrapper.emitted("pay")).toEqual([[["INV-2026-00001", "INV-2026-00002"]]]);
+		expect(wrapper.emitted("pay")).toEqual([[["INV-2026-00001", "INV-2026-00002", "INV-2026-00003"]]]);
 	});
 });

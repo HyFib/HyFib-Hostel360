@@ -20,6 +20,7 @@ LEFT_STATUSES = ("Vacated", "Alumni")
 # Maintained by allotments, the validation actions and the portal services only.
 SYSTEM_FIELDS = (
 	"current_hostel",
+	"last_hostel",
 	"current_room",
 	"current_bed",
 	"current_allotment",
@@ -33,6 +34,9 @@ SYSTEM_FIELDS = (
 	"privacy_consent_on",
 )
 SYSTEM_FIELD_DEFAULTS = {"validation_status": "Pending", "profile_confirmed": 0}
+
+# The only protected fields the validate and reject actions write.
+VALIDATION_FIELDS = ("validation_status", "validated_by", "validated_on", "rejection_reason")
 
 
 class HostelStudent(Document):
@@ -132,6 +136,9 @@ class HostelStudent(Document):
 	@frappe.whitelist(methods=["POST"])
 	def mark_validated(self) -> None:
 		"""Confirm the registration after checking it against admission records."""
+		# The form sends its own copy of the record with the call. Work from the stored one,
+		# so neither the checks below nor the save can use values the browser supplied.
+		self.reload()
 		if not self.can_validate():
 			frappe.throw(_("You are not permitted to validate students."), frappe.PermissionError)
 		if self.validation_status == "Validated":
@@ -141,7 +148,7 @@ class HostelStudent(Document):
 		self.validated_by = frappe.session.user
 		self.validated_on = now_datetime()
 		self.rejection_reason = None
-		self.flags.allow_system_fields = True
+		self.flags.allow_system_fields = VALIDATION_FIELDS
 		self.save()
 		self.add_comment("Info", _("Registration validated"))
 
@@ -162,6 +169,7 @@ class HostelStudent(Document):
 	@frappe.whitelist(methods=["POST"])
 	def mark_rejected(self, reason: str) -> None:
 		"""Reject a registration that does not match admission records."""
+		self.reload()
 		if not self.can_validate():
 			frappe.throw(_("You are not permitted to reject students."), frappe.PermissionError)
 		reason = (reason or "").strip()
@@ -174,7 +182,7 @@ class HostelStudent(Document):
 		self.validated_by = frappe.session.user
 		self.validated_on = now_datetime()
 		self.rejection_reason = reason
-		self.flags.allow_system_fields = True
+		self.flags.allow_system_fields = VALIDATION_FIELDS
 		self.save()
 		self.add_comment("Info", _("Registration rejected: {0}").format(reason))
 

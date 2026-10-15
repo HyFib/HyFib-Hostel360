@@ -27,7 +27,16 @@ from urllib.parse import quote
 
 import frappe
 from frappe import _
-from frappe.utils import add_to_date, cint, get_datetime, getdate, now_datetime, strip_html
+from frappe.rate_limiter import rate_limit
+from frappe.utils import (
+	add_to_date,
+	cint,
+	get_datetime,
+	get_system_timezone,
+	getdate,
+	now_datetime,
+	strip_html,
+)
 
 from hostel360.setup.roles import PORTAL_ROLES
 from hostel360.utils.context import require_portal_identity
@@ -40,6 +49,7 @@ STUDENT_DOCTYPE = "Hostel Student"
 GUARDIAN_DOCTYPE = "Hostel Guardian"
 LEAVE = "Home Visit Leave"
 GRIEVANCE = "Hostel Grievance"
+GRIEVANCE_UPDATE = "Hostel Grievance Update"
 FEEDBACK = "Hostel Feedback"
 BONAFIDE = "Bonafide Certificate Request"
 REDUCTION = "Mess Reduction Application"
@@ -50,11 +60,31 @@ NOTIFICATION_LOG = "Notification Log"
 PORTAL_SWITCHES = {STUDENT: "student_portal_enabled", PARENT: "parent_portal_enabled"}
 PORTAL_HOME = "/hostel"
 PHOTO_ENDPOINT = "/api/method/hostel360.api.portal.download_photo"
+ATTACHMENT_ENDPOINT = "/api/method/hostel360.api.portal.download_grievance_attachment"
+
+# Full portal features need a validated student whose record is Active (design 4.2, TR 3.1).
+ACTIVE = "Active"
+VALIDATED = "Validated"
+CLOSED_STUDENT_STATUSES = ("Vacated", "Alumni")
+
+# Languages the portal is offered in; server messages follow the user's choice (User.language).
+PORTAL_LANGUAGES = ("en", "ta")
+
+# Payment transactions that may still settle, and the gateway checkout style that reports back
+# through a browser redirect (PayU) rather than a JavaScript callback (Razorpay).
+OPEN_TRANSACTION_STATUSES = ("Initiated", "Pending")
+FAILED_TRANSACTION_STATUSES = ("Failed", "Expired")
+SUCCESS_TRANSACTION_STATUS = "Success"
+REFUNDED_TRANSACTION_STATUS = "Refunded"
+REDIRECT_CHECKOUT = "redirect"
 
 # Statuses used for the "waiting for a decision" counters on the dashboard. The owning
 # modules define them; these are the fallbacks while a module is being installed.
 LEAVE_PENDING_STATUSES = ("Pending Parent Approval", "Pending Warden Approval")
 GRIEVANCE_OPEN_STATUSES = ("Open", "In Progress", "Escalated", "Reopened")
+# Hour of the day before which a departure (or after which a return) still counts the mess day;
+# Home Visit Leave owns the rule, this is the fallback while that module is being installed.
+MESS_DAY_CUTOFF_HOUR = 12
 
 # Field length limits for free text coming from the portal.
 NAME_MAX = 140
@@ -76,10 +106,17 @@ DASHBOARD_NOTIFICATIONS = 5
 
 # Grievance attachments. The File hook in hostel360.security.files applies the same policy
 # again on insert; checking here first gives the portal a clear message before any write.
+# The limits come from that module so the two can never disagree, and get_session hands
+# them to the SPA so its pre-upload checks agree as well.
 UPLOAD_PURPOSES = ("grievance",)
 UPLOAD_FOLDER = "Home/Attachments"
-UPLOAD_EXTENSIONS = frozenset({"pdf", "jpg", "jpeg", "png", "webp"})
-UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+try:
+	from hostel360.security.files import PORTAL_EXTENSIONS as UPLOAD_EXTENSIONS
+	from hostel360.security.files import PORTAL_MAX_BYTES as UPLOAD_MAX_BYTES
+except ImportError:
+	UPLOAD_EXTENSIONS = frozenset({"pdf", "jpg", "jpeg", "png", "webp"})
+	UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+ATTACHMENT_INLINE_EXTENSIONS = frozenset({"pdf", "jpg", "jpeg", "png", "webp"})
 # Uploads not attached to a grievance within a day are removed by delete_stale_uploads().
 UNATTACHED_UPLOADS_PER_DAY = 20
 STALE_UPLOAD_HOURS = 24
@@ -93,9 +130,11 @@ HOUR = 60 * MINUTE
 # weak mobile connection, tight enough to stop a script working through one account.
 RATE_LIMITS = {
 	"accept_privacy_notice": (20, HOUR),
+	"set_language": (30, HOUR),
 	"confirm_profile": (20, HOUR),
 	"create_payment": (30, HOUR),
 	"verify_payment": (60, HOUR),
+	"payment_status": (120, HOUR),
 	"download": (60, 10 * MINUTE),
 	"photo": (300, 10 * MINUTE),
 	"apply_mess_reduction": (20, HOUR),
@@ -113,12 +152,29 @@ RATE_LIMITS = {
 	"mark_notifications_read": (120, HOUR),
 }
 
+# The privacy notice is public (it must be readable before a mobile number is entered); this
+# only stops floods. A whole campus may share one public IP address, hence the high ceiling.
+PUBLIC_NOTICE_RATE_LIMIT = 300
+PUBLIC_NOTICE_RATE_WINDOW = MINUTE
+
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 PERIOD_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
+class PortalAccessClosed(frappe.PermissionError):
+	"""The session belongs to a record that may not use the portal now (TR 3.1, 4.1).
+
+	Sign-in already refuses such records; this covers a session that was opened before the
+	record was rejected, closed or un-validated, or before the portal was switched off.
+	"""
+
+
 class PortalValidationPending(frappe.PermissionError):
 	"""The student's registration has not been validated by the hostel office yet."""
+
+
+class PortalStudentInactive(frappe.PermissionError):
+	"""The student is validated but not Active (for example Suspended), so only dues and the basics are open."""
 
 
 class PortalConsentRequired(frappe.PermissionError):
@@ -178,19 +234,62 @@ def _identity(kind: str | None = None) -> frappe._dict:
 			frappe.throw(_("This is available to parents and guardians only."), frappe.PermissionError)
 		frappe.throw(_("This is available to students only."), frappe.PermissionError)
 
+	identity.user = frappe.session.user
+	# The same rule as sign-in, asked again on every call: a session opened before the record
+	# was rejected, closed or switched off must stop working, with the reason shown.
+	reason = _access_blocked_reason(identity)
+	if reason:
+		frappe.throw(reason, PortalAccessClosed, title=_("Portal access"))
+
+	identity.record = _caller_record(identity)
+	return identity
+
+
+def _access_blocked_reason(identity) -> str | None:
+	"""Why the caller may not use the portal now (the sign-in rule of hostel360.auth), or None."""
+	try:
+		from hostel360.auth.events import portal_login_blocked_reason
+	except ImportError:
+		return _local_access_blocked_reason(identity)
+	return portal_login_blocked_reason(identity.user)
+
+
+def _local_access_blocked_reason(identity) -> str | None:
+	"""The sign-in rule (TR 3.1, 4.1), for when the auth module is being reinstalled."""
 	if not _portal_enabled(PORTAL_SWITCHES[identity.kind]):
 		if identity.kind == STUDENT:
-			frappe.throw(_("The student portal is not available right now. Please try again later."), frappe.PermissionError)
-		frappe.throw(_("The parent portal is not available right now. Please try again later."), frappe.PermissionError)
+			return _("The student portal is not available right now. Please try again later.")
+		return _("The parent portal is not available right now. Please try again later.")
 
-	identity.user = frappe.session.user
-	identity.record = _caller_record(identity)
-	if identity.kind == PARENT and identity.record.validation_status == "Rejected":
-		frappe.throw(
-			_("Portal access for this parent record has been closed. Please contact the hostel office."),
-			frappe.PermissionError,
+	if identity.kind == STUDENT:
+		row = frappe.db.get_value(STUDENT_DOCTYPE, identity.student, ["status", "validation_status"], as_dict=True)
+		if not row:
+			return _("Your portal account is not linked to a hostel record. Please contact the hostel office.")
+		if row.validation_status == "Rejected" or row.status in CLOSED_STUDENT_STATUSES:
+			return _("Portal access for this hostel record has been closed. Please contact the hostel office.")
+		if row.validation_status != VALIDATED:
+			return _(
+				"Your hostel registration has not been validated by the hostel office yet. "
+				"You can sign in once it has been validated."
+			)
+		return None
+
+	if frappe.db.get_value(GUARDIAN_DOCTYPE, identity.guardian, "validation_status") == "Rejected":
+		return _("Portal access for this parent record has been closed. Please contact the hostel office.")
+	open_wards = frappe.db.count(
+		STUDENT_DOCTYPE,
+		{
+			"name": ("in", identity.wards or [""]),
+			"validation_status": VALIDATED,
+			"status": ("not in", CLOSED_STUDENT_STATUSES),
+		},
+	)
+	if not open_wards:
+		return _(
+			"The parent portal opens once your ward's hostel registration has been validated "
+			"by the hostel office."
 		)
-	return identity
+	return None
 
 
 def _caller_record(identity) -> frappe._dict:
@@ -226,17 +325,25 @@ def _caller_record(identity) -> frappe._dict:
 	return row
 
 
-def _portal(student: str | None = None, *, kind: str | None = None, full_access: bool = True, write: bool = False):
+def _portal(
+	student: str | None = None,
+	*,
+	kind: str | None = None,
+	full_access: bool = True,
+	write: bool = False,
+	dues: bool = False,
+):
 	"""Resolve the caller and the student a call is about.
 
 	A student may only act for themselves; a parent for one of their wards. When a parent
 	does not say which ward, a read uses the first one, but a write must name the student so a
-	request is never filed for the wrong child.
+	request is never filed for the wrong child. ``dues`` marks the fee endpoints, which stay
+	open for a validated student who is not Active (see ``_assert_full_access``).
 	"""
 	identity = _identity(kind)
 	selected = _select_student(identity, student, write)
 	if full_access:
-		_assert_full_access(identity, selected)
+		_assert_full_access(identity, selected, dues=dues)
 	return frappe._dict(identity=identity, kind=identity.kind, user=identity.user, student=selected)
 
 
@@ -247,6 +354,7 @@ def _portal_for_record(
 	*,
 	kind: str | None = None,
 	full_access: bool = True,
+	dues: bool = False,
 	student_field: str = "student",
 ):
 	"""Resolve the caller for a call naming one record, and check the record is theirs."""
@@ -258,7 +366,7 @@ def _portal_for_record(
 	if student not in identity.wards:
 		frappe.throw(_("You are not permitted to access {0} {1}.").format(label, name), frappe.PermissionError)
 	if full_access:
-		_assert_full_access(identity, student)
+		_assert_full_access(identity, student, dues=dues)
 	return frappe._dict(identity=identity, kind=identity.kind, user=identity.user, student=student, name=name)
 
 
@@ -285,8 +393,13 @@ def _select_student(identity, student, write: bool) -> str:
 	return wards[0]
 
 
-def _assert_full_access(identity, student: str) -> None:
-	"""Full portal features need an accepted privacy notice and a validated student (TR 3.1, 4.1)."""
+def _assert_full_access(identity, student: str, *, dues: bool = False) -> None:
+	"""Full portal features need an accepted privacy notice and a validated, Active student (TR 3.1, 4.1).
+
+	A validated student who is not Active (Applied before moving in, Suspended, or a parent's
+	ward who has since left) still sees and pays their dues: ``dues`` opens just that. Leave,
+	mess, grievances and certificates are for Active residents only.
+	"""
 	if _consent_required(identity.record):
 		frappe.throw(
 			_("Please read and accept the privacy notice to continue."),
@@ -294,10 +407,22 @@ def _assert_full_access(identity, student: str) -> None:
 			title=_("Privacy notice"),
 		)
 
-	row = frappe.db.get_value(STUDENT_DOCTYPE, student, ["full_name", "validation_status"], as_dict=True)
+	row = frappe.db.get_value(STUDENT_DOCTYPE, student, ["full_name", "validation_status", "status"], as_dict=True)
 	status = row.validation_status if row else None
-	if status == "Validated":
-		return
+	if status == VALIDATED:
+		if dues or row.status == ACTIVE:
+			return
+		if identity.kind == STUDENT:
+			message = _(
+				"This is not available while your hostel record is marked {0}. You can still view and pay "
+				"your fees. Please contact the hostel office for anything else."
+			).format(_(row.status or "Inactive"))
+		else:
+			message = _(
+				"This is not available while {0}'s hostel record is marked {1}. You can still view and pay "
+				"the fees. Please contact the hostel office for anything else."
+			).format(row.full_name, _(row.status or "Inactive"))
+		frappe.throw(message, PortalStudentInactive, title=_("Not available"))
 	if status == "Rejected":
 		message = _("This hostel registration was not validated. Please contact the hostel office.")
 	elif identity.kind == STUDENT:
@@ -503,6 +628,9 @@ def get_session() -> dict:
 		"privacy_notice_version": notice_version or None,
 		"privacy_consent_version": record.privacy_consent_version,
 		"unread_notifications": _unread_count(identity.user),
+		# The language server messages are written in for this user; the SPA aligns it with
+		# the language chosen on the device (see set_language).
+		"language": frappe.get_cached_value("User", identity.user, "language") or None,
 		"settings": _session_settings(),
 	}
 
@@ -580,14 +708,30 @@ def _session_settings() -> dict:
 	settings.update(
 		payment_enabled=_optional("payment settings", _payment_enabled) or False,
 		mess_reduction_min_days=_optional("mess settings", _mess_reduction_min_days),
+		mess_day_cutoff_hour=_mess_day_cutoff_hour(),
 		leave_requires_parent_approval=bool(_optional("leave settings", _leave_requires_parent_approval)),
+		# Leave and mess dates are the site's wall-clock time; a phone abroad must compare with it.
+		time_zone=get_system_timezone(),
+		upload={"max_bytes": UPLOAD_MAX_BYTES, "extensions": sorted(UPLOAD_EXTENSIONS)},
 	)
 	return settings
 
 
 def get_branding() -> dict:
-	"""Institution name, logo and HyFib support contacts shown on every portal page."""
-	fields = ("institution_name", "institution_short_name", "institution_logo", "support_phone", "support_email")
+	"""Institution name, logo, hostel office contacts and HyFib support contacts for every portal page.
+
+	The hostel office numbers are what students and parents need for anything about their stay
+	(including emergencies); the HyFib numbers are only for problems with the portal itself.
+	"""
+	fields = (
+		"institution_name",
+		"institution_short_name",
+		"institution_logo",
+		"office_phone",
+		"office_email",
+		"support_phone",
+		"support_email",
+	)
 	values = dict.fromkeys(fields)
 	try:
 		settings = frappe.get_cached_doc("Hostel Settings")
@@ -626,17 +770,43 @@ def _leave_requires_parent_approval() -> bool:
 	return bool(cint(get_setting("leave_requires_parent_approval")))
 
 
-@frappe.whitelist(methods=["GET", "POST"])
+def _mess_day_cutoff_hour() -> int:
+	"""The noon rule Home Visit Leave uses to count full mess days missed (for the leave form)."""
+	try:
+		from hostel360.student_services.doctype.home_visit_leave.home_visit_leave import (
+			MESS_DAY_CUTOFF_HOUR as cutoff,
+		)
+	except ImportError:
+		cutoff = MESS_DAY_CUTOFF_HOUR
+	return cint(cutoff)
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@rate_limit(limit=PUBLIC_NOTICE_RATE_LIMIT, seconds=PUBLIC_NOTICE_RATE_WINDOW)
 def get_privacy_notice() -> dict:
-	"""The current privacy notice and what the caller has accepted."""
+	"""The institution's privacy notice and, for a signed-in caller, what they have accepted.
+
+	Guests may read it too: the notice has to be available before anyone types a mobile number
+	on the sign-in page (DPDP Act 2023, notice before collection).
+	"""
 	from frappe.utils.html_utils import sanitize_html
+
+	notice = sanitize_html(frappe.db.get_single_value("Hostel Settings", "privacy_notice") or "")
+	version = _privacy_notice_version() or None
+	if frappe.session.user == "Guest":
+		return {
+			"version": version,
+			"notice": notice,
+			"accepted_version": None,
+			"accepted_on": None,
+			"consent_required": False,
+		}
 
 	identity = _identity()
 	record = identity.record
-	notice = frappe.db.get_single_value("Hostel Settings", "privacy_notice") or ""
 	return {
-		"version": _privacy_notice_version() or None,
-		"notice": sanitize_html(notice),
+		"version": version,
+		"notice": notice,
 		"accepted_version": record.privacy_consent_version,
 		"accepted_on": record.privacy_consent_on,
 		"consent_required": _consent_required(record),
@@ -653,6 +823,27 @@ def accept_privacy_notice(version: str) -> dict:
 	version = _text(version, _("Version"), 20, required=True, multiline=False)
 	record_privacy_consent(identity.record.doctype, identity.record.name, version)
 	return {"ok": True}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limited("set_language")
+def set_language(lang: str) -> dict:
+	"""Use this language (English or Tamil) for the caller's server messages and notifications.
+
+	Frappe picks the language of a signed-in user from User.language, not from the browser, so
+	the portal's language switch calls this to keep error messages in the language on screen.
+	"""
+	identity = _identity()
+	lang = lang.strip().lower() if isinstance(lang, str) else ""
+	if lang not in PORTAL_LANGUAGES:
+		frappe.throw(_("Please choose English or Tamil."))
+	if not frappe.db.exists("Language", lang):
+		frappe.throw(_("This language is not available on the server yet. Please contact the hostel office."))
+	if frappe.get_cached_value("User", identity.user, "language") != lang:
+		frappe.db.set_value("User", identity.user, "language", lang, update_modified=False)
+	# The rest of this request answers in the new language too.
+	frappe.local.lang = lang
+	return {"ok": True, "language": lang}
 
 
 # ============================================================================ profile
@@ -719,26 +910,36 @@ def get_dashboard(student: str | None = None) -> dict:
 	"""Home screen: room, dues, today's menu, open requests and the latest notifications."""
 	from hostel360.hostel_people.services import get_student_summary
 
-	ctx = _portal(student)
-	summary = _optional("profile", get_student_summary, ctx.student) or {}
-	fees = _optional("fees", _fee_totals, ctx.student)
+	# Dues stay visible for a validated student who is not Active; the rest of the home
+	# screen (menu, open requests) is for residents only and is left out for them.
+	ctx = _portal(student, dues=True)
+	status = frappe.db.get_value(STUDENT_DOCTYPE, ctx.student, "status")
+	restricted = status != ACTIVE
+	unavailable: list[str] = []
+	summary = _optional("profile", get_student_summary, ctx.student, failed=unavailable) or {}
+	fees = _optional("fees", _fee_totals, ctx.student, failed=unavailable)
 	return {
 		"student": ctx.student,
 		"student_name": summary.get("full_name"),
+		"student_status": status,
+		"restricted": restricted,
 		"room": summary.get("room"),
 		"fees": fees,
-		"today_menu": _optional("menu", _today_menu, ctx.student),
-		"pending": _optional("pending", _pending_counts, ctx) or {},
-		"notifications": _notification_rows(ctx.user, DASHBOARD_NOTIFICATIONS),
+		"today_menu": None if restricted else _optional("menu", _today_menu, ctx.student, failed=unavailable),
+		"pending": {} if restricted else (_optional("pending", _pending_counts, ctx, failed=unavailable) or {}),
+		"notifications": _notification_rows(ctx.user, DASHBOARD_NOTIFICATIONS, wards=ctx.identity.wards),
 		"unread_notifications": _unread_count(ctx.user),
+		# Sections that failed to load, so the app never shows an empty section as "nothing due".
+		"unavailable": unavailable,
 	}
 
 
-def _optional(section: str, fn, *args):
+def _optional(section: str, fn, *args, failed: list | None = None):
 	"""Run one part of a composite response; if it fails, log it and leave that part empty.
 
 	The home screen should still open when, say, the mess module has no menu configured.
-	Permission problems are never swallowed.
+	The section is added to ``failed`` so the caller can say it is unavailable rather than
+	empty. Permission problems are never swallowed.
 	"""
 	message_log = frappe.local.message_log
 	messages = len(message_log or [])
@@ -751,6 +952,8 @@ def _optional(section: str, fn, *args):
 			# Drop the error popup the failed part queued; the rest of the response is fine.
 			del message_log[messages:]
 		frappe.log_error(title=f"Hostel360 portal: {section} unavailable", message=frappe.get_traceback())
+		if failed is not None:
+			failed.append(section)
 		return None
 
 
@@ -807,7 +1010,7 @@ def get_fees(student: str | None = None) -> dict:
 	"""Invoices with their items, totals due and the payments made."""
 	from hostel360.hostel_fees.services import get_fee_summary
 
-	ctx = _portal(student)
+	ctx = _portal(student, dues=True)
 	return get_fee_summary(ctx.student)
 
 
@@ -817,7 +1020,7 @@ def create_payment(invoices: list[str] | str, student: str | None = None) -> dic
 	"""Start an online payment for some of the student's invoices; returns the checkout options."""
 	from hostel360.hostel_fees.services import create_payment_order
 
-	ctx = _portal(student, write=True)
+	ctx = _portal(student, write=True, dues=True)
 	names = _name_list(invoices, _("Invoices"), MAX_INVOICES)
 	if not names:
 		frappe.throw(_("Select at least one invoice to pay."))
@@ -847,13 +1050,61 @@ def verify_payment(
 
 
 @frappe.whitelist(methods=["GET", "POST"])
+@rate_limited("payment_status")
+def get_payment_status(transaction: str) -> dict:
+	"""Outcome of one of the caller's online payments: ``{status, payment, receipt_number, transaction, message?}``.
+
+	The fees page asks this after a redirect checkout (PayU) brings the payer back with
+	``?payment=<transaction>``. The query string is never trusted: a payment still open is
+	settled with the gateway here (the same path as the return post), and a closed one is read
+	from the transaction.
+	"""
+	ctx = _portal_for_record(TRANSACTION, transaction, _("Payment"), full_access=False)
+	status, gateway = frappe.db.get_value(TRANSACTION, ctx.name, ["status", "gateway"])
+	if status in OPEN_TRANSACTION_STATUSES and _settles_by_redirect(gateway):
+		from hostel360.hostel_fees.services import confirm_checkout
+
+		return confirm_checkout(ctx.name, {})
+	return _transaction_outcome(ctx.name)
+
+
+def _settles_by_redirect(gateway: str | None) -> bool:
+	try:
+		from hostel360.hostel_fees.gateways import get_gateway_class
+
+		return getattr(get_gateway_class(gateway), "checkout_mode", None) == REDIRECT_CHECKOUT
+	except Exception:
+		# Unknown or retired gateway: report the stored state; reconciliation settles the rest.
+		return False
+
+
+def _transaction_outcome(transaction: str) -> dict:
+	row = frappe.db.get_value(TRANSACTION, transaction, ["name", "status", "payment"], as_dict=True)
+	paid = row.status == SUCCESS_TRANSACTION_STATUS
+	closed = row.status in FAILED_TRANSACTION_STATUSES or row.status == REFUNDED_TRANSACTION_STATUS
+	outcome = {
+		"status": row.status if paid or closed else "Pending",
+		"payment": row.payment if paid else None,
+		"receipt_number": row.payment if paid else None,
+		"transaction": row.name,
+	}
+	if row.status == REFUNDED_TRANSACTION_STATUS:
+		outcome["message"] = _("This payment was refunded. Please contact the hostel office if you need help.")
+	elif closed:
+		outcome["message"] = _("The payment did not go through. You can try again.")
+	elif not paid:
+		outcome["message"] = _("Your payment is being processed. The receipt will appear here shortly.")
+	return outcome
+
+
+@frappe.whitelist(methods=["GET", "POST"])
 @rate_limited("download")
 @frappe.concurrent_limit()
 def download_receipt(payment: str) -> None:
 	"""Fee receipt as PDF."""
 	from hostel360.hostel_fees.services import get_receipt_pdf
 
-	ctx = _portal_for_record(PAYMENT, payment, _("Receipt"))
+	ctx = _portal_for_record(PAYMENT, payment, _("Receipt"), dues=True)
 	_send_pdf(get_receipt_pdf(ctx.name), f"Receipt-{ctx.name}")
 
 
@@ -864,7 +1115,7 @@ def download_fee_structure(student: str | None = None) -> None:
 	"""The fee structure that applies to the student, as PDF."""
 	from hostel360.hostel_fees.services import get_fee_structure_pdf
 
-	ctx = _portal(student)
+	ctx = _portal(student, dues=True)
 	register_number = frappe.db.get_value(STUDENT_DOCTYPE, ctx.student, "register_number") or ctx.student
 	_send_pdf(get_fee_structure_pdf(ctx.student), f"Fee-Structure-{register_number}")
 
@@ -1076,15 +1327,113 @@ def list_grievances(student: str | None = None) -> list[dict]:
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_grievance(name: str) -> dict:
-	"""A grievance with its public timeline (internal staff notes are never included)."""
+	"""A grievance with its public timeline (internal staff notes are never included).
+
+	Attachments are limited to the files raised with the grievance through the portal and are
+	served by ``download_grievance_attachment``: they are private files the student and the
+	parent cannot open directly, and files staff attach on the desk are not for the portal.
+	Each timeline entry says whether the viewer wrote it, so a student never sees a parent's
+	comment labelled as their own.
+	"""
 	from hostel360.student_services.services import get_grievance as grievance_detail
 
 	ctx = _grievance_for(name)
 	detail = grievance_detail(ctx.name)
+	raised_by = frappe.db.get_value(GRIEVANCE, ctx.name, "raised_by_user")
 	if ctx.kind == PARENT:
-		raised_by = frappe.db.get_value(GRIEVANCE, ctx.name, "raised_by_user")
 		detail["can_rate"] = bool(detail.get("can_rate")) and raised_by == ctx.user
+	detail["attachments"] = _grievance_attachments(ctx.name, raised_by)
+	detail["timeline"] = _timeline_for_viewer(ctx.name, detail.get("timeline") or [], ctx.user)
 	return detail
+
+
+def _is_portal_user(user: str | None) -> bool:
+	return bool(user) and bool(PORTAL_ROLES.intersection(frappe.get_roles(user)))
+
+
+def _portal_attachment_rows(grievance: str, raised_by: str | None, fields: list[str], **filters) -> list:
+	"""Files uploaded through the portal by whoever raised the grievance (never desk attachments)."""
+	if not _is_portal_user(raised_by):
+		return []
+	return frappe.get_all(
+		"File",
+		filters={
+			"attached_to_doctype": GRIEVANCE,
+			"attached_to_name": grievance,
+			"owner": raised_by,
+			"is_folder": 0,
+			**filters,
+		},
+		fields=fields,
+		order_by="creation asc",
+	)
+
+
+def _grievance_attachments(grievance: str, raised_by: str | None) -> list[dict]:
+	return [
+		{
+			"name": row.name,
+			"file_name": row.file_name,
+			"file_size": row.file_size,
+			"url": f"{ATTACHMENT_ENDPOINT}?name={quote(grievance, safe='')}&file={quote(row.name, safe='')}",
+		}
+		for row in _portal_attachment_rows(grievance, raised_by, ["name", "file_name", "file_size"])
+	]
+
+
+def _timeline_for_viewer(grievance: str, timeline: list[dict], viewer: str) -> list[dict]:
+	"""Mark the viewer's own entries and show system entries in the viewer's language.
+
+	The public timeline names authors only by display name, so the authors are read again
+	here from the same rows, in the same order. If the two ever disagree (the timeline format
+	changed), nothing is marked as the viewer's rather than risk marking someone else's.
+	"""
+	rows = frappe.get_all(
+		GRIEVANCE_UPDATE,
+		filters={"parent": grievance, "parenttype": GRIEVANCE, "is_internal": 0},
+		fields=["update_by", "message"],
+		order_by="idx asc",
+	)
+	aligned = len(rows) == len(timeline) and all(
+		(row.message or "") == (entry.get("message") or "") for row, entry in zip(rows, timeline, strict=False)
+	)
+	for index, entry in enumerate(timeline):
+		entry["is_mine"] = bool(aligned and rows[index].update_by == viewer)
+		if entry.get("message"):
+			# Entries the system writes ("Grievance registered.") are stored in English; a
+			# message someone typed is not in the catalogue and comes back unchanged.
+			entry["message"] = _(entry["message"])
+	return timeline
+
+
+@frappe.whitelist(methods=["GET"])
+@rate_limited("download")
+def download_grievance_attachment(name: str, file: str) -> None:
+	"""A file raised with the grievance, for the student and (unless confidential) their parents.
+
+	The private file URL only opens for its owner, so the portal serves it after the same
+	checks as the grievance itself.
+	"""
+	ctx = _grievance_for(name)
+	file = _clean_name(file, _("Attachment"))
+	raised_by = frappe.db.get_value(GRIEVANCE, ctx.name, "raised_by_user")
+	rows = _portal_attachment_rows(ctx.name, raised_by, ["name", "file_name"], name=file)
+	if not rows:
+		frappe.throw(_("This attachment was not found."), frappe.DoesNotExistError)
+
+	row = rows[0]
+	# Read the bytes directly: File.get_content() may try to decode them as text.
+	with open(frappe.get_doc("File", row.name).get_full_path(), "rb") as fh:
+		content = fh.read()
+	extension = (row.file_name or "").rsplit(".", 1)[-1].lower()
+	frappe.local.response.filename = row.file_name
+	frappe.local.response.filecontent = content
+	frappe.local.response.content_type = guess_type(row.file_name or "")[0] or "application/octet-stream"
+	frappe.local.response.display_content_as = "inline" if extension in ATTACHMENT_INLINE_EXTENSIONS else "attachment"
+	frappe.local.response.type = "download"
+	headers = getattr(frappe.local, "response_headers", None)
+	if headers is not None:
+		headers.set("Cache-Control", "private, no-store")
 
 
 @frappe.whitelist(methods=["POST"])
@@ -1382,7 +1731,7 @@ def list_notifications(limit: int = 20, start: int = 0) -> list[dict]:
 	"""The caller's in-app notifications, newest first."""
 	identity = _identity()
 	limit = min(max(cint(limit), 1), NOTIFICATION_PAGE_MAX)
-	return _notification_rows(identity.user, limit, max(cint(start), 0))
+	return _notification_rows(identity.user, limit, max(cint(start), 0), wards=identity.wards)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -1400,15 +1749,16 @@ def mark_notifications_read(names: list[str] | str | None = None) -> dict:
 	return {"ok": True}
 
 
-def _notification_rows(user: str, limit: int, start: int = 0) -> list[dict]:
+def _notification_rows(user: str, limit: int, start: int = 0, wards: list[str] | None = None) -> list[dict]:
 	rows = frappe.get_all(
 		NOTIFICATION_LOG,
 		filters={"for_user": user},
-		fields=["name", "subject", "title", "description", "creation", "read", "link"],
+		fields=["name", "subject", "title", "description", "creation", "read", "link", "document_type", "document_name"],
 		order_by="creation desc",
 		start=start,
 		limit=limit,
 	)
+	students = _notification_students(rows, wards or [])
 	return [
 		{
 			"name": row.name,
@@ -1417,9 +1767,47 @@ def _notification_rows(user: str, limit: int, start: int = 0) -> list[dict]:
 			"created": row.creation,
 			"read": bool(cint(row.read)),
 			"link": _portal_link(row.link),
+			"student": students.get(row.name),
 		}
 		for row in rows
 	]
+
+
+def _notification_students(rows: list, wards: list[str]) -> dict:
+	"""Which of the caller's wards each notification is about, so the app opens the right child.
+
+	Only a student the caller may see is ever returned; a notification about anyone else (or
+	about no student) gets none.
+	"""
+	if not wards:
+		return {}
+	names_by_doctype: dict[str, set] = {}
+	for row in rows:
+		if row.document_type and row.document_name:
+			names_by_doctype.setdefault(row.document_type, set()).add(row.document_name)
+
+	owners = {}
+	for doctype, names in names_by_doctype.items():
+		if not _has_student_field(doctype):
+			continue
+		for record in frappe.get_all(doctype, filters={"name": ("in", list(names))}, fields=["name", "student"]):
+			owners[(doctype, record.name)] = record.student
+
+	allowed = set(wards)
+	result = {}
+	for row in rows:
+		student = owners.get((row.document_type, row.document_name))
+		if student in allowed:
+			result[row.name] = student
+	return result
+
+
+def _has_student_field(doctype: str) -> bool:
+	try:
+		return bool(frappe.get_meta(doctype).get_field("student"))
+	except Exception:
+		# A notification about a DocType that no longer exists simply has no student.
+		return False
 
 
 def _unread_count(user: str) -> int:
