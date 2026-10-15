@@ -1,0 +1,44 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-10-15 12:00:00.000000",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": "",
+ "modified": "2026-10-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Mess",
+ "name": "Mess Consumption",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Mess Stock Ledger Entry",
+ "report_name": "Mess Consumption",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "Mess Manager"
+  },
+  {
+   "role": "Mess Staff"
+  },
+  {
+   "role": "Hostel Warden"
+  },
+  {
+   "role": "Deputy Warden"
+  },
+  {
+   "role": "Institution Auditor"
+  },
+  {
+   "role": "System Manager"
+  }
+ ]
+}

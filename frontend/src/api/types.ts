@@ -1,0 +1,399 @@
+/** Shapes of the portal API (docs/SOLUTION-DESIGN.md §6). Optional fields may be absent. */
+
+export type PortalKind = "student" | "parent";
+export type OtpChannel = "sms" | "whatsapp";
+
+export interface SendOtpResult {
+	sent: boolean;
+	masked: string;
+	resend_after: number;
+	expires_in: number;
+}
+
+export interface VerifyOtpResult {
+	ok: boolean;
+	kind?: PortalKind;
+	redirect?: string;
+	choose?: PortalKind[];
+}
+
+export interface Ward {
+	student: string;
+	full_name: string;
+	register_number?: string;
+	photo?: string | null;
+	hostel?: string | null;
+	room?: string | null;
+	bed?: string | null;
+}
+
+export interface PortalSettings {
+	institution_name?: string;
+	institution_short_name?: string;
+	logo?: string | null;
+	support_phone?: string;
+	support_email?: string;
+	office_phone?: string;
+	office_email?: string;
+	payment_enabled?: boolean | number;
+	mess_reduction_min_days?: number;
+	leave_requires_parent_approval?: boolean | number;
+	privacy_notice?: string | null;
+}
+
+export interface PortalSession {
+	user: string;
+	kind: PortalKind;
+	display_name: string;
+	mobile_masked?: string;
+	wards: Ward[];
+	validation_status?: "Pending" | "Validated" | "Rejected" | string;
+	profile_confirmed?: boolean | number;
+	consent_required?: boolean | number;
+	privacy_notice_version?: string;
+	privacy_notice?: string | null;
+	settings: PortalSettings;
+}
+
+export interface RoomInfo {
+	hostel?: string | null;
+	hostel_name?: string | null;
+	block?: string | null;
+	block_name?: string | null;
+	floor_label?: string | null;
+	room?: string | null;
+	room_number?: string | null;
+	room_type?: string | null;
+	bed?: string | null;
+	bed_label?: string | null;
+	from_date?: string | null;
+}
+
+export interface Meal {
+	meal: string;
+	dishes: string;
+	is_special?: boolean | number;
+}
+
+export interface TodayMenu {
+	mess?: string;
+	date?: string;
+	day?: string;
+	meals: Meal[];
+}
+
+export interface PortalNotification {
+	name: string;
+	subject: string;
+	created: string;
+	read: boolean | number;
+	link?: string | null;
+}
+
+export interface Dashboard {
+	student: string;
+	room: RoomInfo | null;
+	fees: { outstanding: number; overdue: number; next_due_date?: string | null; payment_enabled?: boolean };
+	today_menu: TodayMenu | null;
+	pending: { leaves?: number; reductions?: number; grievances?: number; certificates?: number; approvals?: number };
+	notifications: PortalNotification[];
+}
+
+export interface GuardianInfo {
+	guardian: string;
+	guardian_name: string;
+	relation?: string;
+	mobile_masked?: string;
+	is_primary?: boolean | number;
+	can_approve_leave?: boolean | number;
+}
+
+export const PROFILE_EDITABLE_FIELDS = [
+	"email",
+	"address_line1",
+	"address_line2",
+	"city",
+	"district",
+	"state",
+	"pincode",
+	"emergency_contact_name",
+	"emergency_contact_phone",
+	"blood_group",
+] as const;
+export type EditableField = (typeof PROFILE_EDITABLE_FIELDS)[number];
+export type ProfileUpdates = Partial<Record<EditableField, string>>;
+
+export interface Profile extends ProfileUpdates {
+	name: string;
+	register_number?: string;
+	roll_number?: string;
+	full_name?: string;
+	first_name?: string;
+	last_name?: string;
+	gender?: string;
+	date_of_birth?: string | null;
+	photo?: string | null;
+	program?: string;
+	department?: string;
+	year_of_study?: string;
+	academic_year?: string;
+	mobile_masked?: string;
+	status?: string;
+	validation_status?: string;
+	profile_confirmed?: boolean | number;
+	room?: RoomInfo | null;
+	guardians?: GuardianInfo[];
+	editable_fields?: string[];
+	/** Parent profiles */
+	guardian_name?: string;
+	relation?: string;
+	occupation?: string;
+	address?: string;
+	wards?: Ward[];
+}
+
+export interface InvoiceItem {
+	fee_head: string;
+	description?: string | null;
+	amount: number;
+}
+
+export interface Invoice {
+	name: string;
+	invoice_type: string;
+	academic_year?: string;
+	posting_date: string;
+	due_date?: string | null;
+	total_amount: number;
+	paid_amount: number;
+	outstanding_amount: number;
+	status: string;
+	items: InvoiceItem[];
+	payment_in_progress?: boolean;
+}
+
+export interface PaymentRecord {
+	name: string;
+	payment_date: string;
+	amount: number;
+	mode_of_payment: string;
+	reference_no?: string | null;
+}
+
+export interface FeesSummary {
+	outstanding: number;
+	overdue: number;
+	overdue_count?: number;
+	next_due_date?: string | null;
+	invoices: Invoice[];
+	payments: PaymentRecord[];
+	payment_enabled?: boolean;
+}
+
+export interface CheckoutOptions {
+	key: string;
+	order_id: string;
+	amount: number;
+	currency: string;
+	name: string;
+	description: string;
+	image?: string;
+	prefill: { name?: string; email?: string; contact?: string };
+	notes?: Record<string, string>;
+}
+
+export interface CreatePaymentResult {
+	transaction: string;
+	gateway: string;
+	amount?: number;
+	test_mode?: number;
+	checkout: CheckoutOptions;
+}
+
+export interface VerifyPaymentResult {
+	status: "Success" | "Pending" | "Failed" | string;
+	payment: string | null;
+	receipt_number: string | null;
+	transaction?: string;
+	message?: string;
+}
+
+export interface MenuDay {
+	date: string;
+	day: string;
+	is_today?: boolean;
+	meals: Meal[];
+}
+
+export interface WeekMenu {
+	mess: string | null;
+	week_start: string;
+	week_end: string;
+	published?: boolean;
+	notes?: string | null;
+	days: MenuDay[];
+}
+
+export interface MessBill {
+	name: string;
+	from_date: string;
+	to_date: string;
+	enrolled_days?: number;
+	reduction_days?: number;
+	chargeable_days: number;
+	daily_rate: number;
+	mess_charge: number;
+	extras_amount: number;
+	total_amount: number;
+	fee_invoice?: string | null;
+	invoice_status?: string | null;
+	outstanding_amount?: number;
+	due_date?: string | null;
+}
+
+export interface MessReduction {
+	name: string;
+	from_date: string;
+	to_date: string;
+	number_of_days: number;
+	reason: string;
+	description?: string | null;
+	status: string;
+	approval_remarks?: string | null;
+	decided_on?: string | null;
+	home_visit_leave?: string | null;
+	applied_on?: string;
+	can_cancel?: boolean;
+}
+
+export interface MessReductionInput {
+	from_date: string;
+	to_date: string;
+	reason: string;
+	description?: string;
+}
+
+export interface Leave {
+	name: string;
+	student?: string;
+	student_name?: string;
+	from_datetime: string;
+	to_datetime: string;
+	number_of_days?: number;
+	destination: string;
+	reason: string;
+	contact_during_leave?: string;
+	applied_by?: string;
+	status: string;
+	parent_approval_status?: string;
+	parent_remarks?: string | null;
+	warden_approval_status?: string;
+	warden_remarks?: string | null;
+	apply_mess_reduction?: boolean | number;
+	mess_reduction?: string | null;
+	checked_out_on?: string | null;
+	returned_on?: string | null;
+	creation?: string;
+	can_cancel?: boolean;
+}
+
+export interface LeaveInput {
+	from_datetime: string;
+	to_datetime: string;
+	destination: string;
+	reason: string;
+	contact_during_leave: string;
+	apply_mess_reduction: 0 | 1;
+}
+
+export interface GrievanceSummary {
+	name: string;
+	subject: string;
+	category: string;
+	priority: string;
+	status: string;
+	is_confidential?: boolean | number;
+	creation: string;
+	modified?: string;
+	resolved_on?: string | null;
+	student_rating?: number | null;
+}
+
+export interface TimelineEntry {
+	on: string;
+	by: string;
+	is_staff?: boolean;
+	message: string;
+	status_change?: string | null;
+}
+
+export interface Attachment {
+	name?: string;
+	file_name: string;
+	file_url: string;
+	file_size?: number;
+}
+
+export interface Grievance extends GrievanceSummary {
+	description: string;
+	sla_due_by?: string | null;
+	assigned?: boolean;
+	resolution?: string | null;
+	student_feedback?: string | null;
+	can_comment?: boolean;
+	can_reopen?: boolean;
+	can_rate?: boolean;
+	attachments?: Attachment[];
+	timeline: TimelineEntry[];
+}
+
+export interface GrievanceInput {
+	category: string;
+	subject: string;
+	description: string;
+	priority: string;
+	is_confidential: 0 | 1;
+	attachments?: string[];
+}
+
+export interface UploadResult {
+	file_url: string;
+	file_name: string;
+}
+
+export interface FeedbackInput {
+	feedback_type: string;
+	period?: string;
+	food_quality?: number;
+	cleanliness?: number;
+	staff_behaviour?: number;
+	facilities?: number;
+	overall: number;
+	comments?: string;
+	is_anonymous: 0 | 1;
+}
+
+export interface Certificate {
+	name: string;
+	purpose: string;
+	purpose_details?: string | null;
+	status: string;
+	creation?: string;
+	approved_on?: string | null;
+	rejection_reason?: string | null;
+	certificate_number?: string | null;
+	issue_date?: string | null;
+	valid_till?: string | null;
+	can_download?: boolean;
+	is_expired?: boolean;
+}
+
+export interface Ok {
+	ok: boolean;
+	status?: string;
+}
+
+export interface Named {
+	name: string;
+	status?: string;
+}

@@ -97,6 +97,10 @@ doc_events = {
 	"User": {
 		"validate": "hostel360.auth.events.validate_user",
 	},
+	# A HyFib reply on a Support Ticket counts as the first response straight away
+	"Comment": {
+		"after_insert": "hostel360.hostel_operations.support.on_comment",
+	},
 }
 
 # Scheduled Tasks
@@ -138,6 +142,7 @@ scheduler_events = {
 		"hostel360.hostel_fees.tasks.mark_overdue_invoices",
 		"hostel360.hostel_people.tasks.close_ended_allotments",
 		"hostel360.hostel_operations.maintenance.purge_old_metric_samples",
+		"hostel360.api.portal.delete_stale_uploads",
 	],
 	"weekly": [
 		"hostel360.hostel_mess.tasks.send_low_stock_digest",

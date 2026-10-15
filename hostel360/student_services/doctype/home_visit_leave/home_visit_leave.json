@@ -1,0 +1,447 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "student_section",
+  "student",
+  "student_name",
+  "column_break_student",
+  "hostel",
+  "room",
+  "leave_section",
+  "from_datetime",
+  "to_datetime",
+  "number_of_days",
+  "column_break_leave",
+  "destination",
+  "contact_during_leave",
+  "reason",
+  "mess_section",
+  "apply_mess_reduction",
+  "column_break_mess",
+  "mess_reduction_days",
+  "mess_reduction",
+  "application_section",
+  "applied_by",
+  "column_break_application",
+  "applied_by_user",
+  "parent_section",
+  "parent_approval_status",
+  "parent_guardian",
+  "parent_guardian_name",
+  "column_break_parent",
+  "parent_action_on",
+  "parent_remarks",
+  "warden_section",
+  "warden_approval_status",
+  "warden_user",
+  "column_break_warden",
+  "warden_action_on",
+  "warden_remarks",
+  "movement_section",
+  "status",
+  "cancelled_by",
+  "column_break_movement",
+  "checked_out_on",
+  "returned_on",
+  "overdue_since"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "LV-.YYYY.-.#####",
+   "default": "LV-.YYYY.-.#####",
+   "reqd": 1,
+   "hidden": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "student_section",
+   "fieldtype": "Section Break",
+   "label": "Student"
+  },
+  {
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "label": "Student",
+   "options": "Hostel Student",
+   "reqd": 1,
+   "search_index": 1,
+   "in_standard_filter": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "student_name",
+   "fieldtype": "Data",
+   "label": "Student Name",
+   "fetch_from": "student.full_name",
+   "read_only": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "column_break_student",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "hostel",
+   "fieldtype": "Link",
+   "label": "Hostel",
+   "options": "Hostel",
+   "read_only": 1,
+   "search_index": 1,
+   "in_standard_filter": 1,
+   "description": "Taken from the student's current allotment when the leave is applied."
+  },
+  {
+   "fieldname": "room",
+   "fieldtype": "Link",
+   "label": "Room",
+   "options": "Hostel Room",
+   "read_only": 1
+  },
+  {
+   "fieldname": "leave_section",
+   "fieldtype": "Section Break",
+   "label": "Leave Details"
+  },
+  {
+   "fieldname": "from_datetime",
+   "fieldtype": "Datetime",
+   "label": "Leaving On",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "to_datetime",
+   "fieldtype": "Datetime",
+   "label": "Returning On",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "number_of_days",
+   "fieldtype": "Int",
+   "label": "Calendar Days",
+   "read_only": 1,
+   "description": "Calendar days covered by the leave, counting both the leaving and returning days."
+  },
+  {
+   "fieldname": "column_break_leave",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "destination",
+   "fieldtype": "Data",
+   "label": "Destination",
+   "reqd": 1,
+   "length": 140
+  },
+  {
+   "fieldname": "contact_during_leave",
+   "fieldtype": "Data",
+   "label": "Contact During Leave",
+   "options": "Phone",
+   "description": "Mobile number on which the student can be reached while away."
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mess_section",
+   "fieldtype": "Section Break",
+   "label": "Mess"
+  },
+  {
+   "fieldname": "apply_mess_reduction",
+   "fieldtype": "Check",
+   "label": "Apply for Mess Reduction",
+   "default": "0",
+   "description": "On approval a Mess Reduction Application is raised for the days away. The leaving day counts when the student leaves before noon and the returning day counts when the student returns after noon."
+  },
+  {
+   "fieldname": "column_break_mess",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mess_reduction_days",
+   "fieldtype": "Int",
+   "label": "Mess Reduction Days",
+   "read_only": 1,
+   "depends_on": "apply_mess_reduction"
+  },
+  {
+   "fieldname": "mess_reduction",
+   "fieldtype": "Link",
+   "label": "Mess Reduction Application",
+   "options": "Mess Reduction Application",
+   "read_only": 1,
+   "no_copy": 1,
+   "depends_on": "apply_mess_reduction"
+  },
+  {
+   "fieldname": "application_section",
+   "fieldtype": "Section Break",
+   "label": "Application"
+  },
+  {
+   "fieldname": "applied_by",
+   "fieldtype": "Select",
+   "label": "Applied By",
+   "options": "Student\nParent\nWarden",
+   "default": "Student",
+   "reqd": 1,
+   "set_only_once": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_application",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "applied_by_user",
+   "fieldtype": "Link",
+   "label": "Applied By User",
+   "options": "User",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "parent_section",
+   "fieldtype": "Section Break",
+   "label": "Parent Approval"
+  },
+  {
+   "fieldname": "parent_approval_status",
+   "fieldtype": "Select",
+   "label": "Parent Approval",
+   "options": "Pending\nApproved\nRejected\nNot Required",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "parent_guardian",
+   "fieldtype": "Link",
+   "label": "Parent / Guardian",
+   "options": "Hostel Guardian",
+   "description": "Guardian who applied for, approved or rejected the leave."
+  },
+  {
+   "fieldname": "parent_guardian_name",
+   "fieldtype": "Data",
+   "label": "Guardian Name",
+   "fetch_from": "parent_guardian.guardian_name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_parent",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "parent_action_on",
+   "fieldtype": "Datetime",
+   "label": "Parent Action On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "parent_remarks",
+   "fieldtype": "Small Text",
+   "label": "Parent Remarks",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "warden_section",
+   "fieldtype": "Section Break",
+   "label": "Warden Approval"
+  },
+  {
+   "fieldname": "warden_approval_status",
+   "fieldtype": "Select",
+   "label": "Warden Approval",
+   "options": "Pending\nApproved\nRejected",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "warden_user",
+   "fieldtype": "Link",
+   "label": "Decided By",
+   "options": "User",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "column_break_warden",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "warden_action_on",
+   "fieldtype": "Datetime",
+   "label": "Decided On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "warden_remarks",
+   "fieldtype": "Small Text",
+   "label": "Warden Remarks",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "movement_section",
+   "fieldtype": "Section Break",
+   "label": "Status and Movement"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending Parent Approval\nPending Warden Approval\nApproved\nRejected\nCancelled\nChecked Out\nReturned\nOverdue",
+   "default": "Pending Warden Approval",
+   "read_only": 1,
+   "no_copy": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "cancelled_by",
+   "fieldtype": "Link",
+   "label": "Cancelled By",
+   "options": "User",
+   "read_only": 1,
+   "no_copy": 1,
+   "depends_on": "eval:doc.status=='Cancelled'"
+  },
+  {
+   "fieldname": "column_break_movement",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "checked_out_on",
+   "fieldtype": "Datetime",
+   "label": "Checked Out On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "returned_on",
+   "fieldtype": "Datetime",
+   "label": "Returned On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "overdue_since",
+   "fieldtype": "Datetime",
+   "label": "Overdue Since",
+   "read_only": 1,
+   "no_copy": 1,
+   "depends_on": "overdue_since"
+  }
+ ],
+ "icon": "calendar",
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Student Services",
+ "name": "Home Visit Leave",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Hostel Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Hostel Warden",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Deputy Warden",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Hostel Office Staff",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Mess Manager",
+   "read": 1
+  },
+  {
+   "role": "Institution Auditor",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1,
+   "delete": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "student_name,hostel,status",
+ "show_title_field_in_link": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "student_name",
+ "track_changes": 1
+}

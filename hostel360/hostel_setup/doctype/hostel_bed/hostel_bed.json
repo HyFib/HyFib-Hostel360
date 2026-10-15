@@ -1,0 +1,206 @@
+{
+ "actions": [],
+ "autoname": "format:{room}-{bed_label}",
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "room",
+  "bed_label",
+  "hostel",
+  "block",
+  "floor",
+  "column_break_bed",
+  "status",
+  "is_active",
+  "current_student",
+  "current_student_name",
+  "current_allotment",
+  "remarks_section",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "room",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Room",
+   "options": "Hostel Room",
+   "reqd": 1,
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "bed_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Bed Label",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fetch_from": "room.hostel",
+   "fieldname": "hostel",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Hostel",
+   "options": "Hostel",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "room.block",
+   "fieldname": "block",
+   "fieldtype": "Link",
+   "label": "Block",
+   "options": "Hostel Block",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "room.floor",
+   "fieldname": "floor",
+   "fieldtype": "Link",
+   "label": "Floor",
+   "options": "Hostel Floor",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_bed",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Vacant",
+   "description": "Occupied is set by Room Allotment. Reserved and Maintenance keep a vacant bed out of allotment.",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Vacant\nOccupied\nReserved\nMaintenance",
+   "search_index": 1
+  },
+  {
+   "default": "1",
+   "description": "Beds removed by reducing room capacity are kept inactive for history.",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active",
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_student",
+   "fieldtype": "Link",
+   "label": "Current Student",
+   "no_copy": 1,
+   "options": "Hostel Student",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "current_student_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Current Student Name",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_allotment",
+   "fieldtype": "Link",
+   "label": "Current Allotment",
+   "no_copy": 1,
+   "options": "Room Allotment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "icon": "bed",
+ "in_create": 1,
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Setup",
+ "name": "Hostel Bed",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Warden"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "read": 1,
+   "role": "Mess Manager"
+  },
+  {
+   "read": 1,
+   "role": "Mess Staff"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "room,status,current_student_name",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

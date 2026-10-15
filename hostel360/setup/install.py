@@ -52,7 +52,8 @@ SECURITY_SETTINGS = {
 	"only_allow_system_managers_to_upload_public_files": 1,
 	"strip_exif_metadata_from_uploaded_images": 1,
 	"max_file_size": 10,
-	"allowed_file_extensions": "pdf\njpg\njpeg\npng\nwebp\nxlsx\nxls\ncsv",
+	# Frappe compares the upper-cased extension against these lines.
+	"allowed_file_extensions": "PDF\nJPG\nJPEG\nPNG\nWEBP\nXLSX\nXLS\nCSV\nJSON\nMD\nTXT\nZIP",
 	"allow_error_traceback": 0,
 	"encrypt_backup": 1,
 	"enable_telemetry": 0,

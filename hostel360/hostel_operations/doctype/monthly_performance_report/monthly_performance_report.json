@@ -1,0 +1,426 @@
+{
+ "actions": [],
+ "autoname": "format:MPR-{month}",
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "Monthly server performance report e-mailed to the institution (technical requirement 13).",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "month",
+  "from_date",
+  "to_date",
+  "column_break_main",
+  "instance_label",
+  "prepared_on",
+  "sent_on",
+  "sent_to",
+  "availability_section",
+  "uptime_percent",
+  "downtime_minutes",
+  "uptime_source",
+  "column_break_availability",
+  "incidents",
+  "critical_alerts",
+  "capacity_section",
+  "avg_cpu_percent",
+  "peak_cpu_percent",
+  "column_break_capacity",
+  "avg_memory_percent",
+  "peak_memory_percent",
+  "column_break_disk",
+  "disk_used_percent",
+  "security_section",
+  "security_events",
+  "column_break_security",
+  "malware_detections",
+  "column_break_waf",
+  "waf_blocks",
+  "backups_section",
+  "backups_succeeded",
+  "column_break_backups",
+  "backups_failed",
+  "column_break_restore",
+  "last_restore_test_on",
+  "support_section",
+  "tickets_raised",
+  "tickets_resolved",
+  "column_break_support",
+  "sla_compliance_percent",
+  "usage_section",
+  "active_students",
+  "portal_logins",
+  "column_break_usage",
+  "online_payments_count",
+  "online_payments_amount",
+  "incidents_section",
+  "incident_details",
+  "summary_section",
+  "summary",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "bold": 1,
+   "description": "YYYY-MM",
+   "fieldname": "month",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Month",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "instance_label",
+   "fieldtype": "Data",
+   "label": "Instance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "prepared_on",
+   "fieldtype": "Datetime",
+   "label": "Prepared On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "sent_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Sent On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "sent_to",
+   "fieldtype": "Small Text",
+   "label": "Sent To",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "availability_section",
+   "fieldtype": "Section Break",
+   "label": "Availability"
+  },
+  {
+   "fieldname": "uptime_percent",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Uptime (%)",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "fieldname": "downtime_minutes",
+   "fieldtype": "Int",
+   "label": "Downtime (Minutes)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "uptime_source",
+   "fieldtype": "Data",
+   "label": "Measured By",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_availability",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Distinct critical alerts opened during the month.",
+   "fieldname": "incidents",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Critical Incidents",
+   "read_only": 1
+  },
+  {
+   "description": "Including repeats of the same incident.",
+   "fieldname": "critical_alerts",
+   "fieldtype": "Int",
+   "label": "Critical Alert Occurrences",
+   "read_only": 1
+  },
+  {
+   "fieldname": "capacity_section",
+   "fieldtype": "Section Break",
+   "label": "Server Capacity"
+  },
+  {
+   "fieldname": "avg_cpu_percent",
+   "fieldtype": "Percent",
+   "label": "Average CPU (%)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "peak_cpu_percent",
+   "fieldtype": "Percent",
+   "label": "Peak CPU (%)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_capacity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "avg_memory_percent",
+   "fieldtype": "Percent",
+   "label": "Average Memory (%)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "peak_memory_percent",
+   "fieldtype": "Percent",
+   "label": "Peak Memory (%)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_disk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "disk_used_percent",
+   "fieldtype": "Percent",
+   "label": "Disk Used (%)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "security_section",
+   "fieldtype": "Section Break",
+   "label": "Security"
+  },
+  {
+   "fieldname": "security_events",
+   "fieldtype": "Int",
+   "label": "Security Events",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_security",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "malware_detections",
+   "fieldtype": "Int",
+   "label": "Malware Detections",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_waf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "waf_blocks",
+   "fieldtype": "Int",
+   "label": "Requests Blocked by WAF",
+   "read_only": 1
+  },
+  {
+   "fieldname": "backups_section",
+   "fieldtype": "Section Break",
+   "label": "Backups"
+  },
+  {
+   "fieldname": "backups_succeeded",
+   "fieldtype": "Int",
+   "label": "Backups Succeeded",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_backups",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "backups_failed",
+   "fieldtype": "Int",
+   "label": "Backups Failed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_restore",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_restore_test_on",
+   "fieldtype": "Datetime",
+   "label": "Last Restore Test",
+   "read_only": 1
+  },
+  {
+   "fieldname": "support_section",
+   "fieldtype": "Section Break",
+   "label": "Support"
+  },
+  {
+   "fieldname": "tickets_raised",
+   "fieldtype": "Int",
+   "label": "Tickets Raised",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tickets_resolved",
+   "fieldtype": "Int",
+   "label": "Tickets Resolved",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_support",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sla_compliance_percent",
+   "fieldtype": "Percent",
+   "label": "SLA Compliance (%)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "usage_section",
+   "fieldtype": "Section Break",
+   "label": "Usage"
+  },
+  {
+   "fieldname": "active_students",
+   "fieldtype": "Int",
+   "label": "Active Residents",
+   "read_only": 1
+  },
+  {
+   "fieldname": "portal_logins",
+   "fieldtype": "Int",
+   "label": "Portal Logins",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_usage",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "online_payments_count",
+   "fieldtype": "Int",
+   "label": "Online Payments",
+   "read_only": 1
+  },
+  {
+   "fieldname": "online_payments_amount",
+   "fieldtype": "Currency",
+   "label": "Online Payments Amount",
+   "options": "",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "incidents_section",
+   "fieldtype": "Section Break",
+   "label": "Critical Incidents"
+  },
+  {
+   "fieldname": "incident_details",
+   "fieldtype": "Table",
+   "label": "Incidents",
+   "options": "Monthly Performance Report Incident",
+   "read_only": 1
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Text Editor",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Monthly Performance Report",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-15 16:50:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Operations",
+ "name": "Monthly Performance Report",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HyFib Operations",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "month",
+ "track_changes": 1
+}

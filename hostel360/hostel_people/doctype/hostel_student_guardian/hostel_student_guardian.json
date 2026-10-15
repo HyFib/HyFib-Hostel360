@@ -1,0 +1,82 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "guardian",
+  "guardian_name",
+  "relation",
+  "mobile_number",
+  "is_primary",
+  "can_approve_leave"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "guardian",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Guardian",
+   "options": "Hostel Guardian",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fetch_from": "guardian.guardian_name",
+   "fieldname": "guardian_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Guardian Name",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "relation",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Relation",
+   "options": "Father\nMother\nGuardian\nBrother\nSister\nOther",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fetch_from": "guardian.mobile_number",
+   "fieldname": "mobile_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mobile Number",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "is_primary",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Primary"
+  },
+  {
+   "columns": 1,
+   "default": "1",
+   "description": "This guardian may approve home visit leave.",
+   "fieldname": "can_approve_leave",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Can Approve Leave"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel People",
+ "name": "Hostel Student Guardian",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

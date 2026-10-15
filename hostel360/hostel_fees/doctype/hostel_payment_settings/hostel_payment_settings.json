@@ -1,0 +1,174 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 16:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_gateway",
+  "enabled",
+  "gateway",
+  "test_mode",
+  "column_break_gateway",
+  "merchant_display_name",
+  "transaction_expiry_minutes",
+  "section_keys",
+  "key_id",
+  "key_secret",
+  "column_break_keys",
+  "webhook_secret",
+  "webhook_help",
+  "section_reminders",
+  "send_fee_reminders",
+  "reminder_days_before_due",
+  "column_break_reminders",
+  "reminder_interval_days",
+  "max_reminders_per_invoice"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_gateway",
+   "fieldtype": "Section Break",
+   "label": "Online Payments"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enable Online Payments",
+   "default": "0",
+   "description": "Students and parents can pay dues from the portal. Collections settle directly to the institution's merchant account."
+  },
+  {
+   "fieldname": "gateway",
+   "fieldtype": "Select",
+   "label": "Payment Gateway",
+   "options": "Razorpay",
+   "default": "Razorpay",
+   "reqd": 1
+  },
+  {
+   "fieldname": "test_mode",
+   "fieldtype": "Check",
+   "label": "Test Mode",
+   "default": "1",
+   "description": "Use the gateway's test keys (rzp_test_...). No real money is collected."
+  },
+  {
+   "fieldname": "column_break_gateway",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "merchant_display_name",
+   "fieldtype": "Data",
+   "label": "Merchant Display Name",
+   "description": "Shown on the payment page, e.g. \"ACGCET Hostels\"."
+  },
+  {
+   "fieldname": "transaction_expiry_minutes",
+   "fieldtype": "Int",
+   "label": "Transaction Expiry (Minutes)",
+   "default": "60",
+   "non_negative": 1,
+   "description": "Unpaid online transactions are marked Expired after this time and their invoices become payable again."
+  },
+  {
+   "fieldname": "section_keys",
+   "fieldtype": "Section Break",
+   "label": "API Keys"
+  },
+  {
+   "fieldname": "key_id",
+   "fieldtype": "Data",
+   "label": "Key ID"
+  },
+  {
+   "fieldname": "key_secret",
+   "fieldtype": "Password",
+   "label": "Key Secret"
+  },
+  {
+   "fieldname": "column_break_keys",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "webhook_secret",
+   "fieldtype": "Password",
+   "label": "Webhook Secret",
+   "description": "Secret entered while creating the webhook in the gateway dashboard."
+  },
+  {
+   "fieldname": "webhook_help",
+   "fieldtype": "HTML",
+   "label": "Webhook Setup"
+  },
+  {
+   "fieldname": "section_reminders",
+   "fieldtype": "Section Break",
+   "label": "Fee Reminders"
+  },
+  {
+   "fieldname": "send_fee_reminders",
+   "fieldtype": "Check",
+   "label": "Send Fee Reminders",
+   "default": "1",
+   "description": "Daily at 08:00, students and parents are reminded of dues falling due soon or overdue."
+  },
+  {
+   "fieldname": "reminder_days_before_due",
+   "fieldtype": "Int",
+   "label": "Remind Days Before Due Date",
+   "default": "3",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_reminders",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reminder_interval_days",
+   "fieldtype": "Int",
+   "label": "Days Between Reminders",
+   "default": "3",
+   "non_negative": 1,
+   "description": "An invoice is reminded at most once in this many days."
+  },
+  {
+   "fieldname": "max_reminders_per_invoice",
+   "fieldtype": "Int",
+   "label": "Maximum Reminders per Invoice",
+   "default": "0",
+   "non_negative": 1,
+   "description": "0 means no limit."
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-15 16:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Fees",
+ "name": "Hostel Payment Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Hostel Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1
+  },
+  {
+   "role": "HyFib Operations",
+   "read": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

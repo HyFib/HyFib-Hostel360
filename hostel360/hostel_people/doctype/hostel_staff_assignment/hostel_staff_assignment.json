@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "hostel",
+  "block"
+ ],
+ "fields": [
+  {
+   "fieldname": "hostel",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Hostel",
+   "options": "Hostel",
+   "reqd": 1
+  },
+  {
+   "description": "Optional; leave blank for the whole hostel.",
+   "fieldname": "block",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Block",
+   "options": "Hostel Block"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel People",
+ "name": "Hostel Staff Assignment",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

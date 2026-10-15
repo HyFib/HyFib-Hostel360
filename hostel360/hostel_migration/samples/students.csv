@@ -1,0 +1,10 @@
+stud_id,reg_no,student_name,sex,dob,blood,prog_id,year,adm_year,mobile,email,address,city,district,pincode,emergency_name,emergency_phone,status,mess,photo,deleted
+S001,smp21me001,ARUN KUMAR,M,14-03-2003,O+,P01,4,2021,+91 98765 00001,arun.kumar@example.com,"12, Gandhi Street",karaikudi,sivagangai,630001,Murugan K,98765 00101,STAYING,Y,photos/S001.png,N
+S002,SMP22ME014,karthik raja,M,02/11/2004,B+,P01,3,2022,09876500002,,"5, Nehru Nagar",Madurai,Madurai,625001,Raja S,9876500102,STAYING,Y,,N
+S003,SMP23CE007,Vignesh S,M,2005-07-21,A+,P02,2,2023,91-9876500003,vignesh.s@example.com,"44, Main Road",Paramakudi,Ramanathapuram,623707,Selvam P,9876500103,STAYING,Y,photos/S003.png,N
+S004,SMP24CS021,Surya Prakash,M,30-01-2006,O+,P03,1,2024,9876500004,,"8, Anna Salai",Sivakasi,Virudhunagar,626123,Prakash M,9876500104,STAYING,N,,N
+S005,SMP20ME030,Dinesh Kumar,M,11-09-2001,AB+,P01,4,2020,9876500005,,"21, Periyar Nagar",Thanjavur,Thanjavur,613001,Kumar R,9876500105,LEFT,N,,N
+S006,SMP21CS003,PRIYA DHARSHINI,F,05-05-2003,B+,P03,4,2021,9876500006,priya.d@example.com,"3, Bharathi Nagar",Pudukkottai,Pudukkottai,622001,Lakshmi V,9876500106,STAYING,Y,photos/S006.png,N
+S007,SMP23CE011,Kavya R,F,19/08/2005,O-,P02,2,2023,9876500007,,"17, Kamarajar Street",Dindigul,Dindigul,624001,Ravi K,9876500107,STAYING,Y,,N
+S008,SMP24ME002,Meena Lakshmi,F,2006-02-14,A+,P01,1,2024,9876500008,NULL,"9, Vivekananda Street",Theni,Theni,625531,Lakshmanan P,9876500108,STAYING,Y,,N
+S009,TEST0001,Test Student,M,01-01-2000,O+,P01,1,2024,9876500009,,,,,,,,STAYING,N,,Y

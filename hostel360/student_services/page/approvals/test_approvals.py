@@ -1,0 +1,114 @@
+# Copyright (c) 2026, HyFib Solutions Private Limited and contributors
+# For license information, please see license.txt
+
+from unittest.mock import patch
+
+import frappe
+from frappe.tests import IntegrationTestCase
+from frappe.utils import add_to_date, now_datetime
+
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, MESS_MANAGER_ROLE, OFFICE_ROLE, WARDEN_ROLE
+from hostel360.student_services import services
+from hostel360.student_services.page.approvals import approvals
+from hostel360.student_services.testing import (
+	leave_data,
+	make_hostel,
+	make_student,
+	make_user,
+	scope_to_hostel,
+	set_hostel_settings,
+)
+
+
+class TestApprovals(IntegrationTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		set_hostel_settings(leave_requires_parent_approval=0)
+		self.hostel = make_hostel()
+		self.other_hostel = make_hostel()
+		self.deputy = make_user([DEPUTY_WARDEN_ROLE])
+		scope_to_hostel(self.deputy, self.hostel)
+		self.warden = make_user([WARDEN_ROLE])
+
+		self.student = make_student(self.hostel)
+		self.other = make_student(self.other_hostel)
+		self.leave = services.apply_leave(self.student.name, leave_data(), "Student", self.student.user)
+		self.other_leave = services.apply_leave(self.other.name, leave_data(), "Student", self.other.user)
+		self.certificate = services.request_bonafide(self.student.name, "Passport", None)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	def inbox_as(self, user):
+		frappe.set_user(user)
+		try:
+			return approvals.get_inbox()
+		finally:
+			frappe.set_user("Administrator")
+
+	def names(self, inbox, section):
+		return {row.name for row in inbox["sections"].get(section, [])}
+
+	def test_deputy_sees_only_their_hostel(self):
+		inbox = self.inbox_as(self.deputy)
+		self.assertIn(self.leave, self.names(inbox, "leaves"))
+		self.assertNotIn(self.other_leave, self.names(inbox, "leaves"))
+		self.assertIn(self.certificate, self.names(inbox, "certificates"))
+		self.assertEqual(inbox["counts"]["leaves"], len(inbox["sections"]["leaves"]))
+
+	def test_warden_sees_every_hostel(self):
+		inbox = self.inbox_as(self.warden)
+		self.assertTrue({self.leave, self.other_leave} <= self.names(inbox, "leaves"))
+
+	def test_sections_follow_what_the_user_may_decide(self):
+		mess_manager = make_user([MESS_MANAGER_ROLE])
+		inbox = self.inbox_as(mess_manager)
+		self.assertNotIn("leaves", inbox["sections"])
+		self.assertNotIn("certificates", inbox["sections"])
+		unscoped_deputy = make_user([DEPUTY_WARDEN_ROLE])
+		self.assertEqual(self.inbox_as(unscoped_deputy)["sections"]["leaves"], [])
+		office = make_user([OFFICE_ROLE])
+		self.assertNotIn("leaves", self.inbox_as(office)["sections"])
+
+	def test_decide_leave_and_certificate_inline(self):
+		frappe.set_user(self.deputy)
+		result = approvals.decide("Home Visit Leave", self.leave, "approve", "Safe journey")
+		self.assertEqual(result["status"], "Approved")
+		with self.assertRaises(frappe.ValidationError):
+			approvals.decide("Bonafide Certificate Request", self.certificate, "reject", "")
+		self.assertEqual(
+			approvals.decide("Bonafide Certificate Request", self.certificate, "approve")["status"], "Approved"
+		)
+		with self.assertRaises(frappe.PermissionError):
+			approvals.decide("Home Visit Leave", self.other_leave, "approve")
+		with self.assertRaises(frappe.ValidationError):
+			approvals.decide("User", self.deputy, "approve")
+		frappe.set_user("Administrator")
+		self.assertNotIn(self.leave, self.names(self.inbox_as(self.deputy), "leaves"))
+
+	def test_mess_reductions_are_decided_by_the_mess_service(self):
+		frappe.set_user(self.warden)
+		with patch("hostel360.hostel_mess.services.decide_mess_reduction") as decide:
+			approvals.decide("Mess Reduction Application", "MRA-TEST-1", "reject", "Billing closed")
+		decide.assert_called_once_with("MRA-TEST-1", False, "Billing closed", self.warden)
+
+	def test_escalated_grievances_need_attention(self):
+		name = services.raise_grievance(
+			self.student.name,
+			{"category": "Water", "subject": "No water on second floor", "description": "Since morning"},
+			self.student.user,
+		)
+		frappe.db.set_value("Hostel Grievance", name, "sla_due_by", add_to_date(now_datetime(), hours=-1))
+		from hostel360.student_services.grievance_tasks import escalate_overdue_grievances
+
+		escalate_overdue_grievances()
+		self.assertIn(name, self.names(self.inbox_as(self.deputy), "grievances"))
+
+		frappe.set_user(self.deputy)
+		self.assertEqual(approvals.act_on_grievance(name, "take")["status"], "Escalated")
+		self.assertEqual(frappe.db.get_value("Hostel Grievance", name, "assigned_to"), self.deputy)
+		with self.assertRaises(frappe.ValidationError):
+			approvals.act_on_grievance(name, "resolve", "")
+		self.assertEqual(approvals.act_on_grievance(name, "resolve", "Motor repaired")["status"], "Resolved")
+		frappe.set_user("Administrator")
+		self.assertNotIn(name, self.names(self.inbox_as(self.deputy), "grievances"))

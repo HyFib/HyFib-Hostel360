@@ -42,5 +42,3 @@ deploy/terraform/**/.terraform.lock.hcl.bak
 *.swp
 .DS_Store
 
-# Local tooling
-.claude/

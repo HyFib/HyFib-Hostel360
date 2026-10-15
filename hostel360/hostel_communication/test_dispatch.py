@@ -1,0 +1,498 @@
+# Copyright (c) 2026, HyFib Solutions Private Limited and contributors
+# For license information, please see license.txt
+
+import json
+import random
+from unittest.mock import patch
+
+import frappe
+from frappe.tests import IntegrationTestCase
+from frappe.utils import add_to_date, get_datetime, now_datetime
+
+from hostel360.hostel_communication import dispatch
+from hostel360.hostel_communication import events as ev
+from hostel360.hostel_communication.providers.base import DeliveryResult
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, STUDENT_ROLE, WARDEN_ROLE
+
+FEE_CONTEXT = {
+	"student_name": "Meena S",
+	"invoice": "INV-2026-09999",
+	"invoice_type": "Hostel Fee",
+	"amount": 45250,
+	"due_date": "2026-11-15",
+}
+
+
+def random_mobile() -> str:
+	return random.choice("6789") + "".join(random.choice("0123456789") for _ in range(9))
+
+
+def make_user(*roles: str) -> str:
+	email = f"msg-{frappe.generate_hash(length=8)}@example.com"
+	user = frappe.get_doc(
+		{
+			"doctype": "User",
+			"email": email,
+			"first_name": "Message",
+			"last_name": "Tester",
+			"send_welcome_email": 0,
+			"roles": [{"role": role} for role in roles],
+		}
+	)
+	user.flags.no_welcome_mail = True
+	user.insert(ignore_permissions=True)
+	return user.name
+
+
+class DispatchTestCase(IntegrationTestCase):
+	def setUp(self):
+		super().setUp()
+		self.settings = frappe.get_doc("Messaging Settings")
+		self.settings.update(
+			{
+				"sms_enabled": 1,
+				"whatsapp_enabled": 1,
+				"email_enabled": 1,
+				"test_mode": 1,
+				"prefer_whatsapp": 0,
+				"sms_provider": "MSG91",
+				"whatsapp_phone_number_id": "1234567890",
+			}
+		)
+		patcher = patch("hostel360.hostel_communication.dispatch.get_settings", return_value=self.settings)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+		self.reference = f"REF-{frappe.generate_hash(length=8)}"
+
+	def set_template(self, name: str, field: str, value) -> None:
+		"""Change a template for one test only (the class shares one transaction)."""
+		previous = frappe.db.get_value("Message Template", name, field)
+		frappe.db.set_value("Message Template", name, field, value)
+		self.addCleanup(frappe.db.set_value, "Message Template", name, field, previous)
+
+	def logs(self, **filters) -> list[frappe._dict]:
+		return frappe.get_all(
+			"Message Log",
+			filters={"reference_name": self.reference, **filters},
+			fields=["*"],
+			order_by="creation asc",
+		)
+
+	def deliver(self, recipients, event=ev.FEE_DUE_PUBLISHED, context=None, channels=None):
+		dispatch.deliver(
+			event,
+			recipients,
+			context or FEE_CONTEXT,
+			reference_doctype="Hostel Fee Invoice",
+			reference_name=self.reference,
+			channels=channels,
+		)
+
+
+class TestNotify(DispatchTestCase):
+	def test_notify_is_silent_while_installing_migrating_or_importing(self):
+		for flag in dispatch.SUPPRESS_FLAGS:
+			with patch.dict(frappe.flags, {flag: True}), patch("frappe.enqueue") as enqueue:
+				dispatch.notify(ev.FEE_DUE_PUBLISHED, [{"mobile": random_mobile()}], FEE_CONTEXT)
+			enqueue.assert_not_called()
+
+	def test_notify_queues_delivery_on_the_short_queue(self):
+		recipients = [{"mobile": random_mobile(), "name": f"Student {i}"} for i in range(60)]
+		with patch("frappe.enqueue") as enqueue:
+			dispatch.notify(ev.FEE_DUE_PUBLISHED, recipients, FEE_CONTEXT, "Hostel Fee Invoice", "INV-1")
+		self.assertEqual(enqueue.call_count, 3)
+		args, kwargs = enqueue.call_args_list[0]
+		self.assertEqual(args[0], dispatch.DELIVER_METHOD)
+		self.assertEqual(kwargs["queue"], "short")
+		self.assertEqual(kwargs["notification_event"], ev.FEE_DUE_PUBLISHED)
+		self.assertNotIn("event", kwargs)
+		self.assertEqual(len(kwargs["recipients"]), dispatch.RECIPIENTS_PER_JOB)
+		self.assertEqual(kwargs["reference_name"], "INV-1")
+
+	def test_unknown_events_and_empty_recipients_send_nothing(self):
+		with patch("frappe.enqueue") as enqueue:
+			dispatch.notify("no_such_event", [{"mobile": random_mobile()}], {})
+			dispatch.notify(ev.OTP_LOGIN, [{"mobile": random_mobile()}], {"otp": "123456"})
+			dispatch.notify(ev.FEE_DUE_PUBLISHED, [{"name": "No address"}], FEE_CONTEXT)
+			dispatch.notify(
+				ev.FEE_DUE_PUBLISHED, [{"mobile": random_mobile()}], FEE_CONTEXT, channels=["fax"]
+			)
+		enqueue.assert_not_called()
+
+	def test_notify_never_raises_into_the_caller(self):
+		with patch("frappe.enqueue", side_effect=RuntimeError("queue down")):
+			dispatch.notify(ev.FEE_DUE_PUBLISHED, [{"mobile": random_mobile()}], FEE_CONTEXT)
+
+	def test_notify_delivers_end_to_end_in_tests(self):
+		user = make_user(STUDENT_ROLE)
+		dispatch.notify(
+			ev.FEE_DUE_PUBLISHED,
+			[{"user": user, "name": "Meena S", "kind": "student"}],
+			FEE_CONTEXT,
+			"Hostel Fee Invoice",
+			self.reference,
+			channels=["In-App"],
+		)
+		self.assertEqual([log.channel for log in self.logs()], ["In-App"])
+
+
+class TestDeliver(DispatchTestCase):
+	def test_renders_every_enabled_channel(self):
+		user = make_user(STUDENT_ROLE)
+		mobile = random_mobile()
+		self.deliver(
+			[
+				{
+					"user": user,
+					"mobile": mobile,
+					"email": "meena.parent@example.com",
+					"name": "Meena S",
+					"kind": "student",
+				}
+			]
+		)
+
+		logs = {log.channel: log for log in self.logs()}
+		self.assertEqual(set(logs), {"SMS", "WhatsApp", "Email", "In-App"})
+
+		sms = logs["SMS"]
+		self.assertEqual(sms.status, "Skipped")  # test mode
+		self.assertIn("Rs.45,250", sms.message)
+		self.assertIn("INV-2026-09999", sms.message)
+		self.assertEqual(sms.recipient, f"{mobile[:2]}xxxxxx{mobile[-2:]}")
+		self.assertNotIn(mobile, json.dumps(sms, default=str))
+		self.assertEqual(sms.template, f"{ev.FEE_DUE_PUBLISHED}-SMS")
+
+		email = logs["Email"]
+		self.assertTrue(email.recipient.startswith("me"))
+		self.assertNotIn("meena.parent", email.recipient)
+		self.assertIn("₹45,250.00", email.subject)
+
+		in_app = logs["In-App"]
+		self.assertEqual(in_app.status, "Sent")
+		notification = frappe.get_doc("Notification Log", in_app.provider_message_id)
+		self.assertEqual(notification.for_user, user)
+		self.assertEqual(notification.document_type, "Hostel Fee Invoice")
+		self.assertEqual(notification.document_name, self.reference)
+		self.assertEqual(notification.link, "/hostel/fees")
+		self.assertIn("Fee due", notification.subject)
+
+	def test_placeholder_email_addresses_are_never_used(self):
+		self.deliver([{"email": "abc123@portal.hostel360.invalid", "name": "Meena S"}])
+		self.assertEqual(self.logs(), [])
+
+	def test_channels_argument_limits_delivery(self):
+		user = make_user(STUDENT_ROLE)
+		self.deliver(
+			[{"user": user, "mobile": random_mobile(), "email": "x@example.com"}], channels=["In-App"]
+		)
+		self.assertEqual([log.channel for log in self.logs()], ["In-App"])
+
+	def test_globally_disabled_channels_are_not_used(self):
+		self.settings.sms_enabled = 0
+		self.settings.whatsapp_enabled = 0
+		self.deliver([{"mobile": random_mobile(), "email": "x@example.com"}])
+		self.assertEqual([log.channel for log in self.logs()], ["Email"])
+
+	def test_disabled_template_skips_its_channel(self):
+		self.set_template(f"{ev.FEE_DUE_PUBLISHED}-WhatsApp", "enabled", 0)
+		self.deliver([{"mobile": random_mobile()}])
+		self.assertEqual([log.channel for log in self.logs()], ["SMS"])
+
+	def test_otp_event_is_never_sent_by_email_or_in_app(self):
+		templates = dispatch._templates_for(ev.OTP_LOGIN, None, self.settings)
+		self.assertEqual(set(templates), {"SMS", "WhatsApp"})
+
+	def test_template_errors_are_logged_not_raised(self):
+		self.set_template(f"{ev.FEE_DUE_PUBLISHED}-SMS", "body", "Fee {{ amount | nosuchfilter }}")
+		self.deliver([{"mobile": random_mobile()}], channels=["SMS"])
+		(log,) = self.logs()
+		self.assertEqual(log.status, "Failed")
+		self.assertTrue(log.error.startswith("Template error"))
+
+	def test_shared_phone_gets_one_copy(self):
+		mobile = random_mobile()
+		self.deliver(
+			[
+				{"mobile": mobile, "name": "Student", "kind": "student"},
+				{"mobile": mobile, "name": "Parent", "kind": "parent"},
+			],
+			channels=["SMS"],
+		)
+		self.assertEqual(len(self.logs()), 1)
+
+	def test_html_channels_escape_student_text(self):
+		user = make_user(STUDENT_ROLE)
+		context = {**FEE_CONTEXT, "student_name": "<script>alert(1)</script>"}
+		self.deliver([{"user": user}], context=context, channels=["In-App"])
+		(log,) = self.logs()
+		notification = frappe.get_doc("Notification Log", log.provider_message_id)
+		self.assertNotIn("<script>", notification.description or "")
+		self.assertIn("&lt;script&gt;", notification.description)
+
+	def test_prefer_whatsapp_falls_back_to_sms(self):
+		self.settings.prefer_whatsapp = 1
+		self.settings.test_mode = 0
+		failed = DeliveryResult.failed("WhatsApp Cloud API", "WhatsApp error 131026: undeliverable")
+		with (
+			patch("hostel360.hostel_communication.providers.whatsapp.send_template", return_value=failed),
+			patch(
+				"hostel360.hostel_communication.providers.sms.send_sms",
+				return_value=DeliveryResult.sent("MSG91", "req-1"),
+			) as send_sms,
+		):
+			self.deliver([{"mobile": random_mobile()}], channels=["SMS", "WhatsApp"])
+		logs = {log.channel: log for log in self.logs()}
+		self.assertEqual(logs["WhatsApp"].status, "Failed")
+		self.assertIsNone(logs["WhatsApp"].payload)
+		self.assertEqual(logs["SMS"].status, "Sent")
+		self.assertEqual(logs["SMS"].provider_message_id, "req-1")
+		send_sms.assert_called_once()
+
+	def test_prefer_whatsapp_does_not_send_sms_when_whatsapp_works(self):
+		self.settings.prefer_whatsapp = 1
+		self.settings.test_mode = 0
+		with (
+			patch(
+				"hostel360.hostel_communication.providers.whatsapp.send_template",
+				return_value=DeliveryResult.sent("WhatsApp Cloud API", "wamid.1"),
+			),
+			patch("hostel360.hostel_communication.providers.sms.send_sms") as send_sms,
+		):
+			self.deliver([{"mobile": random_mobile()}], channels=["SMS", "WhatsApp"])
+		send_sms.assert_not_called()
+		self.assertEqual([log.channel for log in self.logs()], ["WhatsApp"])
+
+
+class TestRetries(DispatchTestCase):
+	def setUp(self):
+		super().setUp()
+		self.settings.test_mode = 0
+
+	def fail_once(self, retryable=True) -> frappe._dict:
+		result = DeliveryResult.failed("MSG91", "HTTP 503: busy", retryable=retryable)
+		with patch("hostel360.hostel_communication.providers.sms.send_sms", return_value=result):
+			self.deliver([{"mobile": self.mobile}], channels=["SMS"])
+		(log,) = self.logs()
+		return log
+
+	@property
+	def mobile(self):
+		if not hasattr(self, "_mobile"):
+			self._mobile = random_mobile()
+		return self._mobile
+
+	def test_failed_message_is_scheduled_with_encrypted_payload(self):
+		log = self.fail_once()
+		self.assertEqual(log.status, "Failed")
+		self.assertEqual(log.attempts, 1)
+		self.assertIsNotNone(log.next_retry_on)
+		minutes = (get_datetime(log.next_retry_on) - now_datetime()).total_seconds() / 60
+		self.assertAlmostEqual(minutes, dispatch.RETRY_BASE_MINUTES, delta=2)
+		self.assertNotIn(self.mobile, log.payload)
+
+	def test_non_retryable_failure_is_not_scheduled(self):
+		log = self.fail_once(retryable=False)
+		self.assertIsNone(log.payload)
+		self.assertIsNone(log.next_retry_on)
+
+	def test_backoff_and_give_up_after_three_attempts(self):
+		log = self.fail_once()
+		failure = DeliveryResult.failed("MSG91", "HTTP 503: busy", retryable=True)
+		with patch("hostel360.hostel_communication.providers.sms.send_sms", return_value=failure) as send_sms:
+			dispatch.retry_message(log.name)
+			second = frappe.db.get_value(
+				"Message Log", log.name, ["attempts", "next_retry_on", "payload"], as_dict=True
+			)
+			self.assertEqual(second.attempts, 2)
+			minutes = (get_datetime(second.next_retry_on) - now_datetime()).total_seconds() / 60
+			self.assertAlmostEqual(minutes, dispatch.RETRY_BASE_MINUTES * 2, delta=2)
+
+			dispatch.retry_message(log.name)
+			third = frappe.db.get_value(
+				"Message Log", log.name, ["status", "attempts", "next_retry_on", "payload"], as_dict=True
+			)
+			self.assertEqual((third.status, third.attempts), ("Failed", 3))
+			self.assertIsNone(third.payload)
+			self.assertIsNone(third.next_retry_on)
+
+			self.assertIsNone(dispatch.retry_message(log.name))
+		self.assertEqual(send_sms.call_count, 2)
+		self.assertEqual(send_sms.call_args.args[0], self.mobile)
+
+	def test_scheduled_retry_sends_due_messages(self):
+		log = self.fail_once()
+		frappe.db.set_value("Message Log", log.name, "next_retry_on", add_to_date(now_datetime(), minutes=-1))
+		with patch(
+			"hostel360.hostel_communication.providers.sms.send_sms",
+			return_value=DeliveryResult.sent("MSG91", "req-9"),
+		):
+			dispatch.retry_failed_messages()
+		row = frappe.db.get_value(
+			"Message Log", log.name, ["status", "attempts", "payload", "sent_on"], as_dict=True
+		)
+		self.assertEqual((row.status, row.attempts), ("Sent", 2))
+		self.assertIsNone(row.payload)
+		self.assertIsNotNone(row.sent_on)
+
+	def test_messages_not_yet_due_are_left_alone(self):
+		log = self.fail_once()
+		with patch("hostel360.hostel_communication.providers.sms.send_sms") as send_sms:
+			dispatch.retry_failed_messages()
+		send_sms.assert_not_called()
+		self.assertEqual(frappe.db.get_value("Message Log", log.name, "attempts"), 1)
+
+
+class TestOtpAndDirectMessages(DispatchTestCase):
+	def test_otp_message_never_stores_the_code(self):
+		mobile = random_mobile()
+		self.assertTrue(dispatch.send_otp_message(mobile, "482913", "sms"))
+		log = frappe.get_all(
+			"Message Log",
+			filters={"event": ev.OTP_LOGIN, "recipient": f"{mobile[:2]}xxxxxx{mobile[-2:]}"},
+			fields=["*"],
+			order_by="creation desc",
+			limit=1,
+		)[0]
+		self.assertNotIn("482913", json.dumps(log, default=str))
+		self.assertIsNone(log.payload)
+
+	def test_otp_provider_errors_are_scrubbed(self):
+		self.settings.test_mode = 0
+		mobile = random_mobile()
+		echo = DeliveryResult.failed("MSG91", "rejected message '482913 is your OTP'", retryable=True)
+		with patch("hostel360.hostel_communication.providers.sms.send_sms", return_value=echo):
+			self.assertFalse(dispatch.send_otp_message(mobile, "482913", "SMS"))
+		log = frappe.get_all(
+			"Message Log",
+			filters={"event": ev.OTP_LOGIN, "recipient": f"{mobile[:2]}xxxxxx{mobile[-2:]}"},
+			fields=["error", "status", "payload"],
+			limit=1,
+		)[0]
+		self.assertEqual(log.status, "Failed")
+		self.assertNotIn("482913", log.error)
+		self.assertIn("******", log.error)
+		self.assertIsNone(log.payload)
+
+	def test_otp_message_needs_a_mobile_channel(self):
+		self.assertFalse(dispatch.send_otp_message(random_mobile(), "482913", "email"))
+		self.assertFalse(dispatch.send_otp_message("12345", "482913", "sms"))
+
+	def test_whatsapp_otp_uses_the_authentication_template(self):
+		self.settings.test_mode = 0
+		with patch(
+			"hostel360.hostel_communication.providers.whatsapp.send_authentication_code",
+			return_value=DeliveryResult.sent("WhatsApp Cloud API", "wamid.2"),
+		) as send:
+			self.assertTrue(dispatch.send_otp_message(random_mobile(), "135790", "whatsapp"))
+		self.assertEqual(send.call_args.args[1], "h360_otp_login")
+		self.assertEqual(send.call_args.args[3], "135790")
+
+	def test_send_direct_logs_without_a_template(self):
+		mobile = random_mobile()
+		self.assertTrue(dispatch.send_direct("SMS", mobile, "Disk 91%", "Disk usage on app-1 is 91%."))
+		log = frappe.get_all(
+			"Message Log",
+			filters={"event": ev.DIRECT_MESSAGE, "recipient": f"{mobile[:2]}xxxxxx{mobile[-2:]}"},
+			fields=["channel", "status", "subject", "template"],
+			limit=1,
+		)[0]
+		self.assertEqual((log.channel, log.status, log.subject), ("SMS", "Skipped", "Disk 91%"))
+		self.assertIsNone(log.template)
+		self.assertFalse(dispatch.send_direct("Fax", mobile, "x", "y"))
+		self.assertFalse(dispatch.send_direct("Email", "ops@portal.hostel360.invalid", "x", "y"))
+
+
+class TestRecipients(IntegrationTestCase):
+	def test_recipients_for_users(self):
+		user = make_user(WARDEN_ROLE)
+		mobile = random_mobile()
+		frappe.db.set_value("User", user, "mobile_no", mobile)
+		disabled = make_user(WARDEN_ROLE)
+		frappe.db.set_value("User", disabled, "enabled", 0)
+		recipients = dispatch.recipients_for_users([user, disabled, "Guest", user])
+		self.assertEqual(len(recipients), 1)
+		self.assertEqual(recipients[0]["user"], user)
+		self.assertEqual(recipients[0]["mobile"], mobile)
+		self.assertEqual(recipients[0]["email"], user)
+		self.assertEqual(recipients[0]["kind"], "staff")
+
+	def test_recipients_for_approvers_respects_hostel_scope(self):
+		if not frappe.db.exists("DocType", "Hostel"):
+			self.skipTest("Hostel Setup is not installed on this site")
+		hostels = []
+		for _i in range(2):
+			code = f"T{frappe.generate_hash(length=5).upper()}"
+			frappe.get_doc(
+				{
+					"doctype": "Hostel",
+					"hostel_name": f"Test Hostel {code}",
+					"hostel_code": code,
+					"gender": "Male",
+				}
+			).insert(ignore_permissions=True)
+			hostels.append(code)
+
+		scoped_here = make_user(DEPUTY_WARDEN_ROLE)
+		scoped_elsewhere = make_user(DEPUTY_WARDEN_ROLE)
+		unrestricted = make_user(DEPUTY_WARDEN_ROLE)
+		warden = make_user(WARDEN_ROLE)
+		for user, hostel in ((scoped_here, hostels[0]), (scoped_elsewhere, hostels[1])):
+			frappe.get_doc(
+				{"doctype": "User Permission", "user": user, "allow": "Hostel", "for_value": hostel}
+			).insert(ignore_permissions=True)
+
+		users = {r["user"] for r in dispatch.recipients_for_approvers(DEPUTY_WARDEN_ROLE, hostels[0])}
+		self.assertIn(scoped_here, users)
+		self.assertIn(unrestricted, users)
+		self.assertIn(warden, users)
+		self.assertNotIn(scoped_elsewhere, users)
+
+		everyone = {r["user"] for r in dispatch.recipients_for_approvers(DEPUTY_WARDEN_ROLE)}
+		self.assertTrue({scoped_here, scoped_elsewhere, unrestricted, warden} <= everyone)
+
+	def test_recipients_for_student_and_guardians(self):
+		if not frappe.db.exists("DocType", "Hostel Student"):
+			self.skipTest("Hostel People is not installed on this site")
+		guardians = []
+		for status in ("Pending", "Rejected"):
+			guardian = frappe.get_doc(
+				{
+					"doctype": "Hostel Guardian",
+					"guardian_name": f"Guardian {status}",
+					"relation": "Mother",
+					"mobile_number": random_mobile(),
+				}
+			).insert(ignore_permissions=True)
+			guardians.append(guardian)
+		student = frappe.get_doc(
+			{
+				"doctype": "Hostel Student",
+				"register_number": f"MSG{frappe.generate_hash(length=8).upper()}",
+				"first_name": "Recipient",
+				"last_name": "Student",
+				"gender": "Female",
+				"mobile_number": random_mobile(),
+				"status": "Active",
+				"guardians": [{"guardian": g.name, "relation": "Mother"} for g in guardians],
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.db.set_value("Hostel Guardian", guardians[1].name, "validation_status", "Rejected")
+
+		only_student = dispatch.recipients_for_student(student.name)
+		self.assertEqual(
+			[(r["kind"], r["mobile"]) for r in only_student], [("student", student.mobile_number)]
+		)
+
+		everyone = dispatch.recipients_for_student(student.name, include_guardians=True)
+		self.assertEqual([r["kind"] for r in everyone], ["student", "parent"])
+		self.assertEqual(everyone[1]["mobile"], guardians[0].mobile_number)
+
+		self.assertEqual(
+			dispatch.recipients_for_student(student.name, include_student=False, include_guardians=True)[0][
+				"name"
+			],
+			"Guardian Pending",
+		)
+		self.assertEqual(dispatch.recipients_for_student("NO-SUCH-STUDENT"), [])

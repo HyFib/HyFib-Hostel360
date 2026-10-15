@@ -1,0 +1,204 @@
+{
+ "actions": [],
+ "autoname": "format:{event}-{channel}",
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "Wording for each event and channel. Templates are rendered with Jinja.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "event",
+  "channel",
+  "enabled",
+  "column_break_header",
+  "event_label",
+  "subject",
+  "message_section",
+  "body",
+  "available_variables",
+  "provider_section",
+  "dlt_template_id",
+  "msg91_template_id",
+  "whatsapp_template_name",
+  "whatsapp_language",
+  "column_break_provider",
+  "template_parameters",
+  "standard_hash"
+ ],
+ "fields": [
+  {
+   "fieldname": "event",
+   "fieldtype": "Select",
+   "label": "Event",
+   "options": "\notp_login\nstudent_validated\nroom_allotted\nfee_due_published\nfee_reminder\npayment_received\nmess_bill_published\nmenu_published\nmess_reduction_submitted\nmess_reduction_decided\nleave_submitted\nleave_parent_approval_required\nleave_warden_approval_required\nleave_decided\nleave_overdue\ngrievance_received\ngrievance_assigned\ngrievance_updated\ngrievance_escalated\ngrievance_resolved\nbonafide_decided\nsupport_ticket_update\nmess_low_stock",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Select",
+   "label": "Channel",
+   "options": "SMS\nWhatsApp\nEmail\nIn-App",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_header",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "event_label",
+   "fieldtype": "Data",
+   "label": "Event Description",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "label": "Subject",
+   "length": 500,
+   "depends_on": "eval:in_list(['Email', 'In-App'], doc.channel)",
+   "mandatory_depends_on": "eval:in_list(['Email', 'In-App'], doc.channel)",
+   "description": "Jinja allowed. Used as the e-mail subject or the in-app notification title."
+  },
+  {
+   "fieldname": "message_section",
+   "fieldtype": "Section Break",
+   "label": "Message"
+  },
+  {
+   "fieldname": "body",
+   "fieldtype": "Code",
+   "label": "Body",
+   "options": "Jinja",
+   "reqd": 1,
+   "description": "Jinja template. Helpers: rupees(amount), format_inr(amount), fdate(date), fdatetime(datetime), short(text, length). SMS: keep under 160 characters, plain English, and register the same wording on the DLT portal."
+  },
+  {
+   "fieldname": "available_variables",
+   "fieldtype": "Small Text",
+   "label": "Available Variables",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "provider_section",
+   "fieldtype": "Section Break",
+   "label": "Provider Template",
+   "depends_on": "eval:in_list(['SMS', 'WhatsApp'], doc.channel)"
+  },
+  {
+   "fieldname": "dlt_template_id",
+   "fieldtype": "Data",
+   "label": "DLT Template ID",
+   "depends_on": "eval:doc.channel=='SMS'",
+   "description": "Content template ID from the DLT portal."
+  },
+  {
+   "fieldname": "msg91_template_id",
+   "fieldtype": "Data",
+   "label": "MSG91 Flow Template ID",
+   "depends_on": "eval:doc.channel=='SMS'",
+   "description": "Template ID of the MSG91 flow linked to this DLT template. When set, MSG91 sends its stored wording with these variables; when blank, the text above is sent with the DLT Template ID."
+  },
+  {
+   "fieldname": "whatsapp_template_name",
+   "fieldtype": "Data",
+   "label": "WhatsApp Template Name",
+   "depends_on": "eval:doc.channel=='WhatsApp'",
+   "description": "Approved template name in WhatsApp Manager."
+  },
+  {
+   "fieldname": "whatsapp_language",
+   "fieldtype": "Select",
+   "label": "WhatsApp Template Language",
+   "options": "en\nen_US\nen_GB\nta",
+   "default": "en",
+   "depends_on": "eval:doc.channel=='WhatsApp'"
+  },
+  {
+   "fieldname": "column_break_provider",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "template_parameters",
+   "fieldtype": "Small Text",
+   "label": "Template Parameters",
+   "depends_on": "eval:in_list(['SMS', 'WhatsApp'], doc.channel)",
+   "description": "One Jinja expression per line, in order. WhatsApp receives them as {{1}}, {{2}}…; MSG91 receives them as VAR1, VAR2… together with every context variable by name."
+  },
+  {
+   "fieldname": "standard_hash",
+   "fieldtype": "Data",
+   "label": "Standard Wording Fingerprint",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "Fingerprint of the wording as shipped. While it matches, upgrades may refresh the wording; once the template is edited it is never changed automatically."
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-15 15:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Communication",
+ "name": "Message Template",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HyFib Operations",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "event_label",
+ "track_changes": 1
+}

@@ -1,0 +1,297 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 16:30:00.000000",
+ "default_print_format": "Hostel Fee Receipt",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "student",
+  "student_name",
+  "hostel",
+  "column_break_payment",
+  "payment_date",
+  "mode_of_payment",
+  "amount",
+  "section_reference",
+  "reference_no",
+  "reference_date",
+  "column_break_reference",
+  "bank_name",
+  "payment_transaction",
+  "section_allocations",
+  "allocations",
+  "total_allocated",
+  "column_break_allocated",
+  "unallocated_amount",
+  "section_other",
+  "received_by",
+  "column_break_other",
+  "remarks",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "RCPT-.YYYY.-.#####",
+   "default": "RCPT-.YYYY.-.#####",
+   "reqd": 1,
+   "hidden": 1,
+   "print_hide": 1,
+   "no_copy": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "label": "Student",
+   "options": "Hostel Student",
+   "reqd": 1,
+   "bold": 1,
+   "search_index": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "student_name",
+   "fieldtype": "Data",
+   "label": "Student Name",
+   "fetch_from": "student.full_name",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_global_search": 1
+  },
+  {
+   "fieldname": "hostel",
+   "fieldtype": "Link",
+   "label": "Hostel",
+   "options": "Hostel",
+   "fetch_from": "student.current_hostel",
+   "fetch_if_empty": 1,
+   "read_only": 1,
+   "search_index": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_payment",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_date",
+   "fieldtype": "Date",
+   "label": "Payment Date",
+   "reqd": 1,
+   "default": "Today",
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "mode_of_payment",
+   "fieldtype": "Select",
+   "label": "Mode of Payment",
+   "options": "Online\nCash\nUPI\nDemand Draft\nCheque\nBank Transfer",
+   "default": "Cash",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "options": "",
+   "reqd": 1,
+   "bold": 1,
+   "in_list_view": 1,
+   "non_negative": 1
+  },
+  {
+   "fieldname": "section_reference",
+   "fieldtype": "Section Break",
+   "label": "Payment Reference"
+  },
+  {
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "label": "Reference No",
+   "search_index": 1,
+   "in_global_search": 1,
+   "mandatory_depends_on": "eval:doc.mode_of_payment && doc.mode_of_payment != 'Cash'",
+   "description": "UPI/UTR, DD, cheque or bank transaction number. Not needed for cash."
+  },
+  {
+   "fieldname": "reference_date",
+   "fieldtype": "Date",
+   "label": "Reference Date",
+   "depends_on": "eval:doc.mode_of_payment && doc.mode_of_payment != 'Cash'"
+  },
+  {
+   "fieldname": "column_break_reference",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bank_name",
+   "fieldtype": "Data",
+   "label": "Bank / Branch",
+   "depends_on": "eval:in_list(['Demand Draft', 'Cheque', 'Bank Transfer'], doc.mode_of_payment)"
+  },
+  {
+   "fieldname": "payment_transaction",
+   "fieldtype": "Link",
+   "label": "Online Transaction",
+   "options": "Hostel Payment Transaction",
+   "read_only": 1,
+   "search_index": 1,
+   "depends_on": "eval:doc.payment_transaction"
+  },
+  {
+   "fieldname": "section_allocations",
+   "fieldtype": "Section Break",
+   "label": "Allocation to Invoices"
+  },
+  {
+   "fieldname": "allocations",
+   "fieldtype": "Table",
+   "label": "Allocations",
+   "options": "Hostel Payment Allocation"
+  },
+  {
+   "fieldname": "total_allocated",
+   "fieldtype": "Currency",
+   "label": "Total Allocated",
+   "options": "",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_allocated",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unallocated_amount",
+   "fieldtype": "Currency",
+   "label": "Unallocated Amount",
+   "options": "",
+   "read_only": 1,
+   "description": "Only possible for online payments that exceeded the dues at the time they were confirmed."
+  },
+  {
+   "fieldname": "section_other",
+   "fieldtype": "Section Break",
+   "label": "Other Details",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "received_by",
+   "fieldtype": "Link",
+   "label": "Received By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_other",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Hostel Payment",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "search_index": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-15 16:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Fees",
+ "name": "Hostel Payment",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Hostel Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Hostel Warden",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "Deputy Warden",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "Hostel Office Staff",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Mess Manager",
+   "read": 1
+  },
+  {
+   "role": "Institution Auditor",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "search_fields": "student,student_name,mode_of_payment,reference_no",
+ "show_title_field_in_link": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "student_name",
+ "track_changes": 1
+}

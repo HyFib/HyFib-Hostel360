@@ -1,0 +1,237 @@
+# Copyright (c) 2026, HyFib Solutions Private Limited and contributors
+# For license information, please see license.txt
+
+import base64
+import re
+from io import BytesIO
+from unittest.mock import patch
+
+import frappe
+from frappe.tests import IntegrationTestCase
+from frappe.utils import add_days, getdate, nowdate
+
+from hostel360.setup.roles import DEPUTY_WARDEN_ROLE, OFFICE_ROLE, WARDEN_ROLE
+from hostel360.student_services import services, verification
+from hostel360.student_services.testing import (
+	capture_notifications,
+	make_guardian,
+	make_hostel,
+	make_student,
+	make_user,
+	scope_to_hostel,
+	set_hostel_settings,
+)
+from hostel360.student_services.utils import mask_name
+
+IGNORE_TEST_RECORD_DEPENDENCIES = ["Hostel Student", "Hostel", "Hostel Room", "User"]
+DOCTYPE = "Bonafide Certificate Request"
+
+
+class TestBonafideCertificateRequest(IntegrationTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		set_hostel_settings(
+			bonafide_validity_days=90,
+			bonafide_signatory_name="Dr. A. Selvam",
+			bonafide_signatory_designation="Chief Warden",
+			portal_url="https://hostel.example.edu",
+		)
+		self.hostel = make_hostel()
+		self.student = make_student(self.hostel)
+		self.warden = make_user([WARDEN_ROLE])
+		frappe.cache.delete_keys("rl:hostel360:verify-certificate")
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.local.form_dict = frappe._dict()
+
+	def request(self, purpose="Bank Loan", details="Indian Bank, Karaikudi", student=None):
+		return services.request_bonafide((student or self.student).name, purpose, details)
+
+	def approved(self, **kwargs):
+		doc = frappe.get_doc(DOCTYPE, self.request(**kwargs))
+		doc.approve_by(self.warden)
+		return doc
+
+	# ------------------------------------------------------------------ requests
+
+	def test_request_copies_student_details(self):
+		doc = frappe.get_doc(DOCTYPE, self.request())
+		self.assertEqual(doc.status, "Pending")
+		self.assertEqual(doc.hostel, self.hostel)
+		self.assertEqual(doc.student_name, self.student.full_name)
+		self.assertEqual(doc.year_of_study, "2")
+		self.assertFalse(doc.certificate_number)
+
+	def test_duplicate_pending_request_is_refused(self):
+		self.request()
+		with self.assertRaises(frappe.DuplicateEntryError):
+			self.request(details="Another branch")
+		self.request(purpose="Passport", details=None)
+
+	def test_other_purpose_needs_details(self):
+		with self.assertRaises(frappe.ValidationError):
+			self.request(purpose="Other", details="")
+
+	def test_ineligible_students_cannot_request(self):
+		for student in (make_student(self.hostel, validation_status="Pending"), make_student(None)):
+			with self.assertRaises(frappe.ValidationError):
+				self.request(student=student)
+
+	# ------------------------------------------------------------------ decisions
+
+	def test_approval_numbers_and_dates_the_certificate(self):
+		with capture_notifications() as sent:
+			doc = self.approved()
+		year = getdate(nowdate()).year
+		self.assertEqual(doc.status, "Approved")
+		self.assertRegex(doc.certificate_number, rf"^BC/{year}/\d{{5}}$")
+		self.assertEqual(len(doc.verification_code), 16)
+		self.assertRegex(doc.verification_code, r"^[A-Za-z0-9_-]{16}$")
+		self.assertEqual(getdate(doc.issue_date), getdate(nowdate()))
+		self.assertEqual(getdate(doc.valid_till), getdate(add_days(nowdate(), 90)))
+		self.assertEqual(doc.approved_by, self.warden)
+		self.assertEqual(sent.recipients("bonafide_decided"), {self.student.user})
+
+		second = self.approved(purpose="Scholarship", details="Post-matric")
+		first_number = int(doc.certificate_number.rsplit("/", 1)[1])
+		self.assertEqual(int(second.certificate_number.rsplit("/", 1)[1]), first_number + 1)
+		self.assertNotEqual(second.verification_code, doc.verification_code)
+
+	def test_rejection_needs_a_reason_and_is_final(self):
+		doc = frappe.get_doc(DOCTYPE, self.request())
+		with self.assertRaises(frappe.ValidationError):
+			doc.reject_by("", self.warden)
+		doc.reject_by("Fee dues pending; clear them first", self.warden)
+		self.assertEqual(doc.status, "Rejected")
+		with self.assertRaises(frappe.ValidationError):
+			doc.approve_by(self.warden)
+
+	def test_only_hostel_approvers_decide(self):
+		doc = frappe.get_doc(DOCTYPE, self.request())
+		office = make_user([OFFICE_ROLE])
+		other_deputy = make_user([DEPUTY_WARDEN_ROLE])
+		scope_to_hostel(other_deputy, make_hostel())
+		for user in (office, other_deputy, self.student.user):
+			with self.assertRaises(frappe.PermissionError):
+				doc.approve_by(user)
+		deputy = make_user([DEPUTY_WARDEN_ROLE])
+		scope_to_hostel(deputy, self.hostel)
+		doc.approve_by(deputy)
+		self.assertEqual(doc.status, "Approved")
+
+	def test_handover_and_locking(self):
+		doc = self.approved()
+		office = make_user([OFFICE_ROLE])
+		doc.mark_issued_by(office)
+		self.assertEqual(doc.status, "Issued")
+		self.assertEqual(doc.issued_by, office)
+		doc.purpose_details = "Changed after issue"
+		with self.assertRaises(frappe.ValidationError):
+			doc.save(ignore_permissions=True)
+
+	# ------------------------------------------------------------------ verification
+
+	def test_verification_lookup(self):
+		doc = self.approved()
+		result = verification.lookup_certificate(doc.verification_code)
+		self.assertEqual(result["state"], "valid")
+		self.assertEqual(result["certificate_number"], doc.certificate_number)
+		self.assertEqual(result["student_name"], "R***** K")
+		self.assertNotIn("Rajesh", str(result))
+
+		frappe.db.set_value(DOCTYPE, doc.name, "valid_till", add_days(nowdate(), -1))
+		self.assertEqual(verification.lookup_certificate(doc.verification_code)["state"], "expired")
+
+		for code in ("", "short", doc.verification_code.swapcase(), "x" * 16, "'; drop table--1"):
+			self.assertEqual(verification.lookup_certificate(code)["state"], "not_found")
+
+	def test_pending_or_rejected_requests_do_not_verify(self):
+		doc = frappe.get_doc(DOCTYPE, self.request())
+		doc.reject_by("Not eligible", self.warden)
+		self.assertEqual(verification.lookup_certificate("A" * 16)["state"], "not_found")
+
+	def test_public_page_context(self):
+		from hostel360.www import verify_certificate
+
+		doc = self.approved()
+		frappe.set_user("Guest")
+		frappe.local.form_dict = frappe._dict(code=f"  {doc.verification_code} ")
+		context = verify_certificate.get_context(frappe._dict())
+		self.assertEqual(context.result["state"], "valid")
+		self.assertFalse(context.rate_limited)
+		self.assertEqual(context.code, doc.verification_code)
+
+		frappe.local.form_dict = frappe._dict()
+		self.assertIsNone(verify_certificate.get_context(frappe._dict()).result)
+
+	def test_public_page_is_rate_limited(self):
+		from hostel360.www import verify_certificate
+
+		frappe.set_user("Guest")
+		frappe.local.form_dict = frappe._dict(code="A" * 16)
+		with patch.object(verification, "LOOKUP_LIMIT", 2):
+			contexts = [verify_certificate.get_context(frappe._dict()) for _attempt in range(3)]
+		self.assertEqual([c.rate_limited for c in contexts], [False, False, True])
+		self.assertEqual(contexts[-1].http_status_code, 429)
+		self.assertIsNone(contexts[-1].result)
+
+	def test_mask_name(self):
+		self.assertEqual(mask_name("Rajesh Kannan"), "R***** K")
+		self.assertEqual(mask_name("Priya"), "P****")
+		self.assertEqual(mask_name("  s  kumar  raja "), "s K R")
+		self.assertEqual(mask_name(""), "")
+
+	# ------------------------------------------------------------------ printing
+
+	def test_certificate_print_has_verifiable_qr(self):
+		make_guardian(self.student.name, relation="Father")
+		doc = self.approved()
+		html = frappe.get_print(DOCTYPE, doc.name, print_format="Bonafide Certificate", no_letterhead=1)
+		self.assertIn("BONAFIDE CERTIFICATE", html)
+		self.assertIn(doc.certificate_number, html)
+		self.assertIn("Dr. A. Selvam", html)
+		self.assertIn("son of Guardian", html)
+		self.assertIn("applying for a bank loan (Indian Bank, Karaikudi)", html)
+		self.assertIn("https://hostel.example.edu/verify-certificate", html)
+
+		match = re.search(r'src="data:image/png;base64,([^"]+)"', html)
+		self.assertTrue(match, "QR code image missing")
+		from PIL import Image
+
+		image = Image.open(BytesIO(base64.b64decode(match.group(1))))
+		self.assertEqual(image.format, "PNG")
+		self.assertGreaterEqual(image.size[0], 150)
+
+	def test_unapproved_request_prints_no_certificate(self):
+		name = self.request()
+		html = frappe.get_print(DOCTYPE, name, print_format="Bonafide Certificate", no_letterhead=1)
+		self.assertIn("NOT A CERTIFICATE", html)
+		self.assertNotIn("data:image/png", html)
+		with self.assertRaises(frappe.ValidationError):
+			services.get_bonafide_pdf(name)
+
+	def test_portal_pdf_download(self):
+		from frappe.utils import pdf as frappe_pdf
+
+		original_get_pdf = frappe_pdf.get_pdf
+
+		def offline_get_pdf(html, *args, **kwargs):
+			# The dev container cannot resolve the site's host name, so leave out the links
+			# to the site's own stylesheets that wkhtmltopdf would otherwise fetch.
+			html = re.sub(r"<link[^>]*>|<script[^>]*>.*?</script>", "", html, flags=re.S)
+			return original_get_pdf(html, *args, **kwargs)
+
+		doc = self.approved()
+		frappe.set_user(self.student.user)
+		with patch("frappe.utils.pdf.get_pdf", side_effect=offline_get_pdf):
+			pdf = services.get_bonafide_pdf(doc.name)
+		self.assertTrue(pdf.startswith(b"%PDF"))
+		self.assertFalse(frappe.flags.ignore_print_permissions)
+
+	def test_portal_lists(self):
+		doc = self.approved()
+		rows = services.list_certificates(self.student.name)
+		self.assertEqual(rows[0]["name"], doc.name)
+		self.assertTrue(rows[0]["can_download"])
+		self.assertFalse(rows[0]["is_expired"])

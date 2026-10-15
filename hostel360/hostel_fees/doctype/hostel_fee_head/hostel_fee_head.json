@@ -1,0 +1,141 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:fee_head_name",
+ "creation": "2026-10-15 16:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "fee_head_name",
+  "fee_category",
+  "column_break_head",
+  "is_refundable",
+  "is_active",
+  "section_description",
+  "description"
+ ],
+ "fields": [
+  {
+   "fieldname": "fee_head_name",
+   "fieldtype": "Data",
+   "label": "Fee Head",
+   "reqd": 1,
+   "unique": 1,
+   "bold": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "fee_category",
+   "fieldtype": "Select",
+   "label": "Category",
+   "options": "Hostel\nMess\nDeposit\nFine\nOther",
+   "default": "Hostel",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_refundable",
+   "fieldtype": "Check",
+   "label": "Refundable",
+   "default": "0",
+   "in_list_view": 1,
+   "description": "Refundable heads such as the caution deposit are returned when the student vacates."
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": "1",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "section_description",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-15 16:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Fees",
+ "name": "Hostel Fee Head",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Hostel Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Hostel Warden",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "Deputy Warden",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "Hostel Office Staff",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Mess Manager",
+   "read": 1
+  },
+  {
+   "role": "Institution Auditor",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "quick_entry": 1,
+ "search_fields": "fee_category",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "fee_head_name",
+ "track_changes": 1
+}

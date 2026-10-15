@@ -1,0 +1,8 @@
+{
+	"private": true,
+	"scripts": {
+		"postinstall": "cd frontend && yarn install --frozen-lockfile",
+		"build": "cd frontend && yarn build",
+		"dev": "cd frontend && yarn dev"
+	}
+}
