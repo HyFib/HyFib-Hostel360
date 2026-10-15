@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# Send one JSON message to the Hostel360 ingest API (hostel360.api.ops.ingest).
+#
+#   h360-ingest <file>        message from a file
+#   h360-ingest -             message from standard input
+#   h360-ingest --flush       retry spooled messages (the agent does this every run)
+#
+# Each request is signed with the shared ingest secret (Ops Alert Settings):
+#   X-H360-Timestamp: <unix seconds>
+#   X-H360-Signature: hex(HMAC-SHA256(secret, "<timestamp>.<body>"))
+# The server rejects timestamps more than 300 s away and any signature it has already seen,
+# so a retry of the same signed request is answered 409 and counts as delivered.
+#
+# Messages that cannot be delivered (application down, network) are kept in the spool for
+# up to 24 hours and re-signed on the next attempt. A critical alert that cannot be
+# delivered is also published to the OCI Notifications topic, when one is configured, so
+# HyFib still hears about it while the application itself is unavailable.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-ingest
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_require_cmd curl jq python3
+
+: "${H360_INGEST_URL:?H360_INGEST_URL is not set in agent.env}"
+: "${H360_INGEST_SECRET:?H360_INGEST_SECRET is not set in agent.env}"
+spool="${H360_SPOOL_DIR}/ingest"
+spool_max_age_minutes=1440
+spool_max_files=2000
+mkdir -p "${spool}"
+chmod 0700 "${spool}"
+
+sign() {
+	# sign <timestamp> <file>: hex HMAC-SHA256 of "<timestamp>.<body>"; the secret is passed
+	# in the environment, never on a command line.
+	H360_HMAC_KEY="${H360_INGEST_SECRET}" python3 - "$1" "$2" <<'PY'
+import hashlib
+import hmac
+import os
+import sys
+
+with open(sys.argv[2], "rb") as handle:
+	body = handle.read()
+key = os.environ["H360_HMAC_KEY"].encode()
+print(hmac.new(key, sys.argv[1].encode() + b"." + body, hashlib.sha256).hexdigest())
+PY
+}
+
+post() {
+	# post <file>: 0 delivered (or already delivered), 1 retry later, 2 rejected for good
+	local file="$1" timestamp signature status attempt
+	local -a tls=()
+	[[ -n "${H360_INGEST_RESOLVE:-}" ]] && tls+=(--resolve "${H360_INGEST_RESOLVE}")
+	[[ -n "${H360_INGEST_CACERT:-}" ]] && tls+=(--cacert "${H360_INGEST_CACERT}")
+
+	timestamp="$(date +%s)"
+	signature="$(sign "${timestamp}" "${file}")"
+	for attempt in 1 2; do
+		status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+			--max-time 15 --connect-timeout 5 "${tls[@]}" \
+			--header 'Content-Type: application/json' \
+			--header "X-H360-Timestamp: ${timestamp}" \
+			--header "X-H360-Signature: ${signature}" \
+			--data-binary "@${file}" \
+			"${H360_INGEST_URL}" 2>/dev/null || true)"
+		case "${status}" in
+			2??) return 0 ;;
+			409) return 0 ;;
+			400 | 413 | 417 | 422)
+				log_error "ingest rejected a message (HTTP ${status}); see Error Log in Hostel360"
+				return 2
+				;;
+			401 | 403)
+				log_error "ingest refused the signature (HTTP ${status}); check H360_INGEST_SECRET and the clock"
+				return 1
+				;;
+		esac
+		[[ "${attempt}" -lt 2 ]] && sleep 2
+	done
+	log_warn "ingest unreachable (last HTTP status '${status:-none}')"
+	return 1
+}
+
+notify_oci() {
+	# Fallback for critical alerts while the application cannot take them.
+	local file="$1" title body
+	[[ -n "${H360_ONS_TOPIC_ID:-}" ]] || return 0
+	command -v oci >/dev/null 2>&1 || return 0
+	[[ "$(jq -r '.type // ""' "${file}")" == "alert" ]] || return 0
+	[[ "$(jq -r '.severity // ""' "${file}")" == "Critical" ]] || return 0
+	title="$(jq -r '"[Hostel360] " + (.title // .key)' "${file}" | cut -c1-120)"
+	body="$(jq -r '"Host: \(.details.host // "-")\nKey: \(.key)\n\n\(.description // "")\n\nThe Hostel360 application did not accept this alert, so it was sent directly from the server."' "${file}")"
+	if oci ons message publish --auth instance_principal --topic-id "${H360_ONS_TOPIC_ID}" \
+		--title "${title}" --body "${body}" >/dev/null 2>&1; then
+		log_notice "critical alert published to OCI Notifications"
+	else
+		log_warn "OCI Notifications publish failed as well"
+	fi
+}
+
+spool_message() {
+	local file="$1" count target
+	count="$(find "${spool}" -maxdepth 1 -type f -name '*.json' | wc -l)"
+	if [[ "${count}" -ge "${spool_max_files}" ]]; then
+		log_error "ingest spool is full (${count} messages); dropping the oldest"
+		find "${spool}" -maxdepth 1 -type f -name '*.json' -printf '%T@ %p\n' | sort -n | head -n 100 |
+			cut -d' ' -f2- | xargs -r rm -f --
+	fi
+	target="$(mktemp "${spool}/$(date +%Y%m%d%H%M%S)-XXXXXX.json")"
+	cp -- "${file}" "${target}"
+}
+
+flush_spool() {
+	local file result
+	find "${spool}" -maxdepth 1 -type f -name '*.json' -mmin "+${spool_max_age_minutes}" -delete
+	while IFS= read -r file; do
+		result=0
+		post "${file}" || result=$?
+		case "${result}" in
+			0 | 2) rm -f -- "${file}" ;;
+			*) return 1 ;;
+		esac
+	done < <(find "${spool}" -maxdepth 1 -type f -name '*.json' | sort)
+}
+
+h360_lock ingest 60
+
+if [[ "${1:-}" == "--flush" ]]; then
+	flush_spool || exit 1
+	exit 0
+fi
+
+source_file="${1:--}"
+message="$(mktemp)"
+trap 'rm -f -- "${message}"' EXIT
+if [[ "${source_file}" == "-" ]]; then
+	cat >"${message}"
+else
+	cp -- "${source_file}" "${message}"
+fi
+jq -e 'type == "object" and has("type")' "${message}" >/dev/null 2>&1 || die "message is not a JSON object with a type"
+# Compact form: the signature covers exactly the bytes sent.
+jq -c . "${message}" >"${message}.c" && mv -f -- "${message}.c" "${message}"
+
+# Older messages go first so the server sees events in order. When even those cannot be
+# delivered the application is down: keep this one too instead of waiting on it again.
+result=0
+if flush_spool; then
+	post "${message}" || result=$?
+else
+	result=1
+fi
+case "${result}" in
+	0) exit 0 ;;
+	2) exit 1 ;;
+	*)
+		spool_message "${message}"
+		notify_oci "${message}"
+		exit 1
+		;;
+esac

@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# Hostel360 stack logs on the data volume: daily, 180 days (CERT-In). copytruncate because
+# the containers keep the files open.
+{{ h360_data_dir }}/logs/waf/*.log
+{{ h360_data_dir }}/logs/clamav/*.log
+{{ h360_data_dir }}/mariadb/slow.log
+{
+	daily
+	rotate 180
+	missingok
+	notifempty
+	compress
+	delaycompress
+	dateext
+	copytruncate
+	su root root
+}

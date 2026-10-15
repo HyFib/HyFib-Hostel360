@@ -1,0 +1,2 @@
+# Replaces the image's logging.conf: the Hostel360 access and error logs (format "h360",
+# written to files for fail2ban and the host agent) are configured in 00-hostel360.conf.

@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# Monthly restore test (h360-restore-test.timer, 2nd of each month, 03:00 IST).
+#
+# Proves the backups can be restored without touching the live site: the latest database
+# snapshot is loaded into a throwaway MariaDB container with no network, and every site
+# database is compared with the live one (number of tables, and rows in the core tables).
+# The result is reported to Hostel360 as an Ops Backup Record of type "Restore Test", which
+# the monthly performance report quotes (tender: monthly restore test, RPO 24 h, RTO 4 h).
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-restore-test
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_load_env "${H360_CONFIG_DIR}/backup.env"
+h360_require_cmd restic rclone docker jq
+h360_lock restore-test
+
+export RESTIC_CACHE_DIR="${RESTIC_CACHE_DIR:-/var/cache/restic}"
+data_dir="${H360_DATA_DIR:-/srv/hostel360}"
+host="$(h360_host)"
+started_at="$(h360_now_iso)"
+start_seconds="$(date +%s)"
+ts="$(date +%Y%m%d%H%M%S)"
+name="h360-restore-test-${ts}"
+scratch="${data_dir}/restore-test/${ts}"
+core_tables=("tabUser" "tabHostel Student" "tabRoom Allotment" "tabHostel Fee Invoice" "tabHostel Payment")
+snapshot=""
+
+cleanup() {
+	docker rm -f "${name}" >/dev/null 2>&1 || true
+	rm -rf -- "${scratch}"
+}
+trap cleanup EXIT
+
+report() {
+	# report <Success|Failed> <message> [bytes]
+	h360_report "$(jq -cn --arg status "$1" --arg message "$2" --arg snapshot "${snapshot}" \
+		--arg started "${started_at}" --arg finished "$(h360_now_iso)" --arg host "${host}" \
+		--argjson bytes "${3:-0}" \
+		'{type: "backup", source: "Host Agent", backup_type: "Restore Test", status: $status,
+		  started_at: $started, finished_at: $finished, snapshot_id: $snapshot, size_bytes: $bytes,
+		  repository: "restore test", host: $host, message: $message}')"
+}
+
+fail() {
+	log_error "$1"
+	report Failed "$1"
+	h360_alert "host.restore-test.${host}" Critical Backup "Monthly restore test failed on ${host}" "$1"
+	exit 1
+}
+
+count_tables() {
+	# count_tables <exec function> <db>
+	"$1" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$2'"
+}
+
+count_rows() {
+	# count_rows <exec function> <db> <table>: row count, or -1 when the table is absent
+	local exists
+	exists="$("$1" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$2' AND table_name = '$3'")"
+	if [[ "${exists}" == 1 ]]; then
+		"$1" -N -B -e "SELECT COUNT(*) FROM \`$2\`.\`$3\`"
+	else
+		echo -1
+	fi
+}
+
+test_exec() {
+	# shellcheck disable=SC2016 # expanded by the shell inside the scratch container
+	docker exec -i "${name}" sh -c 'MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" exec mariadb --user=root "$@"' sh "$@"
+}
+
+# --------------------------------------------------------------------------- snapshot
+
+snapshot="$(restic snapshots --json --host "${host}" --tag db --latest 1 | jq -r 'sort_by(.time) | last | .short_id // empty')" ||
+	fail "could not list snapshots in the repository"
+[[ -n "${snapshot}" ]] || fail "no database snapshot found for ${host}"
+snapshot_time="$(restic snapshots --json "${snapshot}" | jq -r '.[0].time[0:19]')"
+log_info "testing snapshot ${snapshot} (${snapshot_time})"
+
+# --------------------------------------------------------------------------- throwaway database
+
+live="$(h360_container mariadb)"
+[[ -n "${live}" ]] || fail "the live mariadb container is not running (needed for comparison)"
+image="$(docker inspect --format '{{.Config.Image}}' "${live}")"
+mkdir -p "${scratch}"
+password="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+
+docker run -d --name "${name}" --network none --memory 3g \
+	-e MARIADB_ROOT_PASSWORD="${password}" \
+	-v "${scratch}:/var/lib/mysql" \
+	"${image}" \
+	--character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci \
+	--innodb-buffer-pool-size=1G --skip-log-bin --innodb-read-only-compressed=OFF >/dev/null ||
+	fail "could not start the restore test database (${image})"
+
+ready=0
+for _ in $(seq 1 60); do
+	if docker exec "${name}" healthcheck.sh --connect --innodb_initialized >/dev/null 2>&1; then
+		ready=1
+		break
+	fi
+	sleep 5
+done
+[[ "${ready}" == 1 ]] || fail "restore test database did not start"
+
+# --------------------------------------------------------------------------- restore
+
+log_info "loading the snapshot"
+if ! restic dump "${snapshot}" /hostel360-databases.sql | test_exec --batch; then
+	fail "loading snapshot ${snapshot} into a scratch database failed"
+fi
+
+# --------------------------------------------------------------------------- compare
+
+problems=()
+details=()
+mapfile -t databases < <(h360_site_databases)
+for db in "${databases[@]}"; do
+	[[ "${db}" =~ ^[A-Za-z0-9_]+$ ]] || continue
+	live_tables="$(count_tables h360_db_exec "${db}")"
+	restored_tables="$(count_tables test_exec "${db}")"
+	details+=("${db}: ${restored_tables}/${live_tables} tables")
+	if [[ "${restored_tables}" -eq 0 ]]; then
+		problems+=("${db} has no tables in the snapshot")
+	elif [[ "${restored_tables}" -ne "${live_tables}" ]]; then
+		# A deployment after the snapshot can add tables; anything else is a problem.
+		if [[ -s "${H360_STATE_DIR}/deploy/history" && "$(stat -c %Y "${H360_STATE_DIR}/deploy/history")" -gt "$(date -d "${snapshot_time}" +%s)" ]]; then
+			details+=("table count differs after a deployment since the snapshot")
+		else
+			problems+=("${db}: ${restored_tables} tables restored, ${live_tables} live")
+		fi
+	fi
+	for table in "${core_tables[@]}"; do
+		live_rows="$(count_rows h360_db_exec "${db}" "${table}")"
+		restored_rows="$(count_rows test_exec "${db}" "${table}")"
+		[[ "${live_rows}" == -1 ]] && continue
+		details+=("${table}: ${restored_rows}/${live_rows}")
+		if [[ "${restored_rows}" -lt 0 ]]; then
+			problems+=("${db}.${table} missing in the snapshot")
+		elif [[ "${live_rows}" -gt 0 && "${restored_rows}" -eq 0 ]]; then
+			problems+=("${db}.${table} empty in the snapshot but has ${live_rows} rows live")
+		fi
+	done
+done
+
+bytes="$(du -sb "${scratch}" | cut -f1)"
+elapsed=$(($(date +%s) - start_seconds))
+summary="Snapshot ${snapshot} of ${snapshot_time} restored in ${elapsed}s; ${details[*]}"
+if [[ "${#problems[@]}" -gt 0 ]]; then
+	fail "${summary}. Problems: ${problems[*]}"
+fi
+report Success "${summary}." "${bytes}"
+h360_resolve "host.restore-test.${host}" "Restore test passed for ${snapshot}."
+log_notice "restore test passed: ${summary}"

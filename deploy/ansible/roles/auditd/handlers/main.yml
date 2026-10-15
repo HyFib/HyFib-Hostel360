@@ -1,0 +1,8 @@
+# auditd refuses "systemctl restart" (RefuseManualStop); its init script is the supported way.
+- name: Restart auditd
+  ansible.builtin.command: service auditd restart  # noqa: command-instead-of-module
+  changed_when: true
+
+- name: Load audit rules
+  ansible.builtin.command: augenrules --load
+  changed_when: true

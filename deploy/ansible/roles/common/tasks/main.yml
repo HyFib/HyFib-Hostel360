@@ -1,0 +1,163 @@
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ h360_base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Set the time zone
+  community.general.timezone:
+    name: "{{ h360_timezone }}"
+
+- name: Configure chrony with NIC and NPL time servers
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart chrony
+
+- name: Keep chrony running
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Configure unattended security upgrades
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/apt/apt.conf.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - 20auto-upgrades
+    - 52unattended-upgrades-hostel360
+
+- name: Kernel and network hardening
+  ansible.builtin.template:
+    src: sysctl-hostel360.conf.j2
+    dest: /etc/sysctl.d/60-hostel360.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply sysctl
+
+- name: Create journald drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Keep the journal for 180 days
+  ansible.builtin.template:
+    src: journald-hostel360.conf.j2
+    dest: /etc/systemd/journald.conf.d/60-hostel360.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald
+
+- name: Rotate system logs daily and keep 180 days
+  ansible.builtin.template:
+    src: logrotate-rsyslog.j2
+    dest: /etc/logrotate.d/rsyslog
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Keep logrotate's own retention at 180 days for other packages
+  ansible.builtin.lineinfile:
+    path: /etc/logrotate.conf
+    regexp: '^rotate\s+'
+    line: "rotate {{ h360_log_retention_days }}"
+
+- name: Check for swap
+  ansible.builtin.command: swapon --show=NAME --noheadings
+  register: h360_swap
+  changed_when: false
+
+- name: Create a swap file as a safety margin against memory spikes
+  when: h360_swap_size_mb | int > 0 and h360_swap.stdout | length == 0
+  block:
+    - name: Allocate /swapfile
+      ansible.builtin.command: "fallocate -l {{ h360_swap_size_mb }}M /swapfile"
+      args:
+        creates: /swapfile
+
+    - name: Restrict /swapfile
+      ansible.builtin.file:
+        path: /swapfile
+        mode: "0600"
+        owner: root
+        group: root
+
+    - name: Format /swapfile
+      ansible.builtin.command: mkswap /swapfile
+      changed_when: true
+
+    - name: Enable /swapfile
+      ansible.builtin.command: swapon /swapfile
+      changed_when: true
+
+- name: Mount swap at boot
+  ansible.posix.mount:
+    src: /swapfile
+    path: none
+    fstype: swap
+    opts: sw
+    state: present
+  when: h360_swap_size_mb | int > 0
+
+- name: Administrator group
+  ansible.builtin.group:
+    name: "{{ h360_admin_group }}"
+    state: present
+
+- name: Administrator accounts
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    comment: "{{ item.comment | default(omit) }}"
+    groups: "{{ h360_admin_group }}"
+    append: true
+    shell: /bin/bash
+    password: "!"
+    update_password: on_create
+  loop: "{{ h360_admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Administrator SSH keys
+  ansible.posix.authorized_key:
+    user: "{{ item.0.name }}"
+    key: "{{ item.1 }}"
+    state: present
+  loop: "{{ h360_admin_users | subelements('ssh_keys') }}"
+  loop_control:
+    label: "{{ item.0.name }}"
+
+- name: Sudo for administrators (key-only accounts, every command logged by auditd)
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/60-hostel360-admins
+    content: |
+      Defaults:%{{ h360_admin_group }} logfile=/var/log/sudo.log
+      %{{ h360_admin_group }} ALL=(ALL:ALL) NOPASSWD: ALL
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Login banner
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: |
+      Authorised access only. This system belongs to ACGCET Hostels and is operated by
+      HyFib Solutions Private Limited. All activity is logged and monitored; unauthorised
+      use is an offence under the Information Technology Act, 2000.
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /etc/issue.net
+    - /etc/issue

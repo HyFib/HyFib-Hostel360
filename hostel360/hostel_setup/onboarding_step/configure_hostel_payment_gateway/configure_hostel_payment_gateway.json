@@ -1,0 +1,23 @@
+{
+ "action": "Update Settings",
+ "action_label": "Open Payment Settings",
+ "creation": "2026-10-15 18:00:00.000000",
+ "description": "Enter the Razorpay key and webhook secret of the institution's merchant account and enable online payments. Keep **Test Mode** on until a test payment has gone through end to end.",
+ "docstatus": 0,
+ "doctype": "Onboarding Step",
+ "field": "enabled",
+ "idx": 0,
+ "is_complete": 0,
+ "is_single": 1,
+ "is_skipped": 0,
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "Configure Hostel Payment Gateway",
+ "owner": "Administrator",
+ "reference_document": "Hostel Payment Settings",
+ "show_form_tour": 0,
+ "show_full_form": 0,
+ "title": "Configure the payment gateway",
+ "validate_action": 1,
+ "value_to_validate": "1"
+}

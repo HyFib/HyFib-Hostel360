@@ -1,0 +1,492 @@
+{
+ "charts": [
+  {
+   "chart_name": "Monthly Collections",
+   "label": "Monthly Collections"
+  },
+  {
+   "chart_name": "Occupancy by Hostel",
+   "label": "Occupancy by Hostel"
+  },
+  {
+   "chart_name": "Grievances by Category",
+   "label": "Grievances by Category"
+  },
+  {
+   "chart_name": "Leave Applications per Week",
+   "label": "Leave Applications per Week"
+  }
+ ],
+ "content": "[{\"id\":\"52e0923d21\",\"type\":\"onboarding\",\"data\":{\"onboarding_name\":\"Get started with Hostel360\",\"col\":12}},{\"id\":\"4ec5a21180\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Overview</b></span>\",\"col\":12}},{\"id\":\"883e79ef47\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Beds\",\"col\":3}},{\"id\":\"34c985f583\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Occupied Beds\",\"col\":3}},{\"id\":\"fd1654c5d5\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Vacant Beds\",\"col\":3}},{\"id\":\"832f6a3592\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Students on Leave Now\",\"col\":3}},{\"id\":\"78d822d0e8\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Pending Leave Approvals\",\"col\":3}},{\"id\":\"969e7abe3d\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Pending Reductions\",\"col\":3}},{\"id\":\"35f8c1469a\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Open Grievances\",\"col\":3}},{\"id\":\"5466424822\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Escalated Grievances\",\"col\":3}},{\"id\":\"91fa210b42\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Today's Collection\",\"col\":4}},{\"id\":\"03e5a96b47\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"This Month's Collection\",\"col\":4}},{\"id\":\"660c870ae4\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Outstanding Dues\",\"col\":4}},{\"id\":\"73795d70fe\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Open Critical Alerts\",\"col\":6}},{\"id\":\"59970f358f\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Open Support Tickets\",\"col\":6}},{\"id\":\"035330f21a\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Monthly Collections\",\"col\":6}},{\"id\":\"c2a5b444c9\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Occupancy by Hostel\",\"col\":6}},{\"id\":\"4b0d17c972\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Grievances by Category\",\"col\":6}},{\"id\":\"2b9ac4e8c2\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Leave Applications per Week\",\"col\":6}},{\"id\":\"bae75e2554\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick access</b></span>\",\"col\":12}},{\"id\":\"352af32f33\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Room Board\",\"col\":4}},{\"id\":\"9d55343af3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Approvals\",\"col\":4}},{\"id\":\"9c9af8c66e\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Students\",\"col\":4}},{\"id\":\"d896614571\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Fee Invoices\",\"col\":4}},{\"id\":\"0f9852ce29\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Grievances\",\"col\":4}},{\"id\":\"6f78fbf770\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Get Support\",\"col\":4}},{\"id\":\"ee01628951\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Masters and settings</b></span>\",\"col\":12}},{\"id\":\"1d882332b1\",\"type\":\"card\",\"data\":{\"card_name\":\"Hostels and Rooms\",\"col\":4}},{\"id\":\"b459a27657\",\"type\":\"card\",\"data\":{\"card_name\":\"Academic\",\"col\":4}},{\"id\":\"ec555f7597\",\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":4}},{\"id\":\"b8d2e5cdf6\",\"type\":\"card\",\"data\":{\"card_name\":\"Communication\",\"col\":4}},{\"id\":\"414f911317\",\"type\":\"card\",\"data\":{\"card_name\":\"Data Migration\",\"col\":4}},{\"id\":\"0a434cd187\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "creation": "2026-10-15 18:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "layout-dashboard",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Hostel Admin",
+ "links": [
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostels and Rooms",
+   "link_count": 6,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel",
+   "link_count": 0,
+   "link_to": "Hostel",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Block",
+   "link_count": 0,
+   "link_to": "Hostel Block",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Floor",
+   "link_count": 0,
+   "link_to": "Hostel Floor",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Room",
+   "link_count": 0,
+   "link_to": "Hostel Room",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Bed",
+   "link_count": 0,
+   "link_to": "Hostel Bed",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Facility",
+   "link_count": 0,
+   "link_to": "Room Facility",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Academic",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Academic Year",
+   "link_count": 0,
+   "link_to": "Hostel Academic Year",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Department",
+   "link_count": 0,
+   "link_to": "Academic Department",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Program",
+   "link_count": 0,
+   "link_to": "Academic Program",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Settings",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Settings",
+   "link_count": 0,
+   "link_to": "Hostel Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Payment Settings",
+   "link_count": 0,
+   "link_to": "Hostel Payment Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Settings",
+   "link_count": 0,
+   "link_to": "Mess Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Messaging Settings",
+   "link_count": 0,
+   "link_to": "Messaging Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Alert Settings",
+   "link_count": 0,
+   "link_to": "Ops Alert Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Communication",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Message Template",
+   "link_count": 0,
+   "link_to": "Message Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Message Log",
+   "link_count": 0,
+   "link_to": "Message Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Data Migration",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Migration Run",
+   "link_count": 0,
+   "link_to": "Migration Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Migration Record Map",
+   "link_count": 0,
+   "link_to": "Migration Record Map",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Hostel Occupancy",
+   "link_count": 0,
+   "link_to": "Hostel Occupancy",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Bed",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Student Register",
+   "link_count": 0,
+   "link_to": "Student Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Student",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Fee Dues",
+   "link_count": 0,
+   "link_to": "Fee Dues",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Fee Invoice",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Grievance Summary",
+   "link_count": 0,
+   "link_to": "Grievance Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Grievance",
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Setup",
+ "module_onboarding": "Get started with Hostel360",
+ "name": "Hostel Admin",
+ "number_cards": [
+  {
+   "label": "Total Beds",
+   "number_card_name": "Total Beds"
+  },
+  {
+   "label": "Occupied Beds",
+   "number_card_name": "Occupied Beds"
+  },
+  {
+   "label": "Vacant Beds",
+   "number_card_name": "Vacant Beds"
+  },
+  {
+   "label": "Students on Leave Now",
+   "number_card_name": "Students on Leave Now"
+  },
+  {
+   "label": "Pending Leave Approvals",
+   "number_card_name": "Pending Leave Approvals"
+  },
+  {
+   "label": "Pending Reductions",
+   "number_card_name": "Pending Mess Reductions"
+  },
+  {
+   "label": "Open Grievances",
+   "number_card_name": "Open Grievances"
+  },
+  {
+   "label": "Escalated Grievances",
+   "number_card_name": "Escalated Grievances"
+  },
+  {
+   "label": "Today's Collection",
+   "number_card_name": "Fee Collection Today"
+  },
+  {
+   "label": "This Month's Collection",
+   "number_card_name": "Fee Collection This Month"
+  },
+  {
+   "label": "Outstanding Dues",
+   "number_card_name": "Outstanding Dues"
+  },
+  {
+   "label": "Open Critical Alerts",
+   "number_card_name": "Open Critical Alerts"
+  },
+  {
+   "label": "Open Support Tickets",
+   "number_card_name": "Open Support Tickets"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "Hostel Warden"
+  },
+  {
+   "role": "Deputy Warden"
+  },
+  {
+   "role": "Hostel Office Staff"
+  },
+  {
+   "role": "Mess Manager"
+  },
+  {
+   "role": "Mess Staff"
+  },
+  {
+   "role": "Institution Auditor"
+  },
+  {
+   "role": "HyFib Operations"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "format": "",
+   "label": "Room Board",
+   "link_to": "room-board",
+   "stats_filter": "",
+   "type": "Page"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "format": "",
+   "label": "Approvals",
+   "link_to": "approvals",
+   "stats_filter": "",
+   "type": "Page"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "",
+   "label": "Students",
+   "link_to": "Hostel Student",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "format": "{} overdue",
+   "label": "Fee Invoices",
+   "link_to": "Hostel Fee Invoice",
+   "stats_filter": "[[\"Hostel Fee Invoice\", \"status\", \"=\", \"Overdue\"], [\"Hostel Fee Invoice\", \"docstatus\", \"=\", 1]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "format": "{} open",
+   "label": "Grievances",
+   "link_to": "Hostel Grievance",
+   "stats_filter": "[[\"Hostel Grievance\", \"status\", \"in\", [\"Open\", \"In Progress\", \"Escalated\", \"Reopened\"]]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "New",
+   "format": "",
+   "label": "Get Support",
+   "link_to": "Support Ticket",
+   "stats_filter": "[]",
+   "type": "DocType"
+  }
+ ],
+ "standard": 1,
+ "title": "Hostel Admin",
+ "type": "Workspace"
+}

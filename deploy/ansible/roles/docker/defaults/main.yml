@@ -1,0 +1,6 @@
+# Docker Engine from Docker's own repository. Pin a version (apt version string, e.g.
+# "5:29.0.1-1~ubuntu.24.04~noble") to keep upgrades deliberate; empty installs the latest.
+h360_docker_version: ""
+h360_docker_address_pool: 172.31.0.0/16
+h360_docker_log_max_size: 20m
+h360_docker_log_max_file: 10

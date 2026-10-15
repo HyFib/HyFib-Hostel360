@@ -1,0 +1,91 @@
+#!/bin/bash
+# One-shot configurator: writes the bench-wide settings (common_site_config.json) from the
+# environment, so every container of the stack agrees on database, Redis and scanner
+# addresses. Safe to run on every start; values are only rewritten when they differ.
+set -Eeuo pipefail
+
+cd /home/frappe/frappe-bench
+
+: "${DB_HOST:=mariadb}"
+: "${DB_PORT:=3306}"
+: "${REDIS_CACHE:=redis://redis-cache:6379}"
+: "${REDIS_QUEUE:=redis://redis-queue:6379}"
+: "${SOCKETIO_PORT:=9000}"
+: "${CLAMD_HOST:=clamav}"
+: "${CLAMD_PORT:=3310}"
+: "${MAX_FILE_SIZE:=10485760}"
+: "${CHROMIUM_PATH:=/usr/lib/chromium/chromium-headless-shell}"
+: "${FRAPPE_MONITOR:=1}"
+
+log() {
+	printf '%s h360-configure: %s\n' "$(date -Iseconds)" "$*" >&2
+}
+
+current() {
+	# current <key>: value from common_site_config.json ("" when absent)
+	env/bin/python - "$1" <<'PY'
+import json
+import sys
+
+try:
+	with open("sites/common_site_config.json") as handle:
+		value = json.load(handle).get(sys.argv[1])
+except (OSError, ValueError):
+	value = None
+if value is None:
+	print("")
+elif isinstance(value, bool):
+	print("true" if value else "false")
+else:
+	print(value)
+PY
+}
+
+set_global() {
+	# set_global <key> <value> [parse]: parse=1 stores numbers/booleans as JSON
+	local key="$1" value="$2" parse="${3:-0}"
+	if [[ "$(current "${key}")" == "${value}" ]]; then
+		return 0
+	fi
+	if [[ "${parse}" == 1 ]]; then
+		bench set-config -g -p "${key}" "${value}" >/dev/null
+	else
+		bench set-config -g "${key}" "${value}" >/dev/null
+	fi
+	log "set ${key}"
+}
+
+set_global db_host "${DB_HOST}"
+set_global db_port "${DB_PORT}" 1
+set_global redis_cache "${REDIS_CACHE}"
+set_global redis_queue "${REDIS_QUEUE}"
+# Older code paths still read redis_socketio; it points at the queue instance.
+set_global redis_socketio "${REDIS_QUEUE}"
+set_global socketio_port "${SOCKETIO_PORT}" 1
+set_global clamd_host "${CLAMD_HOST}"
+set_global clamd_port "${CLAMD_PORT}" 1
+set_global max_file_size "${MAX_FILE_SIZE}" 1
+set_global monitor "${FRAPPE_MONITOR}" 1
+if [[ -x "${CHROMIUM_PATH}" ]]; then
+	set_global chromium_path "${CHROMIUM_PATH}"
+fi
+
+if [[ -n "${SITE_NAME:-}" ]]; then
+	# Default site for bench commands run inside the containers (what "bench use" sets).
+	set_global default_site "${SITE_NAME}"
+	rm -f sites/currentsite.txt
+
+	if [[ -f "sites/${SITE_NAME}/site_config.json" ]]; then
+		public_url="${PUBLIC_URL:-https://${SITE_NAME}}"
+		site_host="$(env/bin/python -c 'import json, sys; print(json.load(open(sys.argv[1])).get("host_name", ""))' \
+			"sites/${SITE_NAME}/site_config.json" 2>/dev/null || true)"
+		if [[ "${site_host}" != "${public_url}" ]]; then
+			bench --site "${SITE_NAME}" set-config host_name "${public_url}" >/dev/null
+			log "set host_name for ${SITE_NAME}"
+		fi
+	else
+		log "site ${SITE_NAME} does not exist yet; create it with 'bench new-site' (see deploy/README.md)"
+	fi
+fi
+
+log "configuration complete"

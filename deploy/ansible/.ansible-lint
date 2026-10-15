@@ -1,0 +1,9 @@
+# ansible-lint configuration for the Hostel360 playbook
+profile: production
+offline: true
+exclude_paths:
+  - collections/
+skip_list:
+  # Every role reads the same inventory variables (h360_*), defined once in group_vars;
+  # per-role prefixes would mean duplicating each setting under several names.
+  - var-naming[no-role-prefix]

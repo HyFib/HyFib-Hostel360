@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# Guided restore of a Hostel360 backup onto the running stack.
+#
+#   h360-restore list [db|files]                    snapshots in the repository
+#   h360-restore restore [--db SNAPSHOT] [--files SNAPSHOT] [--db-only | --files-only] [--yes]
+#
+# Without snapshot ids the latest database and file snapshots of this host are used.
+# Disaster recovery on a new server works the same way once Ansible has prepared it and
+# the stack is up with an empty site directory: pass --host <old host label> to pick the
+# snapshots of the old server.
+#
+# What happens:
+#   1. the plan is shown and must be confirmed by typing the site name
+#   2. safety copies of the CURRENT state: local dump, offsite restic snapshot tagged
+#      pre-restore and an OCI volume backup
+#   3. maintenance mode, application containers stopped (MariaDB and Redis keep running)
+#   4. site databases dropped and loaded from the snapshot; sites directory synchronised
+#      from the snapshot (uploaded files, site_config.json)
+#   5. database users re-created from site_config.json, containers started, bench migrate
+#      (the snapshot may predate the running release), maintenance off, smoke check
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-restore
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_load_env "${H360_CONFIG_DIR}/backup.env"
+h360_require_cmd restic rclone docker jq rsync gzip
+
+data_dir="${H360_DATA_DIR:-/srv/hostel360}"
+host="$(h360_host)"
+snapshot_host="${host}"
+export RESTIC_CACHE_DIR="${RESTIC_CACHE_DIR:-/var/cache/restic}"
+
+usage() {
+	sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+latest_snapshot() {
+	# latest_snapshot <tag>: id of the newest snapshot with the tag for the snapshot host
+	restic snapshots --json --host "${snapshot_host}" --tag "$1" --latest 1 |
+		jq -r 'sort_by(.time) | last | .short_id // empty'
+}
+
+describe() {
+	restic snapshots --json "$1" | jq -r '.[0] | "\(.short_id)  \(.time[0:19])  host=\(.hostname)  tags=\(.tags | join(","))"'
+}
+
+confirm() {
+	local site="$1" answer
+	if [[ "${assume_yes}" == 1 ]]; then
+		return 0
+	fi
+	[[ -t 0 ]] || die "not a terminal: run interactively or pass --yes"
+	printf '\nThis REPLACES the live data of %s with the snapshot(s) above.\n' "${site}"
+	printf 'Type the site name to continue: '
+	read -r answer
+	[[ "${answer}" == "${site}" ]] || die "confirmation did not match; nothing was changed"
+}
+
+# --------------------------------------------------------------------------- arguments
+
+command="${1:-}"
+[[ -n "${command}" ]] || {
+	usage
+	exit 1
+}
+shift
+
+db_snapshot=""
+files_snapshot=""
+restore_db=1
+restore_files=1
+assume_yes=0
+list_kind=""
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--db)
+			db_snapshot="${2:?--db needs a snapshot id}"
+			shift
+			;;
+		--files)
+			files_snapshot="${2:?--files needs a snapshot id}"
+			shift
+			;;
+		--db-only) restore_files=0 ;;
+		--files-only) restore_db=0 ;;
+		--host)
+			snapshot_host="${2:?--host needs a value}"
+			shift
+			;;
+		--yes) assume_yes=1 ;;
+		db | files) list_kind="$1" ;;
+		*) die "unknown option $1" ;;
+	esac
+	shift
+done
+
+case "${command}" in
+	list)
+		args=(snapshots --host "${snapshot_host}")
+		[[ -n "${list_kind}" ]] && args+=(--tag "${list_kind}")
+		restic "${args[@]}"
+		exit 0
+		;;
+	restore) ;;
+	-h | --help | help)
+		usage
+		exit 0
+		;;
+	*) die "unknown command ${command}" ;;
+esac
+
+h360_lock restore
+h360_lock backup 3600
+
+site="$(h360_stack_value SITE_NAME)"
+port="$(h360_stack_value WAF_HTTPS_PORT)"
+port="${port:-8443}"
+[[ -n "${site}" ]] || die "SITE_NAME is not set in the stack configuration"
+
+if [[ "${restore_db}" == 1 && -z "${db_snapshot}" ]]; then
+	db_snapshot="$(latest_snapshot db)"
+	[[ -n "${db_snapshot}" ]] || die "no database snapshot for host ${snapshot_host}"
+fi
+if [[ "${restore_files}" == 1 && -z "${files_snapshot}" ]]; then
+	files_snapshot="$(latest_snapshot files)"
+	[[ -n "${files_snapshot}" ]] || die "no file snapshot for host ${snapshot_host}"
+fi
+
+printf 'Site:      %s\n' "${site}"
+[[ "${restore_db}" == 1 ]] && printf 'Database:  %s\n' "$(describe "${db_snapshot}")"
+[[ "${restore_files}" == 1 ]] && printf 'Files:     %s\n' "$(describe "${files_snapshot}")"
+confirm "${site}"
+
+# --------------------------------------------------------------------------- 2. safety copies
+
+ts="$(date +%Y%m%d-%H%M%S)"
+safety_dir="${data_dir}/backups/pre-restore"
+mkdir -p "${safety_dir}"
+chmod 0700 "${safety_dir}"
+if [[ -n "$(h360_site_databases)" && -n "$(h360_container mariadb)" ]]; then
+	log_info "saving the current database to ${safety_dir}/${ts}.sql.gz"
+	h360_dump_databases "${safety_dir}/${ts}.sql.gz" || die "could not save the current database; nothing was changed"
+	H360_BACKUP_LOCK_HELD=1 /usr/local/sbin/h360-backup --db-only --tag pre-restore ||
+		log_warn "offsite pre-restore backup failed; the local copy is in ${safety_dir}"
+fi
+if [[ -n "${H360_BLOCK_VOLUME_ID:-}" ]]; then
+	/usr/local/sbin/h360-snapshot --reason pre-restore >/dev/null || log_warn "volume backup failed"
+fi
+
+# --------------------------------------------------------------------------- 3. stop the application
+
+h360_maintenance "${site}" on
+log_info "stopping application containers"
+h360_compose stop waf frontend backend websocket scheduler queue-short queue-long >/dev/null
+
+# --------------------------------------------------------------------------- 4. restore
+
+if [[ "${restore_files}" == 1 ]]; then
+	staging="${data_dir}/restore-staging/${ts}"
+	mkdir -p "${staging}"
+	log_info "restoring files of snapshot ${files_snapshot}"
+	restic restore "${files_snapshot}" --target "${staging}" --include "${data_dir}/sites"
+	[[ -d "${staging}${data_dir}/sites" ]] || die "snapshot ${files_snapshot} contains no sites directory"
+	rsync -a --delete --exclude /assets "${staging}${data_dir}/sites/" "${data_dir}/sites/"
+	rm -rf -- "${staging}"
+	log_notice "sites directory restored; /etc/hostel360 from the snapshot is not applied automatically (restic restore ${files_snapshot} --include ${H360_CONFIG_DIR})"
+fi
+
+if [[ "${restore_db}" == 1 ]]; then
+	log_info "restoring databases of snapshot ${db_snapshot}"
+	h360_drop_site_databases
+	restic dump "${db_snapshot}" /hostel360-databases.sql | h360_db_exec
+fi
+
+# --------------------------------------------------------------------------- 5. users, start, migrate
+
+for config in "${data_dir}"/sites/*/site_config.json; do
+	[[ -f "${config}" ]] || continue
+	db_name="$(jq -r '.db_name // empty' "${config}")"
+	db_password="$(jq -r '.db_password // empty' "${config}")"
+	[[ "${db_name}" =~ ^[A-Za-z0-9_]+$ && -n "${db_password}" ]] || continue
+	escaped="${db_password//\\/\\\\}"
+	escaped="${escaped//\'/\\\'}"
+	h360_db_exec <<SQL
+CREATE USER IF NOT EXISTS '${db_name}'@'%' IDENTIFIED BY '${escaped}';
+ALTER USER '${db_name}'@'%' IDENTIFIED BY '${escaped}';
+GRANT ALL PRIVILEGES ON \`${db_name}\`.* TO '${db_name}'@'%';
+FLUSH PRIVILEGES;
+SQL
+done
+
+log_info "starting the stack and migrating"
+h360_compose up -d --remove-orphans >/dev/null
+h360_compose run --rm --no-deps -T backend migrate || die "bench migrate failed after the restore; the site stays in maintenance mode"
+h360_wait_for_boot "${site}" || die "the backend did not start after the restore"
+h360_maintenance "${site}" off
+if h360_smoke_check "${site}" "${port}"; then
+	log_notice "restore complete; the site is up"
+else
+	log_error "restore complete but the smoke check fails; investigate before announcing"
+fi
+
+summary="Restored ${site} from"
+[[ "${restore_db}" == 1 ]] && summary="${summary} database ${db_snapshot}"
+[[ "${restore_files}" == 1 ]] && summary="${summary} files ${files_snapshot}"
+h360_alert "restore.${host}" Warning Backup "Data restored on ${host}" \
+	"${summary}. Previous state saved in ${safety_dir}/${ts}.sql.gz and tagged pre-restore."
+h360_resolve "restore.${host}" "${summary}."

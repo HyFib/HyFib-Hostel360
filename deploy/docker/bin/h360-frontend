@@ -1,0 +1,26 @@
+#!/bin/bash
+# Internal nginx in front of gunicorn and the realtime server. Serves the built assets from
+# the image, the site's public files, and X-Accel protected files. It is only reachable
+# from the WAF on the internal network; TLS, security headers and rate limits live there.
+set -Eeuo pipefail
+
+: "${SITE_NAME:?SITE_NAME must be set}"
+: "${BACKEND:=backend:8000}"
+: "${SOCKETIO:=websocket:9000}"
+: "${FRONTEND_PORT:=8080}"
+: "${UPSTREAM_REAL_IP_ADDRESS:=127.0.0.1}"
+: "${CLIENT_MAX_BODY_SIZE:=12m}"
+: "${PROXY_READ_TIMEOUT:=120}"
+export SITE_NAME BACKEND SOCKETIO FRONTEND_PORT UPSTREAM_REAL_IP_ADDRESS CLIENT_MAX_BODY_SIZE PROXY_READ_TIMEOUT
+
+runtime=/tmp/nginx
+mkdir -p "${runtime}/conf.d" "${runtime}/client_body" "${runtime}/proxy" \
+	"${runtime}/fastcgi" "${runtime}/uwsgi" "${runtime}/scgi"
+
+# Only these variables are substituted; nginx's own $variables pass through untouched.
+# shellcheck disable=SC2016
+envsubst '${SITE_NAME} ${BACKEND} ${SOCKETIO} ${FRONTEND_PORT} ${UPSTREAM_REAL_IP_ADDRESS} ${CLIENT_MAX_BODY_SIZE} ${PROXY_READ_TIMEOUT}' \
+	</templates/nginx/hostel360.conf.template >"${runtime}/conf.d/hostel360.conf"
+
+nginx -t -q
+exec nginx -g 'daemon off;'

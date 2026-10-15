@@ -1,0 +1,256 @@
+{
+ "charts": [
+  {
+   "chart_name": "Monthly Collections",
+   "label": "Monthly Collections"
+  }
+ ],
+ "content": "[{\"id\":\"ead13b7bac\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Today's Collection\",\"col\":3}},{\"id\":\"481e21eabe\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"This Month's Collection\",\"col\":3}},{\"id\":\"9f3c871fbf\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Outstanding Dues\",\"col\":3}},{\"id\":\"8dc21e0962\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Overdue Invoices\",\"col\":3}},{\"id\":\"eabf3b12ea\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Monthly Collections\",\"col\":12}},{\"id\":\"617583fc42\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick access</b></span>\",\"col\":12}},{\"id\":\"a806a8d7ab\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Fee Invoices\",\"col\":4}},{\"id\":\"9310ba1496\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Receipts\",\"col\":4}},{\"id\":\"99ceaa806a\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Collection\",\"col\":4}},{\"id\":\"1973dac310\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Records and reports</b></span>\",\"col\":12}},{\"id\":\"9c676c10ec\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing\",\"col\":4}},{\"id\":\"c7d821b991\",\"type\":\"card\",\"data\":{\"card_name\":\"Collections\",\"col\":4}},{\"id\":\"35147d9871\",\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":4}},{\"id\":\"a9767d03de\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "creation": "2026-10-15 18:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "indian-rupee",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Fees",
+ "links": [
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Billing",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Fee Structure",
+   "link_count": 0,
+   "link_to": "Hostel Fee Structure",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Fee Invoice",
+   "link_count": 0,
+   "link_to": "Hostel Fee Invoice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Fee Head",
+   "link_count": 0,
+   "link_to": "Hostel Fee Head",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Collections",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Payment",
+   "link_count": 0,
+   "link_to": "Hostel Payment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Online Payment Transaction",
+   "link_count": 0,
+   "link_to": "Hostel Payment Transaction",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Settings",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Payment Settings",
+   "link_count": 0,
+   "link_to": "Hostel Payment Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Fee Collection",
+   "link_count": 0,
+   "link_to": "Fee Collection",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Payment",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Fee Dues",
+   "link_count": 0,
+   "link_to": "Fee Dues",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Fee Invoice",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Daily Collection Summary",
+   "link_count": 0,
+   "link_to": "Daily Collection Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Payment",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Gateway Reconciliation",
+   "link_count": 0,
+   "link_to": "Gateway Reconciliation",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Payment Transaction",
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Fees",
+ "name": "Fees",
+ "number_cards": [
+  {
+   "label": "Today's Collection",
+   "number_card_name": "Fee Collection Today"
+  },
+  {
+   "label": "This Month's Collection",
+   "number_card_name": "Fee Collection This Month"
+  },
+  {
+   "label": "Outstanding Dues",
+   "number_card_name": "Outstanding Dues"
+  },
+  {
+   "label": "Overdue Invoices",
+   "number_card_name": "Overdue Invoices"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "Hostel Warden"
+  },
+  {
+   "role": "Deputy Warden"
+  },
+  {
+   "role": "Hostel Office Staff"
+  },
+  {
+   "role": "Institution Auditor"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 3.0,
+ "shortcuts": [
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "format": "{} overdue",
+   "label": "Fee Invoices",
+   "link_to": "Hostel Fee Invoice",
+   "stats_filter": "[[\"Hostel Fee Invoice\", \"status\", \"=\", \"Overdue\"], [\"Hostel Fee Invoice\", \"docstatus\", \"=\", 1]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "",
+   "label": "Receipts",
+   "link_to": "Hostel Payment",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "format": "",
+   "label": "Daily Collection",
+   "link_to": "Daily Collection Summary",
+   "report_ref_doctype": "Hostel Payment",
+   "stats_filter": "",
+   "type": "Report"
+  }
+ ],
+ "standard": 1,
+ "title": "Fees",
+ "type": "Workspace"
+}

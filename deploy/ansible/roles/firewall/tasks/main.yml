@@ -1,0 +1,77 @@
+# OCI's Ubuntu images ship iptables rules through netfilter-persistent that reject
+# everything but SSH. ufw replaces them so there is one firewall to reason about.
+- name: Check for the image's persistent iptables rules
+  ansible.builtin.stat:
+    path: /etc/iptables/rules.v4
+  register: h360_iptables_rules
+
+- name: Retire netfilter-persistent in favour of ufw
+  when: h360_iptables_rules.stat.exists
+  block:
+    - name: Stop netfilter-persistent
+      ansible.builtin.service:
+        name: netfilter-persistent
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Keep the image's rules for reference
+      ansible.builtin.command: mv /etc/iptables/rules.v4 /etc/iptables/rules.v4.oci-image
+      args:
+        creates: /etc/iptables/rules.v4.oci-image
+
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+# Docker publishes container ports through the FORWARD chain, which ufw's INPUT rules do not
+# see. The DOCKER-USER chain (evaluated first by Docker) gets the real policy: the WAF ports
+# only from the load balancer subnet, nothing else from outside, and no container may reach
+# the instance metadata service (instance principal credentials).
+- name: DOCKER-USER rules for published ports
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/after.rules
+    marker: "# {mark} HOSTEL360 DOCKER-USER"
+    block: "{{ lookup('ansible.builtin.template', 'docker-user.rules.j2') }}"
+  notify: Reload ufw
+
+- name: Deny incoming by default
+  community.general.ufw:
+    direction: incoming
+    default: deny
+
+- name: Allow outgoing by default
+  community.general.ufw:
+    direction: outgoing
+    default: allow
+
+- name: Deny routed by default (Docker manages its own forwarding rules)
+  community.general.ufw:
+    direction: routed
+    default: deny
+
+- name: SSH from the Bastion endpoint only
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    port: "22"
+    src: "{{ h360_bastion_subnet_cidr }}"
+    comment: OCI Bastion
+
+- name: WAF ports from the load balancer subnet only
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    port: "{{ item }}"
+    src: "{{ h360_lb_subnet_cidr }}"
+    comment: OCI load balancer
+  loop: "{{ h360_waf_ports }}"
+
+- name: Log blocked packets (rate limited)
+  community.general.ufw:
+    logging: low
+
+- name: Enable ufw
+  community.general.ufw:
+    state: enabled

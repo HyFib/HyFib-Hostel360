@@ -1,0 +1,34 @@
+# Copy to group_vars/hostel360/main.yml. Secrets go in vault.yml (ansible-vault encrypted).
+# Every variable here has a default in roles/*/defaults/main.yml; these are the ones that
+# must match the environment.
+
+# Site and image
+h360_site_name: hostel.accet.ac.in
+h360_host_label: hostel360-prod-hyd
+h360_image: ap-hyderabad-1.ocir.io/axabcdefghij/hostel360
+h360_image_tag: 1.0.0-94a56ce3e54a
+
+# From terraform output
+h360_lb_subnet_cidr: 10.20.1.0/24
+h360_bastion_subnet_cidr: 10.20.2.0/24
+h360_block_volume_id: ocid1.volume.oc1.ap-hyderabad-1.example
+h360_compartment_id: ocid1.compartment.oc1..aaaaexample
+h360_ons_topic_id: ocid1.onstopic.oc1.ap-hyderabad-1.example
+h360_backup_namespace: axabcdefghij
+h360_backup_bucket: hostel360-backups-mumbai
+
+# Administrators (SSH through OCI Bastion only)
+h360_admin_users:
+  - name: hyfibadmin
+    comment: HyFib Solutions operations
+    ssh_keys:
+      - ssh-ed25519 AAAAexample admin@hyfib
+
+# Hostel website integration pages
+h360_institution_name: Alagappa Chettiar Government College of Engineering and Technology Hostels
+h360_institution_short_name: ACGCET
+h360_hostel_website_origins:
+  - https://www.accet.ac.in
+
+# Campus NAT addresses exempt from the WAF's per-address sign-in rate limits
+h360_waf_rate_exempt_cidrs: []

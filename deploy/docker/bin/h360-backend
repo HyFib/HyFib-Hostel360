@@ -1,0 +1,34 @@
+#!/bin/bash
+# Gunicorn for the Frappe backend.
+#
+# Sizing for the A1.Flex 8 OCPU / 16 GB host: 6 workers x 4 threads = 24 concurrent requests,
+# which covers the 150 req/s peak for 1,500 portal users at the p95 target (most requests
+# finish in well under 200 ms). --preload shares the imported code between workers;
+# max-requests recycles workers gradually so slow memory growth never accumulates.
+set -Eeuo pipefail
+
+: "${GUNICORN_WORKERS:=6}"
+: "${GUNICORN_THREADS:=4}"
+: "${GUNICORN_TIMEOUT:=120}"
+: "${GUNICORN_GRACEFUL_TIMEOUT:=30}"
+: "${GUNICORN_MAX_REQUESTS:=5000}"
+: "${GUNICORN_MAX_REQUESTS_JITTER:=500}"
+: "${GUNICORN_BIND:=0.0.0.0:8000}"
+
+echo "h360-backend: gunicorn ${GUNICORN_WORKERS} workers x ${GUNICORN_THREADS} threads on ${GUNICORN_BIND}" >&2
+
+exec /home/frappe/frappe-bench/env/bin/gunicorn \
+	--chdir=/home/frappe/frappe-bench/sites \
+	--bind="${GUNICORN_BIND}" \
+	--workers="${GUNICORN_WORKERS}" \
+	--threads="${GUNICORN_THREADS}" \
+	--worker-class=gthread \
+	--worker-tmp-dir=/dev/shm \
+	--timeout="${GUNICORN_TIMEOUT}" \
+	--graceful-timeout="${GUNICORN_GRACEFUL_TIMEOUT}" \
+	--max-requests="${GUNICORN_MAX_REQUESTS}" \
+	--max-requests-jitter="${GUNICORN_MAX_REQUESTS_JITTER}" \
+	--keep-alive=5 \
+	--limit-request-line=8190 \
+	--preload \
+	frappe.app:application

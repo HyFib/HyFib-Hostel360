@@ -1,0 +1,11 @@
+# Remote state in OCI Object Storage (Terraform >= 1.12 "oci" backend). Copy to backend.tf,
+# create the bucket once (versioning on, private), then run: terraform init -migrate-state
+terraform {
+  backend "oci" {
+    bucket    = "hostel360-terraform-state"
+    namespace = "axabcdefghij"
+    key       = "hostel360/prod/terraform.tfstate"
+    region    = "ap-hyderabad-1"
+    # auth / config_file_profile as for the provider
+  }
+}

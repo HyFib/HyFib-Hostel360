@@ -1,0 +1,71 @@
+- name: Architecture of the release binaries
+  ansible.builtin.set_fact:
+    h360_bin_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: Download restic {{ h360_restic_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/restic/restic/releases/download/v{{ h360_restic_version }}/restic_{{ h360_restic_version }}_linux_{{ h360_bin_arch }}.bz2"
+    dest: "/var/cache/restic_{{ h360_restic_version }}.bz2"
+    checksum: "sha256:{{ h360_restic_sha256[h360_bin_arch] }}"
+    mode: "0644"
+  notify: Install restic
+
+- name: Download rclone {{ h360_rclone_version }}
+  ansible.builtin.get_url:
+    url: "https://downloads.rclone.org/v{{ h360_rclone_version }}/rclone-v{{ h360_rclone_version }}-linux-{{ h360_bin_arch }}.zip"
+    dest: "/var/cache/rclone-v{{ h360_rclone_version }}.zip"
+    checksum: "sha256:{{ h360_rclone_sha256[h360_bin_arch] }}"
+    mode: "0644"
+  notify: Install rclone
+
+- name: Install the downloaded binaries before the repository is used
+  ansible.builtin.meta: flush_handlers
+
+- name: Restic cache directory
+  ansible.builtin.file:
+    path: /var/cache/restic
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Restic repository password
+  ansible.builtin.copy:
+    dest: "{{ h360_config_dir }}/secrets/restic_password"
+    content: "{{ vault_h360_restic_password }}"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+
+- name: Backup settings
+  ansible.builtin.template:
+    src: backup.env.j2
+    dest: "{{ h360_config_dir }}/backup.env"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Initialise the restic repository once
+  ansible.builtin.shell: |
+    set -a
+    . {{ h360_config_dir }}/backup.env
+    set +a
+    if restic cat config >/dev/null 2>&1; then
+      echo exists
+    else
+      restic init >/dev/null && echo created
+    fi
+  args:
+    executable: /bin/bash
+  register: h360_restic_init
+  changed_when: "'created' in h360_restic_init.stdout"
+  when: not ansible_check_mode
+
+- name: Backup, restore test and snapshot pruning timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: "{{ h360_backup_timers }}"

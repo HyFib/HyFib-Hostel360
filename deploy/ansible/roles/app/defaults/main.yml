@@ -1,0 +1,37 @@
+# Source of the deploy/ tree on the controller (this repository)
+h360_deploy_src: "{{ playbook_dir }}/.."
+h360_deploy_dir: /opt/hostel360/deploy
+h360_config_dir: /etc/hostel360
+h360_data_dir: /srv/hostel360
+
+h360_site_name: hostel.example.ac.in
+h360_public_url: "https://{{ h360_site_name }}"
+h360_image: ap-hyderabad-1.ocir.io/namespace/hostel360
+# Used for the first installation only; afterwards h360-deploy owns the tag in stack.env.
+h360_image_tag: "0.0.0"
+h360_image_tag_force: false
+
+h360_lb_subnet_cidr: 10.20.1.0/24
+h360_waf_bind_address: 0.0.0.0
+h360_waf_rule_engine: "On"
+h360_waf_auth_rate: 120r/m
+h360_waf_auth_burst: 60
+h360_waf_login_rate: 30r/m
+h360_waf_login_burst: 20
+h360_waf_rate_exempt_cidrs: []
+h360_gunicorn_workers: 6
+h360_gunicorn_threads: 4
+
+h360_institution_name: Hostel Office
+h360_institution_short_name: Hostel
+h360_support_phone: "+91 96060 60596"
+h360_support_email: support@hyfib.com
+h360_hostel_website_origins: []
+
+# Internal certificate of the WAF (the load balancer re-encrypts to it)
+h360_waf_cert_days: 825
+h360_waf_cert_renew_days: 30
+h360_uid_nginx: 101
+
+# OCI CLI (registry login, volume backups) in its own virtual environment
+h360_oci_cli_version: "3.95.0"

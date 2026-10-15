@@ -1,0 +1,7 @@
+h360_lb_subnet_cidr: 10.20.1.0/24
+# Subnet of the OCI Bastion endpoint (the application subnet)
+h360_bastion_subnet_cidr: 10.20.2.0/24
+h360_waf_ports:
+  - 8443
+  - 8080
+h360_external_interface: "{{ ansible_default_ipv4.interface }}"

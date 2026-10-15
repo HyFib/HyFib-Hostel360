@@ -1,0 +1,22 @@
+- name: Create runtime directories
+  ansible.builtin.command: systemd-tmpfiles --create /etc/tmpfiles.d/hostel360.conf
+  changed_when: true
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Reload stack
+  ansible.builtin.systemd_service:
+    name: hostel360-stack.service
+    state: reloaded
+  when: not ansible_check_mode
+
+- name: Reload WAF
+  ansible.builtin.shell: |
+    set -o pipefail
+    waf="$(docker ps -q --filter label=com.docker.compose.project=hostel360 --filter label=com.docker.compose.service=waf)"
+    if [ -n "${waf}" ]; then docker restart "${waf}" >/dev/null; fi
+  args:
+    executable: /bin/bash
+  changed_when: true

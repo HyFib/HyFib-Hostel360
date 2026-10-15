@@ -1,0 +1,60 @@
+## {{ ansible_managed }}
+## Hostel360 audit rules: identity, privilege, access configuration, time, kernel modules,
+## the stack's configuration and secrets, and the container runtime.
+
+## Identity and authentication
+-w /etc/passwd -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/security/opasswd -p wa -k identity
+-w /etc/sudoers -p wa -k privilege
+-w /etc/sudoers.d/ -p wa -k privilege
+-w /var/log/sudo.log -p wa -k privilege
+-w /etc/ssh/sshd_config -p wa -k sshd
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd
+-w /var/log/lastlog -p wa -k logins
+-w /var/log/faillog -p wa -k logins
+-w /var/run/utmp -p wa -k session
+-w /var/log/wtmp -p wa -k session
+-w /var/log/btmp -p wa -k session
+
+## Privileged commands
+-a always,exit -F path=/usr/bin/sudo -F perm=x -F auid>=1000 -F auid!=unset -k privileged
+-a always,exit -F path=/usr/bin/su -F perm=x -F auid>=1000 -F auid!=unset -k privileged
+-a always,exit -F path=/usr/bin/passwd -F perm=x -F auid>=1000 -F auid!=unset -k privileged
+
+## Time changes (log timestamps are evidence)
+-a always,exit -F arch=b64 -S adjtimex,settimeofday,clock_settime -k time-change
+-w /etc/localtime -p wa -k time-change
+-w /etc/chrony/ -p wa -k time-change
+
+## Kernel modules and mounts
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k modules
+-a always,exit -F arch=b64 -S mount,umount2 -F auid>=1000 -F auid!=unset -k mounts
+
+## Network and host identity
+-a always,exit -F arch=b64 -S sethostname,setdomainname -k network
+-w /etc/hosts -p wa -k network
+-w /etc/netplan/ -p wa -k network
+-w /etc/ufw/ -p wa -k firewall
+
+## Scheduled tasks and services
+-w /etc/crontab -p wa -k cron
+-w /etc/cron.d/ -p wa -k cron
+-w /etc/systemd/system/ -p wa -k systemd
+
+## Hostel360 configuration, secrets, host scripts and the container runtime
+-w /etc/hostel360/ -p wa -k hostel360-config
+-w /etc/hostel360/secrets/ -p rwa -k hostel360-secrets
+-w /usr/local/sbin/ -p wa -k hostel360-scripts
+-w /opt/hostel360/ -p wa -k hostel360-deploy
+-w /etc/docker/ -p wa -k docker
+-w /usr/bin/dockerd -p wa -k docker
+-w /usr/bin/docker -p x -k docker-cli
+-w /var/run/docker.sock -p rwa -k docker-socket
+
+{% if h360_audit_immutable %}
+## Rules locked until the next reboot
+-e 2
+{% endif %}

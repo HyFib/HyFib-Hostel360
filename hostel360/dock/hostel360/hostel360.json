@@ -1,0 +1,79 @@
+{
+ "app": "hostel360",
+ "creation": "2026-10-15 18:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Dock",
+ "idx": 0,
+ "items": [
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "layout-dashboard",
+   "link_to": "Hostel Admin",
+   "link_type": "Sidebar",
+   "title": "Hostel Admin"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "bed-double",
+   "link_to": "People and Rooms",
+   "link_type": "Sidebar",
+   "title": "People and Rooms"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "indian-rupee",
+   "link_to": "Fees",
+   "link_type": "Sidebar",
+   "title": "Fees"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "utensils",
+   "link_to": "Mess",
+   "link_type": "Sidebar",
+   "title": "Mess"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "heart-handshake",
+   "link_to": "Student Services",
+   "link_type": "Sidebar",
+   "title": "Student Services"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "activity",
+   "link_to": "HyFib Operations",
+   "link_type": "Sidebar",
+   "title": "HyFib Operations"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "messages-square",
+   "link_to": "Messaging",
+   "link_type": "Sidebar",
+   "title": "Messaging"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "database",
+   "link_to": "Data Migration",
+   "link_type": "Sidebar",
+   "title": "Data Migration"
+  }
+ ],
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "hostel360",
+ "owner": "Administrator",
+ "standard": 1,
+ "user": ""
+}

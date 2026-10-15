@@ -1,0 +1,12 @@
+- name: SSH daemon hardening
+  ansible.builtin.template:
+    src: sshd-hostel360.conf.j2
+    dest: /etc/ssh/sshd_config.d/10-hostel360.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart ssh
+
+- name: Validate the SSH configuration before it is applied
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false

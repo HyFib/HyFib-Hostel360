@@ -1,0 +1,21 @@
+{
+ "action": "Create Entry",
+ "action_label": "Add a Fee Structure",
+ "creation": "2026-10-15 18:00:00.000000",
+ "description": "Define the fee heads and amounts for the academic year, by hostel or year of study where they differ. **Publish Dues** on a structure raises the invoices students see in the portal.",
+ "docstatus": 0,
+ "doctype": "Onboarding Step",
+ "idx": 0,
+ "is_complete": 0,
+ "is_single": 0,
+ "is_skipped": 0,
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "Set Up Hostel Fee Structures",
+ "owner": "Administrator",
+ "reference_document": "Hostel Fee Structure",
+ "show_form_tour": 0,
+ "show_full_form": 1,
+ "title": "Set fee structures",
+ "validate_action": 1
+}

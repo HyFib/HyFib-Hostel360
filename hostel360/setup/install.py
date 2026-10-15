@@ -65,6 +65,18 @@ SECURITY_SETTINGS = {
 	"show_external_link_warning": "Ask",
 }
 
+# CERT-In directions (28 April 2022): ICT system logs must be retained for at least 180 days.
+# Frappe's own defaults are shorter, so these are raised (never lowered) on every migrate.
+MIN_LOG_RETENTION_DAYS = {
+	"Activity Log": 365,
+	"Access Log": 365,
+	"API Request Log": 180,
+	"Error Log": 180,
+	"Route History": 180,
+	"Integration Request": 180,
+	"Webhook Request Log": 180,
+}
+
 WEBSITE_SETTINGS = {
 	"disable_signup": 1,
 	"home_page": "hostel",
@@ -77,12 +89,14 @@ def after_install():
 	apply_settings("System Settings", {**REGIONAL_SETTINGS, **SECURITY_SETTINGS})
 	apply_settings("Website Settings", WEBSITE_SETTINGS)
 	sync_roles()
+	enforce_log_retention()
 	run_module_setup()
 	frappe.db.commit()  # nosemgrep
 
 
 def after_migrate():
 	sync_roles()
+	enforce_log_retention()
 	run_module_setup()
 
 
@@ -125,6 +139,28 @@ def sync_roles() -> None:
 				"is_custom": 0,
 			}
 		).insert(ignore_permissions=True)
+
+
+def enforce_log_retention() -> None:
+	from frappe.core.doctype.log_settings.log_settings import _supports_log_clearing
+	from frappe.utils import cint
+
+	settings = frappe.get_single("Log Settings")
+	changed = False
+	for doctype, days in MIN_LOG_RETENTION_DAYS.items():
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		row = next((r for r in settings.logs_to_clear if r.ref_doctype == doctype), None)
+		if row is None:
+			if _supports_log_clearing(doctype):
+				settings.append("logs_to_clear", {"ref_doctype": doctype, "days": days})
+				changed = True
+		elif cint(row.days) < days:
+			row.days = days
+			changed = True
+	if changed:
+		settings.flags.ignore_permissions = True
+		settings.save()
 
 
 def run_module_setup() -> None:

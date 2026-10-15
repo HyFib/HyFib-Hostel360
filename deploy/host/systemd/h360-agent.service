@@ -1,0 +1,11 @@
+[Unit]
+Description=Hostel360 host agent (health, metrics, security signals)
+Documentation=file:///opt/hostel360/deploy/README.md
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/h360-agent
+SyslogIdentifier=h360-agent
+TimeoutStartSec=4min

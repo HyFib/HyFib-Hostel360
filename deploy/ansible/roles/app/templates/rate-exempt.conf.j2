@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# Addresses exempt from the WAF's per-address sign-in rate limits (nginx geo format).
+{% for cidr in h360_waf_rate_exempt_cidrs %}
+{{ cidr }} 1;
+{% endfor %}

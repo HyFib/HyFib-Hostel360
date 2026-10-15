@@ -1,0 +1,221 @@
+- name: Configuration and state directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /opt/hostel360, mode: "0755" }
+    - { path: "{{ h360_deploy_dir }}", mode: "0755" }
+    - { path: "{{ h360_config_dir }}", mode: "0750" }
+    - { path: "{{ h360_config_dir }}/secrets", mode: "0700" }
+    - { path: "{{ h360_config_dir }}/waf", mode: "0755" }
+    - { path: "{{ h360_config_dir }}/waf/tls", mode: "0750", group: "{{ h360_uid_nginx }}" }
+    - { path: "{{ h360_config_dir }}/waf/lists", mode: "0755" }
+    - { path: /usr/local/lib/hostel360, mode: "0755" }
+    - { path: /var/lib/hostel360, mode: "0700" }
+    - { path: /var/spool/hostel360, mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+# --------------------------------------------------------------------------- deploy tree
+
+- name: Stack definition and configuration files
+  ansible.builtin.copy:
+    src: "{{ h360_deploy_src }}/{{ item }}"
+    dest: "{{ h360_deploy_dir }}/"
+    owner: root
+    group: root
+    mode: u=rwX,g=rX,o=rX
+    directory_mode: "0755"
+  loop:
+    - compose
+    - mariadb
+    - redis
+    - waf
+    - php-fpm
+    - clamav
+    - integration
+    - host
+    - monitoring
+    - README.md
+  notify: Reload stack
+
+- name: Host scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /usr/local/sbin/
+    owner: root
+    group: root
+    mode: "0755"
+  with_fileglob:
+    - "{{ h360_deploy_src }}/host/bin/h360-*"
+  when: (item | basename) != "h360-lib.sh"
+
+- name: Host script library
+  ansible.builtin.copy:
+    src: "{{ h360_deploy_src }}/host/bin/h360-lib.sh"
+    dest: /usr/local/lib/hostel360/h360-lib.sh
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Systemd units and timers
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /etc/systemd/system/
+    owner: root
+    group: root
+    mode: "0644"
+  with_fileglob:
+    - "{{ h360_deploy_src }}/host/systemd/*"
+  notify: Reload systemd
+
+- name: Runtime directories (clamd socket shared with the malware scanner)
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/hostel360.conf
+    content: |
+      d /run/hostel360 0755 root root -
+      d /run/hostel360/clamav 0750 1000 1000 -
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Create runtime directories
+
+- name: Apply the runtime directory definitions before the stack starts
+  ansible.builtin.meta: flush_handlers
+
+- name: Rotate the stack's log files (180 days)
+  ansible.builtin.template:
+    src: logrotate-hostel360.j2
+    dest: /etc/logrotate.d/hostel360
+    owner: root
+    group: root
+    mode: "0644"
+
+# --------------------------------------------------------------------------- secrets and TLS
+
+- name: MariaDB root password (Docker secret)
+  ansible.builtin.copy:
+    dest: "{{ h360_config_dir }}/secrets/db_root_password"
+    content: "{{ vault_h360_db_root_password }}"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+
+- name: WAF private key
+  community.crypto.openssl_privatekey:
+    path: "{{ h360_config_dir }}/waf/tls/server.key"
+    type: ECC
+    curve: secp256r1
+    owner: root
+    group: "{{ h360_uid_nginx }}"
+    mode: "0640"
+
+- name: Inspect the WAF certificate
+  community.crypto.x509_certificate_info:
+    path: "{{ h360_config_dir }}/waf/tls/server.crt"
+    valid_at:
+      renew: "+{{ h360_waf_cert_renew_days }}d"
+  register: h360_waf_cert
+  failed_when: false
+
+- name: WAF certificate signing request
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ h360_config_dir }}/waf/tls/server.key"
+    common_name: "{{ h360_site_name }}"
+    subject_alt_name:
+      - "DNS:{{ h360_site_name }}"
+      - DNS:localhost
+      - IP:127.0.0.1
+  register: h360_waf_csr
+  changed_when: false
+
+- name: WAF certificate (internal, for load balancer re-encryption)
+  community.crypto.x509_certificate:
+    path: "{{ h360_config_dir }}/waf/tls/server.crt"
+    csr_content: "{{ h360_waf_csr.csr }}"
+    privatekey_path: "{{ h360_config_dir }}/waf/tls/server.key"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ h360_waf_cert_days }}d"
+    force: "{{ h360_waf_cert.valid_at is not defined or not h360_waf_cert.valid_at.renew }}"
+    owner: root
+    group: "{{ h360_uid_nginx }}"
+    mode: "0644"
+  notify: Reload WAF
+
+- name: WAF deny list (maintained by fail2ban; created empty once)
+  ansible.builtin.copy:
+    dest: "{{ h360_config_dir }}/waf/lists/denylist.conf"
+    content: ""
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: WAF rate-limit exemptions
+  ansible.builtin.template:
+    src: rate-exempt.conf.j2
+    dest: "{{ h360_config_dir }}/waf/lists/rate-exempt.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload WAF
+
+# --------------------------------------------------------------------------- stack settings
+
+- name: Read the deployed image tag
+  ansible.builtin.slurp:
+    src: "{{ h360_config_dir }}/stack.env"
+  register: h360_stack_env_current
+  failed_when: false
+
+- name: Tag currently in stack.env
+  ansible.builtin.set_fact:
+    h360_current_tag: >-
+      {{ ((h360_stack_env_current.content | default('') | b64decode
+          | regex_findall('(?m)^H360_IMAGE_TAG=(\\S+)$')) + [''])[0] }}
+
+- name: Keep the tag h360-deploy set unless a new one is forced
+  ansible.builtin.set_fact:
+    h360_effective_tag: "{{ h360_image_tag if (h360_image_tag_force or h360_current_tag == '') else h360_current_tag }}"
+
+- name: Stack environment
+  ansible.builtin.template:
+    src: stack.env.j2
+    dest: "{{ h360_config_dir }}/stack.env"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Reload stack
+
+# --------------------------------------------------------------------------- OCI CLI
+
+- name: OCI CLI virtual environment
+  ansible.builtin.pip:
+    name: "oci-cli=={{ h360_oci_cli_version }}"
+    virtualenv: /opt/oci-cli
+    virtualenv_command: python3 -m venv
+
+- name: OCI CLI on the path
+  ansible.builtin.file:
+    src: /opt/oci-cli/bin/oci
+    dest: /usr/local/bin/oci
+    state: link
+
+# --------------------------------------------------------------------------- start
+
+- name: Pull the images (registry login with the instance principal)
+  ansible.builtin.command: /usr/local/sbin/h360-deploy --prepare
+  register: h360_prepare
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Enable and start the stack
+  ansible.builtin.systemd_service:
+    name: hostel360-stack.service
+    enabled: true
+    state: started
+    daemon_reload: true

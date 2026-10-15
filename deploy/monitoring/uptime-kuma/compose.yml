@@ -1,0 +1,58 @@
+# External uptime monitor for HyFib Hostel360, on a separate small VM in OCI Mumbai
+# (ap-mumbai-1), so an outage of the Hyderabad region or of the application VM itself is
+# still seen and notified. See deploy/monitoring/README.md for the monitors to create.
+#
+#   MONITOR_HOSTNAME=monitor.hyfib.com docker compose -f compose.yml up -d
+#   ssh -L 3001:127.0.0.1:3001 <monitor-vm>     then open http://localhost:3001
+#
+# Only the push endpoint (/api/push/...) is public, over HTTPS with an automatic
+# certificate: the Hostel360 application calls it every 5 minutes as a dead-man switch.
+name: hostel360-uptime
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:2.5.6
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Kolkata
+    # Admin interface on loopback only: reach it through an SSH tunnel.
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    environment:
+      MONITOR_HOSTNAME: ${MONITOR_HOSTNAME:?set MONITOR_HOSTNAME to the monitor's DNS name}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    depends_on:
+      - uptime-kuma
+
+volumes:
+  uptime-kuma-data:
+  caddy-data:
+  caddy-config:

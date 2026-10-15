@@ -1,0 +1,50 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. Sensitive values can instead be passed
+# as TF_VAR_<name> environment variables.
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaexample"
+compartment_ocid = "ocid1.compartment.oc1..aaaaexample"
+home_region      = "ap-mumbai-1"
+oci_profile      = "DEFAULT"
+
+region        = "ap-hyderabad-1"
+backup_region = "ap-mumbai-1"
+environment   = "prod"
+
+site_hostname = "hostel.accet.ac.in"
+
+# HyFib office / VPN egress addresses for Bastion sessions
+bastion_client_cidrs = ["203.0.113.10/32"]
+
+ssh_public_keys = [
+  "ssh-ed25519 AAAAexample admin@hyfib",
+]
+
+# OCI estimate option 1
+instance_ocpus          = 8
+instance_memory_gbs     = 16
+data_volume_size_gbs    = 400
+data_volume_vpus_per_gb = 10
+lb_min_bandwidth_mbps   = 10
+lb_max_bandwidth_mbps   = 100
+
+# Public certificate: an OCI Certificates service certificate...
+lb_certificate_ocid = ""
+# ...or PEM files (kept out of the repository)
+# lb_certificate_pem = file("certs/hostel.accet.ac.in.fullchain.pem")
+# lb_private_key_pem = file("certs/hostel.accet.ac.in.key")
+
+# Verify the WAF's internal certificate from the load balancer (copy it from
+# /etc/hostel360/waf/tls/server.crt after the first Ansible run)
+# backend_ca_certificate_pem = file("certs/waf-internal.crt")
+
+backup_bucket_name = "hostel360-backups-mumbai"
+
+alarm_emails = [
+  "support@hyfib.com",
+]
+# alarm_https_endpoint     = "https://hostel.accet.ac.in/api/method/hostel360.api.ops.oci_notification?token=..."
+# alarm_pagerduty_endpoint = "https://events.pagerduty.com/integration/<key>/enqueue"
+# alarm_slack_webhook      = "https://hooks.slack.com/services/..."
+
+create_vault   = false
+enable_oci_waf = false

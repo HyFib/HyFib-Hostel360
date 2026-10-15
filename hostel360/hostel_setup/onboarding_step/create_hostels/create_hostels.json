@@ -1,0 +1,21 @@
+{
+ "action": "Create Entry",
+ "action_label": "Add a Hostel",
+ "creation": "2026-10-15 18:00:00.000000",
+ "description": "Add each hostel with a short code (for example **BH1**), its gender and the warden in charge. Blocks, floors and rooms are added under the hostel.",
+ "docstatus": 0,
+ "doctype": "Onboarding Step",
+ "idx": 0,
+ "is_complete": 0,
+ "is_single": 0,
+ "is_skipped": 0,
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "Create Hostels",
+ "owner": "Administrator",
+ "reference_document": "Hostel",
+ "show_form_tour": 0,
+ "show_full_form": 1,
+ "title": "Create your hostels",
+ "validate_action": 1
+}

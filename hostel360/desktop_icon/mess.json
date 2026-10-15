@@ -1,0 +1,43 @@
+{
+ "app": "hostel360",
+ "creation": "2026-10-15 18:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon": "utensils",
+ "icon_type": "Link",
+ "idx": 4,
+ "label": "Mess",
+ "link_to": "Mess",
+ "link_type": "Workspace Sidebar",
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "Mess",
+ "owner": "Administrator",
+ "parent_icon": "HyFib Hostel360",
+ "restrict_removal": 0,
+ "roles": [
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "Hostel Warden"
+  },
+  {
+   "role": "Deputy Warden"
+  },
+  {
+   "role": "Mess Manager"
+  },
+  {
+   "role": "Mess Staff"
+  },
+  {
+   "role": "Institution Auditor"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "standard": 1
+}

@@ -1,0 +1,277 @@
+{
+ "charts": [
+  {
+   "chart_name": "Occupancy by Hostel",
+   "label": "Occupancy by Hostel"
+  }
+ ],
+ "content": "[{\"id\":\"5efad69124\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Active Residents\",\"col\":3}},{\"id\":\"2116b9aa2d\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Occupied Beds\",\"col\":3}},{\"id\":\"8ddaf32278\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Vacant Beds\",\"col\":3}},{\"id\":\"a5bcc74a68\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Pending Validation\",\"col\":3}},{\"id\":\"e7e8f1b56c\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Occupancy by Hostel\",\"col\":12}},{\"id\":\"27f35ffb82\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick access</b></span>\",\"col\":12}},{\"id\":\"5e3c2588ce\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Room Board\",\"col\":4}},{\"id\":\"d94e14f926\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Students\",\"col\":4}},{\"id\":\"007f0315b7\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Room Allotment\",\"col\":4}},{\"id\":\"dc9f276e1b\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Records and reports</b></span>\",\"col\":12}},{\"id\":\"e3d1577b59\",\"type\":\"card\",\"data\":{\"card_name\":\"Residents\",\"col\":4}},{\"id\":\"38bb39b75e\",\"type\":\"card\",\"data\":{\"card_name\":\"Rooms\",\"col\":4}},{\"id\":\"21dcbd73be\",\"type\":\"card\",\"data\":{\"card_name\":\"Staff\",\"col\":4}},{\"id\":\"cd266fc8d1\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "creation": "2026-10-15 18:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "bed-double",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "People and Rooms",
+ "links": [
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Residents",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Student",
+   "link_count": 0,
+   "link_to": "Hostel Student",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Guardian",
+   "link_count": 0,
+   "link_to": "Hostel Guardian",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Student Bulk Import",
+   "link_count": 0,
+   "link_to": "Student Bulk Import",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Rooms",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Board",
+   "link_count": 0,
+   "link_to": "room-board",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Allotment",
+   "link_count": 0,
+   "link_to": "Room Allotment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Room",
+   "link_count": 0,
+   "link_to": "Hostel Room",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Bed",
+   "link_count": 0,
+   "link_to": "Hostel Bed",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Staff",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Staff",
+   "link_count": 0,
+   "link_to": "Hostel Staff",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Hostel Occupancy",
+   "link_count": 0,
+   "link_to": "Hostel Occupancy",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Bed",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Student Register",
+   "link_count": 0,
+   "link_to": "Student Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Student",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Room Allotment History",
+   "link_count": 0,
+   "link_to": "Room Allotment History",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Room Allotment",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Students On Leave",
+   "link_count": 0,
+   "link_to": "Students On Leave",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Home Visit Leave",
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel People",
+ "name": "People and Rooms",
+ "number_cards": [
+  {
+   "label": "Active Residents",
+   "number_card_name": "Active Residents"
+  },
+  {
+   "label": "Occupied Beds",
+   "number_card_name": "Occupied Beds"
+  },
+  {
+   "label": "Vacant Beds",
+   "number_card_name": "Vacant Beds"
+  },
+  {
+   "label": "Pending Validation",
+   "number_card_name": "Students Pending Validation"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "Hostel Warden"
+  },
+  {
+   "role": "Deputy Warden"
+  },
+  {
+   "role": "Hostel Office Staff"
+  },
+  {
+   "role": "Institution Auditor"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 2.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "format": "",
+   "label": "Room Board",
+   "link_to": "room-board",
+   "stats_filter": "",
+   "type": "Page"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "format": "{} to validate",
+   "label": "Students",
+   "link_to": "Hostel Student",
+   "stats_filter": "[[\"Hostel Student\", \"validation_status\", \"=\", \"Pending\"], [\"Hostel Student\", \"status\", \"in\", [\"Applied\", \"Active\"]]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "",
+   "label": "Room Allotment",
+   "link_to": "Room Allotment",
+   "stats_filter": "[]",
+   "type": "DocType"
+  }
+ ],
+ "standard": 1,
+ "title": "People and Rooms",
+ "type": "Workspace"
+}

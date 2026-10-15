@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Create the Hostel360 site on a freshly provisioned server, or finish its wiring.
+#
+#   h360-site-init
+#
+# Idempotent. On the first run it creates the site (bench new-site with hostel360), stores
+# the Administrator password in /etc/hostel360/secrets/site_admin_password and enables the
+# scheduler. On every run it makes sure the operations wiring matches this server:
+#   - Ops Alert Settings: ingest secret (same as agent.env), instance label, environment
+#   - an OCI notification token, and prints the endpoint for Terraform's alarm_https_endpoint
+# Secrets travel over standard input only, never on a command line.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-site-init
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_require_cmd docker jq openssl
+h360_lock site-init
+
+site="$(h360_stack_value SITE_NAME)"
+public_url="$(h360_stack_value PUBLIC_URL)"
+public_url="${public_url:-https://${site}}"
+data_dir="${H360_DATA_DIR:-/srv/hostel360}"
+secrets="${H360_CONFIG_DIR}/secrets"
+[[ -n "${site}" ]] || die "SITE_NAME is not set in the stack configuration"
+
+backend="$(h360_container backend)"
+[[ -n "${backend}" ]] || die "the backend container is not running (systemctl start hostel360-stack)"
+[[ -n "$(h360_container mariadb)" ]] || die "the mariadb container is not running"
+
+if [[ ! -f "${data_dir}/sites/${site}/site_config.json" ]]; then
+	log_notice "creating site ${site}"
+	password_file="${secrets}/site_admin_password"
+	if [[ ! -s "${password_file}" ]]; then
+		(umask 0077 && openssl rand -base64 24 | tr -d '\n' >"${password_file}")
+	fi
+	# Line 1: database root password, line 2: Administrator password
+	{
+		cat "${secrets}/db_root_password"
+		echo
+		cat "${password_file}"
+		echo
+	} | docker exec -i "${backend}" bash -c '
+		set -euo pipefail
+		IFS= read -r db_root
+		IFS= read -r admin
+		cd /home/frappe/frappe-bench
+		bench new-site "$1" --mariadb-user-host-login-scope=% \
+			--db-root-password "${db_root}" --admin-password "${admin}" --install-app hostel360
+	' bash "${site}"
+	h360_bench --site "${site}" enable-scheduler
+	log_notice "site created; the Administrator password is in ${password_file}"
+fi
+
+# Operations wiring. The token for OCI notifications is created once and kept.
+token_file="${secrets}/oci_notification_token"
+if [[ ! -s "${token_file}" ]]; then
+	(umask 0077 && openssl rand -hex 32 | tr -d '\n' >"${token_file}")
+fi
+
+{
+	printf '%s\n' "${H360_INGEST_SECRET:?H360_INGEST_SECRET is not set in agent.env}"
+	cat "${token_file}"
+	echo
+} | docker exec -i -w /home/frappe/frappe-bench/sites "${backend}" /home/frappe/frappe-bench/env/bin/python -c '
+import sys
+
+import frappe
+from frappe.utils.password import set_encrypted_password
+
+site, label = sys.argv[1], sys.argv[2]
+ingest_secret = sys.stdin.readline().strip()
+oci_token = sys.stdin.readline().strip()
+
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+	doctype = "Ops Alert Settings"
+	set_encrypted_password(doctype, doctype, ingest_secret, "ingest_secret")
+	set_encrypted_password(doctype, doctype, oci_token, "oci_notification_token")
+	frappe.db.set_single_value(doctype, {"instance_label": label, "environment": "Production"})
+	frappe.db.commit()
+finally:
+	frappe.destroy()
+' "${site}" "$(h360_host)"
+
+h360_bench --site "${site}" scheduler status >/dev/null 2>&1 || true
+log_notice "operations wiring done for ${site}"
+printf '\nOCI alarm endpoint for terraform.tfvars (alarm_https_endpoint), keep it secret:\n'
+printf '  %s/api/method/hostel360.api.ops.oci_notification?token=%s\n\n' "${public_url}" "$(cat "${token_file}")"

@@ -1,0 +1,49 @@
+{
+ "app": "hostel360",
+ "creation": "2026-10-15 18:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Sidebar",
+ "header_icon": "database",
+ "idx": 0,
+ "items": [
+  {
+   "added": 0,
+   "child": 0,
+   "collapsible": 0,
+   "hidden": 0,
+   "icon": "import",
+   "indent": 0,
+   "is_default_module": 1,
+   "keep_closed": 0,
+   "label": "Migration Run",
+   "link_to": "Migration Run",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "added": 0,
+   "child": 0,
+   "collapsible": 0,
+   "hidden": 0,
+   "icon": "arrow-left-right",
+   "indent": 0,
+   "is_default_module": 1,
+   "keep_closed": 0,
+   "label": "Migration Record Map",
+   "link_to": "Migration Record Map",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Migration",
+ "name": "Data Migration",
+ "owner": "Administrator",
+ "standard": 1,
+ "title": "Data Migration"
+}

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Linux Malware Detect post-scan hook (conf.maldet: post_scan_hook).
+#
+# maldet runs it after a scan or a monitor digest with hits (post_scan_hook_min_hits=1) and
+# passes the results in LMD_* variables. Each scan with hits becomes one critical security
+# alert in Hostel360, keyed by the scan id, so the monthly report counts the detections.
+# maldet requires the hook to be root-owned and not writable by others.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-maldet-hook
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+
+hits="${LMD_HITS:-0}"
+[[ "${hits}" =~ ^[0-9]+$ && "${hits}" -gt 0 ]] || exit 0
+
+host="$(h360_host)"
+scan_id="${LMD_SCANID:-$(date +%Y%m%d%H%M%S)}"
+scan_id="$(printf '%s' "${scan_id}" | tr -c 'A-Za-z0-9._-' '_')"
+hit_list=""
+if [[ -n "${LMD_SESSION_FILE:-}" && -r "${LMD_SESSION_FILE}" ]]; then
+	# First lines of the session: signature and path of each hit (paths only, no content).
+	hit_list="$(head -n 20 "${LMD_SESSION_FILE}" | cut -c1-300)"
+fi
+
+description="maldet found ${hits} infected file(s) on ${host} (${LMD_SCAN_TYPE:-scan} of ${LMD_PATH:-unknown path}, engine ${LMD_ENGINE:-n/a}).
+Infected files are quarantined in /usr/local/maldetect/quarantine. Review with: maldet --report ${scan_id}
+${hit_list}"
+
+log_warn "malware detected: ${hits} hit(s), scan ${scan_id}"
+h360_report "$(jq -cn --arg key "host.maldet.${host}.${scan_id}" --arg host "${host}" \
+	--arg title "Malware detected on ${host}: ${hits} file(s)" --arg description "${description}" \
+	--arg scan "${scan_id}" --argjson hits "${hits}" \
+	'{type: "alert", source: "Security", key: $key, severity: "Critical", category: "Security",
+	  title: $title, description: $description, details: {host: $host, scan_id: $scan, hits: $hits}}')"

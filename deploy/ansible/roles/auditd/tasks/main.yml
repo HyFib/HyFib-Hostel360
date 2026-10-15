@@ -1,0 +1,34 @@
+- name: Install auditd
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - audispd-plugins
+    state: present
+
+- name: Audit log size and rotation
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: "^{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: max_log_file, value: "{{ h360_audit_max_log_file_mb }}" }
+    - { key: num_logs, value: "{{ h360_audit_num_logs }}" }
+    - { key: max_log_file_action, value: ROTATE }
+    - { key: space_left_action, value: SYSLOG }
+    - { key: admin_space_left_action, value: SUSPEND }
+  notify: Restart auditd
+
+- name: Hostel360 audit rules
+  ansible.builtin.template:
+    src: hostel360.rules.j2
+    dest: /etc/audit/rules.d/60-hostel360.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Load audit rules
+
+- name: Keep auditd running
+  ansible.builtin.service:
+    name: auditd
+    state: started
+    enabled: true

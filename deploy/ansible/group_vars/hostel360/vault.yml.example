@@ -1,0 +1,12 @@
+# Copy to group_vars/hostel360/vault.yml and encrypt:  ansible-vault encrypt vault.yml
+# Generate each value with:  openssl rand -hex 32
+
+# MariaDB root password (Docker secret of the mariadb container)
+vault_h360_db_root_password: change-me
+
+# restic repository password. Store a sealed copy with ACGCET: without it nobody can read
+# the backups, including HyFib.
+vault_h360_restic_password: change-me
+
+# HMAC key shared with Hostel360 > Ops Alert Settings > Ingest Secret
+vault_h360_ingest_secret: change-me

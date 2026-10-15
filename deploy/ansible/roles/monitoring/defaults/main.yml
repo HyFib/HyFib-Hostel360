@@ -1,0 +1,9 @@
+h360_config_dir: /etc/hostel360
+h360_data_dir: /srv/hostel360
+h360_site_name: hostel.example.ac.in
+h360_public_url: "https://{{ h360_site_name }}"
+h360_host_label: "{{ ansible_hostname }}"
+h360_ons_topic_id: ""
+h360_monitoring_timers:
+  - h360-agent.timer
+  - h360-uptime-probe.timer

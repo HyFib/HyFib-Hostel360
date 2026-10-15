@@ -159,6 +159,13 @@ ignore_links_on_delete = ["Message Log", "Ops Alert", "Ops Metric Sample"]
 default_log_clearing_doctypes = {
 	"Message Log": 365,
 	"Ops Metric Sample": 400,
+	"Activity Log": 365,
+	"Access Log": 365,
+	"API Request Log": 180,
+	"Error Log": 180,
+	"Route History": 180,
+	"Integration Request": 180,
+	"Webhook Request Log": 180,
 }
 
 # User Data Protection (DPDP Act 2023: personal data export / erasure requests)

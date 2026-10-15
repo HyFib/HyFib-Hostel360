@@ -1,0 +1,285 @@
+{
+ "charts": [
+  {
+   "chart_name": "Alerts per Day",
+   "label": "Alerts per Day"
+  },
+  {
+   "chart_name": "Alerts by Severity",
+   "label": "Alerts by Severity"
+  }
+ ],
+ "content": "[{\"id\":\"5b3f144531\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Open Critical Alerts\",\"col\":3}},{\"id\":\"209b49d100\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Open Alerts\",\"col\":3}},{\"id\":\"fef72b7ba4\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Open Support Tickets\",\"col\":3}},{\"id\":\"af21951293\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Failed Backups (30 days)\",\"col\":3}},{\"id\":\"196b99a43a\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Alerts per Day\",\"col\":8}},{\"id\":\"319c5408fb\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Alerts by Severity\",\"col\":4}},{\"id\":\"896d82a3f7\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick access</b></span>\",\"col\":12}},{\"id\":\"6108d638e0\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Operations Status\",\"col\":4}},{\"id\":\"028367f459\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Alerts\",\"col\":4}},{\"id\":\"6c29499aee\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Support Tickets\",\"col\":4}},{\"id\":\"e4036a555a\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Records and reports</b></span>\",\"col\":12}},{\"id\":\"bffdd669db\",\"type\":\"card\",\"data\":{\"card_name\":\"Monitoring\",\"col\":4}},{\"id\":\"0ffb6d4f55\",\"type\":\"card\",\"data\":{\"card_name\":\"Support\",\"col\":4}},{\"id\":\"7aac703730\",\"type\":\"card\",\"data\":{\"card_name\":\"Reporting\",\"col\":4}},{\"id\":\"0ffaac3be2\",\"type\":\"card\",\"data\":{\"card_name\":\"Integrations\",\"col\":4}}]",
+ "creation": "2026-10-15 18:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "activity",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "HyFib Operations",
+ "links": [
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Monitoring",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Operations Status",
+   "link_count": 0,
+   "link_to": "ops-status",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Ops Alert",
+   "link_count": 0,
+   "link_to": "Ops Alert",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Ops Metric Sample",
+   "link_count": 0,
+   "link_to": "Ops Metric Sample",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Ops Backup Record",
+   "link_count": 0,
+   "link_to": "Ops Backup Record",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Support",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Support Ticket",
+   "link_count": 0,
+   "link_to": "Support Ticket",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reporting",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Monthly Performance Report",
+   "link_count": 0,
+   "link_to": "Monthly Performance Report",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Alert History",
+   "link_count": 0,
+   "link_to": "Alert History",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Ops Alert",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Uptime and Incidents",
+   "link_count": 0,
+   "link_to": "Uptime and Incidents",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Ops Alert",
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Integrations",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Ops Alert Settings",
+   "link_count": 0,
+   "link_to": "Ops Alert Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Messaging Settings",
+   "link_count": 0,
+   "link_to": "Messaging Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Message Log",
+   "link_count": 0,
+   "link_to": "Message Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Online Payment Transaction",
+   "link_count": 0,
+   "link_to": "Hostel Payment Transaction",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Gateway Reconciliation",
+   "link_count": 0,
+   "link_to": "Gateway Reconciliation",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Payment Transaction",
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Operations",
+ "name": "HyFib Operations",
+ "number_cards": [
+  {
+   "label": "Open Critical Alerts",
+   "number_card_name": "Open Critical Alerts"
+  },
+  {
+   "label": "Open Alerts",
+   "number_card_name": "Open Alerts"
+  },
+  {
+   "label": "Open Support Tickets",
+   "number_card_name": "Open Support Tickets"
+  },
+  {
+   "label": "Failed Backups (30 days)",
+   "number_card_name": "Recent Failed Backups"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "HyFib Operations"
+  },
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "Institution Auditor"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 6.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "format": "",
+   "label": "Operations Status",
+   "link_to": "ops-status",
+   "stats_filter": "",
+   "type": "Page"
+  },
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "format": "{} open",
+   "label": "Alerts",
+   "link_to": "Ops Alert",
+   "stats_filter": "[[\"Ops Alert\", \"status\", \"in\", [\"Open\", \"Acknowledged\"]]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "format": "{} open",
+   "label": "Support Tickets",
+   "link_to": "Support Ticket",
+   "stats_filter": "[[\"Support Ticket\", \"status\", \"not in\", [\"Resolved\", \"Closed\"]]]",
+   "type": "DocType"
+  }
+ ],
+ "standard": 1,
+ "title": "HyFib Operations",
+ "type": "Workspace"
+}

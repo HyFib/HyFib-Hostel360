@@ -1,0 +1,59 @@
+#cloud-config
+# HyFib Hostel360 application server, first boot.
+#
+# Keeps the bootstrap minimal: time zone, base packages, the data volume formatted (only
+# if blank) and mounted at ${data_mount}. Everything else is configured by Ansible
+# (deploy/ansible/site.yml), either pushed from an administrator's workstation through the
+# Bastion, or pulled here when an ansible-pull repository is configured.
+
+timezone: Asia/Kolkata
+package_update: true
+package_upgrade: true
+packages:
+  - ansible-core
+  - git
+  - jq
+  - python3-apt
+  - e2fsprogs
+
+write_files:
+  - path: /usr/local/sbin/h360-mount-data
+    owner: root:root
+    permissions: "0750"
+    content: |
+      #!/bin/bash
+      # Format the data volume on first use (never when it already holds a filesystem)
+      # and mount it by label. Ansible's storage role runs the same steps idempotently.
+      set -Eeuo pipefail
+      device="${data_device}"
+      mountpoint="${data_mount}"
+      for _ in $(seq 1 60); do
+        [[ -e "$${device}" ]] && break
+        sleep 5
+      done
+      [[ -e "$${device}" ]] || { echo "data volume $${device} not attached" >&2; exit 1; }
+      if ! blkid "$${device}" >/dev/null 2>&1; then
+        # bytes-per-inode 16384 gives about 26 million inodes on 400 GB (tender: 4 million)
+        mkfs.ext4 -q -L h360data -i 16384 -m 1 -E lazy_itable_init=0 "$${device}"
+      fi
+      mkdir -p "$${mountpoint}"
+      if ! grep -q 'LABEL=h360data' /etc/fstab; then
+        echo "LABEL=h360data $${mountpoint} ext4 defaults,noatime,nofail,x-systemd.device-timeout=300 0 2" >> /etc/fstab
+      fi
+      systemctl daemon-reload
+      mountpoint -q "$${mountpoint}" || mount "$${mountpoint}"
+  - path: /etc/hostel360/bootstrap.env
+    owner: root:root
+    permissions: "0640"
+    content: |
+      H360_SITE_HOSTNAME=${site_hostname}
+      H360_LB_SUBNET_CIDR=${lb_subnet_cidr}
+      H360_DATA_DEVICE=${data_device}
+
+runcmd:
+  - [/usr/local/sbin/h360-mount-data]
+%{ if ansible_pull_repo != "" ~}
+  - [ansible-pull, --url, "${ansible_pull_repo}", --checkout, "${ansible_pull_branch}", --directory, /opt/hostel360/src, --inventory, "localhost,", --connection, local, deploy/ansible/site.yml]
+%{ endif ~}
+
+final_message: "Hostel360 bootstrap finished after $UPTIME seconds; run the Ansible playbook next."

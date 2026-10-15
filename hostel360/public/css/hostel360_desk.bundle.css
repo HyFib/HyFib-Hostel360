@@ -1,1 +1,107 @@
-/* Desk-wide styles for HyFib Hostel360. */
+/* Desk-wide styles for HyFib Hostel360.
+ *
+ * Loaded on every desk page through `app_include_css`. Page-specific styling stays next to its
+ * page (room board, approvals, operations status); this file only holds what several screens
+ * share: brand colours, status tones and small workspace fixes.
+ */
+
+:root {
+	--h360-brand: #0b4f9c;
+	--h360-brand-strong: #083b75;
+	--h360-brand-subtle: #e8f0fa;
+	--h360-accent: #19a7ce;
+
+	/* Status tones as background/foreground pairs, for badges on custom pages that are not
+	   Frappe indicators. Frappe's palette comes first so the tones follow the desk theme. */
+	--h360-success-bg: var(--green-100, #dcfce7);
+	--h360-success-fg: var(--green-800, #166534);
+	--h360-info-bg: var(--blue-100, #dbeafe);
+	--h360-info-fg: var(--blue-800, #1e40af);
+	--h360-warning-bg: var(--orange-100, #ffedd5);
+	--h360-warning-fg: var(--orange-800, #9a3412);
+	--h360-danger-bg: var(--red-100, #fee2e2);
+	--h360-danger-fg: var(--red-800, #991b1b);
+	--h360-neutral-bg: var(--gray-200, #e5e7eb);
+	--h360-neutral-fg: var(--gray-700, #374151);
+}
+
+[data-theme="dark"] {
+	--h360-brand: #5b9be0;
+	--h360-brand-strong: #8bbcf0;
+	--h360-brand-subtle: rgba(91, 155, 224, 0.16);
+	--h360-accent: #4cc3e6;
+
+	--h360-success-bg: rgba(34, 197, 94, 0.16);
+	--h360-success-fg: #86efac;
+	--h360-info-bg: rgba(59, 130, 246, 0.18);
+	--h360-info-fg: #93c5fd;
+	--h360-warning-bg: rgba(249, 115, 22, 0.18);
+	--h360-warning-fg: #fdba74;
+	--h360-danger-bg: rgba(239, 68, 68, 0.18);
+	--h360-danger-fg: #fca5a5;
+	--h360-neutral-bg: rgba(148, 163, 184, 0.18);
+	--h360-neutral-fg: #cbd5e1;
+}
+
+/* Status badges --------------------------------------------------------------------------- */
+
+.h360-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: var(--text-xs, 11px);
+	font-weight: 500;
+	line-height: 1.5;
+	white-space: nowrap;
+	background: var(--h360-neutral-bg);
+	color: var(--h360-neutral-fg);
+}
+
+.h360-status.success {
+	background: var(--h360-success-bg);
+	color: var(--h360-success-fg);
+}
+
+.h360-status.info {
+	background: var(--h360-info-bg);
+	color: var(--h360-info-fg);
+}
+
+.h360-status.warning {
+	background: var(--h360-warning-bg);
+	color: var(--h360-warning-fg);
+}
+
+.h360-status.danger {
+	background: var(--h360-danger-bg);
+	color: var(--h360-danger-fg);
+}
+
+/* `hostel360.status_pill()` renders a Frappe indicator pill; keep long statuses on one line. */
+.h360-status-pill {
+	white-space: nowrap;
+}
+
+/* Money in tables and summaries lines up by digit. */
+.h360-amount {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* Workspaces ------------------------------------------------------------------------------ */
+
+/* The Hostel360 workspaces are shared by several roles, and a number card, chart or shortcut the
+   viewer may not read renders as an empty, class-less wrapper that still holds its grid column,
+   leaving gaps in a row of cards. Collapse those blocks. Spacers and paragraphs always carry a
+   class, so they are left alone. */
+.desk-page .ce-block:has(> .ce-block__content > div:empty:not([class])) {
+	display: none;
+}
+
+/* Once hidden blocks close up, a number card can share a row with a chart; keep the card at its
+   own height instead of stretching it to the chart's. */
+.desk-page .ce-block:has(.number-widget-box) {
+	align-self: flex-start;
+}

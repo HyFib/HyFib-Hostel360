@@ -1,0 +1,4 @@
+# Lock the audit rules until reboot ("-e 2"). Safer, but rule changes then need a reboot.
+h360_audit_immutable: false
+h360_audit_max_log_file_mb: 100
+h360_audit_num_logs: 60

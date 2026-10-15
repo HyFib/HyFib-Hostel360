@@ -1,0 +1,10 @@
+[Unit]
+Description=Probe the Hostel360 portal every minute
+
+[Timer]
+OnBootSec=1min
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

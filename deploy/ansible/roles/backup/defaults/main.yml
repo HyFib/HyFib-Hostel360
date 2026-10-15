@@ -1,0 +1,24 @@
+h360_config_dir: /etc/hostel360
+h360_restic_version: "0.19.1"
+h360_restic_sha256:
+  arm64: a5f64aaab53d51e311fa3829124c5b703f2d14cf187d8640b6be3b2b49376465
+  amd64: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
+h360_rclone_version: "1.75.2"
+h360_rclone_sha256:
+  arm64: 7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10
+  amd64: 349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702
+
+h360_backup_bucket: hostel360-backups-mumbai
+h360_backup_namespace: ""
+h360_backup_region: ap-mumbai-1
+h360_backup_repository_path: restic
+h360_compartment_id: ""
+h360_block_volume_id: ""
+h360_backup_keep_daily: 30
+h360_backup_keep_weekly: 12
+h360_backup_keep_monthly: 12
+h360_snapshot_keep_days: 14
+h360_backup_timers:
+  - h360-backup.timer
+  - h360-restore-test.timer
+  - h360-snapshot-prune.timer
