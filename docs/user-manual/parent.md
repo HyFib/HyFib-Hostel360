@@ -10,9 +10,12 @@ Go to **`https://<portal address>/hostel`** (for ACGCET, e.g. `https://hostel.ac
 or use the **Parent login** button on the hostel website.
 
 1. Enter **your** mobile number — the one you gave the hostel office as your ward's parent
-   or guardian — choose **SMS** or **WhatsApp**, tap **Send code**.
+   or guardian — choose **SMS** or **WhatsApp**, tap **Send code**. If the hostel offers it,
+   you can choose **E-mail** instead: you still enter your mobile number, and the code goes to
+   the e-mail address the hostel office has for you. No e-mail address given to the office?
+   Choose SMS or WhatsApp.
 2. Enter the 6-digit code and tap **Verify and sign in** (valid 5 minutes; **Resend code**
-   after 60 seconds).
+   after 60 seconds; for an e-mailed code, look in your spam folder too).
 3. If your ward uses the same number, choose **I am a parent or guardian**.
 4. First time: read the **privacy notice** and tap **I have read and accept**.
 

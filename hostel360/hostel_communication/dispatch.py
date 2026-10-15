@@ -296,6 +296,72 @@ def send_otp_message(
 	return bool(result.ok)
 
 
+def send_otp_email(
+	email: str,
+	otp: str,
+	timeout: tuple[float, float] | None = None,
+	language: str | None = None,
+	name: str | None = None,
+) -> bool:
+	"""E-mail a sign-in code synchronously. Returns True when the mail server accepted it.
+
+	The same rules as ``send_otp_message``: the code is never stored (the message goes
+	straight to the mail server, not through the Email Queue, and the Message Log keeps
+	neither subject nor text), ``timeout`` bounds each step of the SMTP conversation and a
+	mail server that keeps failing is skipped for a while. Placeholder addresses on the
+	``.invalid`` TLD are never written to. ``name`` greets the recipient when given.
+	"""
+	address = cstr(email).strip().lower()
+	if (
+		not otp
+		or not address
+		or email_provider.is_placeholder_address(address)
+		or not validate_email_address(address)
+	):
+		return False
+
+	settings = get_settings()
+	template = _otp_template(ev.EMAIL, language)
+	if not template:
+		return False
+
+	expiry_minutes = max(1, math.ceil((cint(settings.get("otp_expiry_seconds")) or 300) / 60))
+	log = _new_log(ev.EMAIL, ev.OTP_LOGIN, address, None, None, None, template.get("name"))
+	log["message"] = "Sign-in code message (the code is never stored)."
+
+	provider = email_provider.DIRECT_PROVIDER
+	if provider_paused(provider):
+		_finish_log(
+			log,
+			DeliveryResult.failed(
+				provider,
+				f"Not sent: {provider} has failed repeatedly, so sign-in codes skip it for up to "
+				f"{BREAKER_SECONDS} seconds.",
+			),
+		)
+		return False
+
+	try:
+		rendered = render_for_channel(
+			ev.OTP_LOGIN,
+			template,
+			ev.EMAIL,
+			{"otp": otp, "expiry_minutes": expiry_minutes},
+			{"name": cstr(name).strip() or None},
+		)
+		result = email_provider.send_email_now(
+			address, rendered["subject"], rendered["body"], timeout=timeout, settings=settings
+		)
+	except Exception as e:
+		result = DeliveryResult.failed(provider, f"{type(e).__name__}: {e}")
+
+	if result.error:
+		result.error = result.error.replace(otp, "******")
+	_finish_log(log, result)
+	record_outcome(result)
+	return bool(result.ok)
+
+
 def _otp_provider(channel: str, settings) -> str:
 	if channel == ev.WHATSAPP:
 		return whatsapp_provider.PROVIDER
@@ -802,7 +868,9 @@ def _templates_for(event: str, channels: list[str] | None, settings) -> dict:
 	rows = frappe.get_all("Message Template", filters=filters, fields=list(TEMPLATE_FIELDS))
 	by_channel = {}
 	for row in rows:
-		if event in ev.MOBILE_ONLY_EVENTS and row.channel not in ev.MOBILE_CHANNELS:
+		# A sign-in code is e-mailed only by send_otp_email, straight to the mail server: the
+		# Email Queue keeps a copy of every message, and the code must not be stored.
+		if event == ev.OTP_LOGIN and row.channel not in ev.MOBILE_CHANNELS:
 			continue
 		if _channel_enabled(settings, row.channel):
 			row.language = row.language or ev.DEFAULT_LANGUAGE
@@ -835,8 +903,8 @@ def _channel_enabled(settings, channel: str) -> bool:
 def _otp_template(channel: str, language: str | None = None) -> dict | None:
 	"""The sign-in code template; falls back to the built-in wording if it was deleted.
 
-	The Tamil template is used for a Tamil request when it is enabled and registered; the
-	English one stays the switch for the channel.
+	The Tamil template is used for a Tamil request when it is enabled (and, for SMS and
+	WhatsApp, registered); the English one stays the switch for the channel.
 	"""
 	fields = [*TEMPLATE_FIELDS, "enabled"]
 	row = frappe.db.get_value(

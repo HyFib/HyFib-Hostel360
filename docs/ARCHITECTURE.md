@@ -163,15 +163,15 @@ sequenceDiagram
     participant A as hostel360.api.auth
     participant O as auth.otp
     participant R as Redis
-    participant G as SMS / WhatsApp
+    participant G as SMS / WhatsApp / SMTP
 
     P->>A: send_otp(mobile, channel)
     A->>O: request_code
-    O->>O: number known, validated, not closed?
+    O->>O: number known, validated, not closed?<br/>(e-mail: an address on that record?)
     alt eligible
         O->>R: store HMAC(code), TTL 300 s, counters
-        O->>G: send code (bounded time, circuit breaker)
-    else unknown or not eligible
+        O->>G: send code to the number, or e-mail it straight to the SMTP server<br/>(bounded time, circuit breaker)
+    else unknown, not eligible or no e-mail address
         O->>R: store a code nobody receives, same counters
         O->>O: wait about as long as a real send
     end
@@ -350,7 +350,7 @@ in [DEPLOYMENT.md](DEPLOYMENT.md#3-continuous-integration-and-delivery).
 |---|---|
 | Frappe as the platform | Mature role/permission model, audit trail, reports with Excel/PDF export, background jobs and a desk the office can use without custom UI for every list |
 | Portal as a separate SPA over a narrow API | Students and parents never get DocType permissions; one module (`api/portal.py`) holds every ownership check, and the phone UI can be fast and bilingual |
-| OTP sign-in to the registered mobile | Students and parents already have the number on record; no passwords to forget or share |
+| OTP sign-in to the registered mobile | Students and parents already have the number on record; no passwords to forget or share. The code can also go to the e-mail address on record (optional), but the mobile number stays the identifier |
 | Same response for unknown numbers | The sign-in page cannot be used to find out who lives in the hostel |
 | Alerts in their own transaction | A failing payment webhook must still leave an alert behind; two callers raising the same key must not deadlock each other's work |
 | Dividing-system mess billing in the app | The month's cost divided by student-days is the institution's rule; bills become fee invoices so dues, payment and receipts work the same way |

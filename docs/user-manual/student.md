@@ -19,9 +19,13 @@ You can sign in once the hostel office has **validated** your registration. Use 
 number you gave the hostel office.
 
 1. **Sign in** screen: enter your 10-digit mobile number, choose **SMS** or **WhatsApp**, tap
-   **Send code**.
+   **Send code**. If the hostel offers it, you can choose **E-mail** instead: you still enter
+   your mobile number, and the code goes to the e-mail address the hostel office has on your
+   record (the one you confirm in *Confirm your details*). No e-mail address given to the
+   office? Choose SMS or WhatsApp.
 2. Enter the 6-digit code you receive and tap **Verify and sign in**. The code is valid for 5
-   minutes. No code? Wait for **Resend code** (after 60 seconds).
+   minutes. No code? Wait for **Resend code** (after 60 seconds); for an e-mailed code, look in
+   your spam folder too.
 3. If your parent uses the same number, you are asked **Who is signing in?** — tap **I am the
    student**.
 

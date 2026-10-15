@@ -37,16 +37,29 @@ page gives the shapes and the rules a client must follow.
 
 ### `send_otp` (guest, POST)
 
-Request: `mobile` (10-digit Indian number, any common format), `channel` (`sms` | `whatsapp`,
-optional; must be allowed by Messaging Settings).
+Request: `mobile` (10-digit Indian number, any common format), `channel` (`sms` |
+`whatsapp` | `email`, optional, default `sms`).
+
+- `sms` and `whatsapp` send the code to the number by the channels Messaging Settings
+  allows (*Send Codes By*); a channel that is not allowed falls back to the allowed one.
+- `email` is accepted while Messaging Settings has *Allow E-mail Sign-in Codes* and *Enable
+  Email* ticked (the page's boot data says so as `otp_email`). The number still identifies
+  the student or parent; the code goes to the e-mail address on that Hostel Student or
+  Hostel Guardian record, never to a placeholder `.invalid` portal address, and is not
+  re-sent by SMS if the e-mail fails. A code e-mailed to an address signs in only the
+  records registered with that address (see `verify_otp`). While e-mail codes are off, an
+  `email` request is treated like any other channel that is not allowed.
 
 ```json
 {"message": {"sent": true, "masked": "98xxxxxx10", "resend_after": 60, "expires_in": 300}}
 ```
 
-The response is the same for unknown, unvalidated and closed numbers. Limits: one code per
-number every 60 s, 5 an hour; 20 an hour per address (trusted networks exempt); a flood guard
-of 3,000 calls an hour per address (100,000 for trusted networks). A refused request is 429.
+The response is the same for unknown, unvalidated and closed numbers, for numbers with no
+e-mail address on record and for `email` requests while e-mail codes are off; `masked` is
+always the masked mobile number, never an e-mail address. Limits are per number whatever the
+channel: one code per number every 60 s, 5 an hour; 20 an hour per address (trusted networks
+exempt); a flood guard of 3,000 calls an hour per address (100,000 for trusted networks). A
+refused request is 429.
 
 ### `verify_otp` (guest, POST)
 
@@ -62,6 +75,10 @@ not consumed and the client repeats the call with `kind`:
 ```json
 {"message": {"ok": false, "choose": ["student", "parent"]}}
 ```
+
+A code sent by e-mail to an address that only the student's (or only the guardian's) record
+has signs in that record directly, without the question; asking for the other `kind` with it
+is a 401 that says to request a code to the mobile number instead.
 
 A wrong or expired code is a 401 (`AuthenticationError`) whose message says how many attempts
 are left; 5 wrong attempts invalidate the code and 10 failed verifications in an hour lock the

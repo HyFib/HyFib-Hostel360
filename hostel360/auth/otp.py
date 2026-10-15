@@ -31,6 +31,16 @@ workers, and a circuit breaker that stops calling a provider that keeps failing 
 ``hostel360.hostel_communication.providers.base``). A messaging outage then costs a few
 seconds per request at most instead of tying up the web workers.
 
+E-mail codes (when Messaging Settings allows them) work the same way. The mobile number is
+still what identifies the person; the code goes to the e-mail address on their student or
+guardian record, never to a portal placeholder address. A number with no address on record
+is answered exactly like an unknown one, with the delay of a real e-mail. An e-mailed code
+signs in only the records registered with the address it went to (see ``email_recipient``).
+An e-mail that cannot be sent is not replaced by an SMS, nor an SMS by an e-mail: the person
+waits for the code where they asked for it. (While e-mail codes are switched off, a request
+for one is treated like any other channel that is not allowed: it goes by the mobile
+channels.)
+
 Development shortcut: with ``developer_mode`` on, ``"hostel360_fixed_otp": "123456"`` in
 site_config.json makes every code that value, so testers can sign in without an SMS
 gateway. The setting is ignored whenever developer mode is off, so a key left behind in
@@ -48,9 +58,10 @@ import time
 
 import frappe
 from frappe import _
-from frappe.utils import cint, cstr
+from frappe.utils import cint, cstr, validate_email_address
 
 from hostel360.hostel_communication.events import (
+	EMAIL,
 	MOBILE_CHANNELS,
 	SMS,
 	WHATSAPP,
@@ -71,10 +82,13 @@ INACTIVE_STUDENT_STATUSES = ("Vacated", "Alumni")
 VALIDATED = "Validated"
 REJECTED = "Rejected"
 
-# Unknown numbers are answered after roughly the time a real send takes.
+# Unknown numbers are answered after roughly the time a real send takes, measured
+# separately for e-mail: an SMTP conversation takes longer than an SMS gateway call.
 DEFAULT_SEND_SECONDS = 0.4
+DEFAULT_EMAIL_SEND_SECONDS = 1.0
 MAX_EQUALISE_SECONDS = 3.0
 SEND_TIME_KEY = "send_seconds"
+EMAIL_SEND_TIME_KEY = "send_seconds:email"
 
 # Bounds on the synchronous send (seconds). Background notifications keep the longer
 # provider timeout from Messaging Settings.
@@ -101,17 +115,44 @@ def get_policy() -> frappe._dict:
 		cooldown=max(cint(settings.get("otp_resend_cooldown_seconds")) or 60, 1),
 		sends_per_hour=max(cint(settings.get("otp_max_sends_per_hour")) or 5, 1),
 		sends_per_ip=max(cint(settings.get("otp_max_sends_per_ip_per_hour")) or 20, 1),
-		channels=allowed_channels(settings.get("otp_channels")),
+		channels=[
+			*allowed_channels(settings.get("otp_channels")),
+			*([EMAIL] if email_codes_enabled(settings) else []),
+		],
 		trusted_networks=parse_networks(settings.get("otp_trusted_networks")),
 	)
 
 
 def allowed_channels(setting: str | None) -> list[str]:
+	"""Mobile channels for codes (the ``otp_channels`` setting)."""
 	if setting == "WhatsApp":
 		return [WHATSAPP]
 	if setting == "SMS and WhatsApp":
 		return [SMS, WHATSAPP]
 	return [SMS]
+
+
+def email_codes_enabled(settings=None) -> bool:
+	"""May students and parents ask for their code by e-mail?
+
+	A site-wide switch, safe to tell anyone: it says nothing about any number. Codes are
+	e-mailed only while e-mail itself is enabled in Messaging Settings.
+	"""
+	settings = settings or frappe.get_cached_doc("Messaging Settings")
+	return bool(cint(settings.get("otp_email_enabled")) and cint(settings.get("email_enabled")))
+
+
+def delivery_route(requested: str | None, policy) -> list[str]:
+	"""Channels to try, in order, for the channel the person asked for.
+
+	E-mail is tried alone. A channel that is not allowed (e-mail while it is switched off,
+	WhatsApp on an SMS-only site) gets the allowed mobile channels, as before.
+	"""
+	requested = normalize_channel(requested)
+	if requested == EMAIL and EMAIL in policy.channels:
+		return [EMAIL]
+	mobile = [c for c in policy.channels if c in MOBILE_CHANNELS] or [SMS]
+	return ([requested] if requested in mobile else []) + [c for c in mobile if c != requested]
 
 
 def parse_networks(text: str | None) -> list:
@@ -210,8 +251,14 @@ def _delete(*names: str) -> None:
 	frappe.cache.delete(*[_key(name) for name in names])
 
 
-def _store_code(ref: str, mobile: str, code: str, expiry: int, channel: str | None) -> None:
+def _store_code(
+	ref: str, mobile: str, code: str, expiry: int, channel: str | None, kinds: list[str] | None = None
+) -> None:
+	"""Keep the code's digest. ``kinds`` limits whom the code signs in (e-mailed codes);
+	without it, any portal record holding the number."""
 	state = {"d": code_digest(mobile, code), "e": _now() + expiry, "c": channel or ""}
+	if kinds is not None:
+		state["k"] = list(kinds)
 	pipe = frappe.cache.pipeline()
 	pipe.set(_key(f"code:{ref}"), json.dumps(state), ex=expiry)
 	pipe.delete(_key(f"attempts:{ref}"))
@@ -280,28 +327,83 @@ def guardian_has_portal_ward(guardian: str) -> bool:
 
 
 def resolve_identities(mobile: str) -> list[frappe._dict]:
-	"""Portal identities that may sign in with this mobile number (student and/or parent)."""
+	"""Portal identities that may sign in with this mobile number (student and/or parent).
+
+	Each carries ``kind``, ``doctype``, ``name``, ``display_name`` and ``email``, the real
+	e-mail address on the record (None when there is none, or only a placeholder).
+	"""
 	identities = []
 	if portal_enabled("student_portal_enabled") and frappe.db.exists("DocType", "Hostel Student"):
 		student = frappe.db.get_value(
 			"Hostel Student",
 			{"mobile_number": mobile},
-			["name", "status", "validation_status"],
+			["name", "status", "validation_status", "email", "full_name"],
 			as_dict=True,
 		)
 		if student_may_sign_in(student):
-			identities.append(frappe._dict(kind=KIND_STUDENT, doctype="Hostel Student", name=student.name))
+			identities.append(
+				frappe._dict(
+					kind=KIND_STUDENT,
+					doctype="Hostel Student",
+					name=student.name,
+					display_name=student.full_name,
+					email=registered_email(student.email),
+				)
+			)
 
 	if portal_enabled("parent_portal_enabled") and frappe.db.exists("DocType", "Hostel Guardian"):
 		guardian = frappe.db.get_value(
 			"Hostel Guardian",
 			{"mobile_number": mobile},
-			["name", "validation_status"],
+			["name", "validation_status", "email", "guardian_name"],
 			as_dict=True,
 		)
 		if guardian and guardian.validation_status != REJECTED and guardian_has_portal_ward(guardian.name):
-			identities.append(frappe._dict(kind=KIND_PARENT, doctype="Hostel Guardian", name=guardian.name))
+			identities.append(
+				frappe._dict(
+					kind=KIND_PARENT,
+					doctype="Hostel Guardian",
+					name=guardian.name,
+					display_name=guardian.guardian_name,
+					email=registered_email(guardian.email),
+				)
+			)
 	return identities
+
+
+def registered_email(value: str | None) -> str | None:
+	"""A usable e-mail address from a student or guardian record.
+
+	Portal accounts of people without an e-mail address get placeholder logins on the
+	``.invalid`` TLD; such an address, should one ever be copied onto a record, is no address.
+	"""
+	from hostel360.hostel_communication.providers.email import is_placeholder_address
+
+	address = cstr(value).strip().lower()
+	if not address or is_placeholder_address(address) or not validate_email_address(address):
+		return None
+	return address
+
+
+def email_recipient(identities: list) -> frappe._dict | None:
+	"""Where an e-mailed code goes, and whom it may sign in: ``{email, kinds, name}``.
+
+	The first identity with an address on record (the student before the parent) decides
+	the address, and the code then signs in only the identities registered with that same
+	address. A student who shares a parent's mobile number but has an e-mail address of
+	their own therefore cannot sign in as the parent with an e-mailed code. None when no
+	identity has an address.
+	"""
+	address = next((i.get("email") for i in identities if i.get("email")), None)
+	if not address:
+		return None
+	holders = [i for i in identities if i.get("email") == address]
+	return frappe._dict(
+		email=address,
+		kinds=[i.kind for i in holders],
+		# Greet by name only when the address belongs to one person.
+		name=holders[0].get("display_name") if len(holders) == 1 else None,
+	)
 
 
 # ---------------------------------------------------------------- sending
@@ -312,8 +414,10 @@ def request_code(
 ) -> dict:
 	"""Send a sign-in code if the number belongs to a portal user. Same answer either way.
 
-	``language`` is the language on the requesting device (the portal sends it with every
-	call); the code goes out in Tamil when the Tamil sign-in template is enabled.
+	``channel`` is "sms", "whatsapp" or "email"; for e-mail the number is still looked up
+	the same way and the code goes to the address on that record. ``language`` is the
+	language on the requesting device (the portal sends it with every call); the code goes
+	out in Tamil when the Tamil sign-in template is enabled.
 	"""
 	started = _clock()
 	mobile = _normalise(mobile)
@@ -343,25 +447,42 @@ def request_code(
 			frappe.RateLimitExceededError,
 		)
 
+	route = delivery_route(channel, policy)
 	identities = resolve_identities(mobile)
-	if identities:
+	recipient = None
+	if identities and route[0] == EMAIL:
+		recipient = email_recipient(identities)
+		if not recipient:
+			# Nobody to e-mail: answered like an unknown number. The log line lets the office
+			# see why a code never arrived.
+			security_log("otp_email_unavailable", mobile, ip, kinds=[i.kind for i in identities])
+
+	if identities and (recipient or route[0] != EMAIL):
 		# Named *_secret so Frappe's traceback sanitiser masks it if anything below fails.
 		otp_secret = generate_code(policy.length)
-		_store_code(ref, mobile, otp_secret, policy.expiry, channel)
+		kinds = recipient.kinds if recipient else None
+		_store_code(ref, mobile, otp_secret, policy.expiry, route[0], kinds=kinds)
 		language = normalize_language(language) if language else request_language()
-		delivered = _deliver(mobile, otp_secret, channel, policy, started, language=language)
+		delivered = _deliver(
+			mobile, otp_secret, route, policy, started, language=language, recipient=recipient
+		)
 		del otp_secret
 		security_log(
-			"otp_sent" if delivered else "otp_send_failed", mobile, ip, kinds=[i.kind for i in identities]
+			"otp_sent" if delivered else "otp_send_failed",
+			mobile,
+			ip,
+			kinds=kinds or [i.kind for i in identities],
+			channel=route[0],
 		)
-		_remember_send_time(_clock() - started)
+		_remember_send_time(_clock() - started, route[0])
 	else:
 		# A code nobody receives, so verify_code answers exactly as it does for a registered
 		# number: attempt counting, "attempts left", invalidation and lockout. It is hex, and
 		# verify_code accepts digits only, so it can never be entered.
-		_store_code(ref, mobile, secrets.token_hex(16), policy.expiry, channel)
-		security_log("otp_requested_unknown", mobile, ip)
-		_equalise_timing(started)
+		_store_code(ref, mobile, secrets.token_hex(16), policy.expiry, route[0])
+		if not identities:
+			security_log("otp_requested_unknown", mobile, ip)
+		_equalise_timing(started, route[0])
 
 	return {
 		"sent": True,
@@ -379,21 +500,19 @@ def request_language() -> str:
 def _deliver(
 	mobile: str,
 	otp_secret: str,
-	requested: str | None,
+	route: list[str],
 	policy,
 	started: float,
 	language: str | None = None,
+	recipient: frappe._dict | None = None,
 ) -> bool:
-	"""Try the requested channel first, then any other channel allowed for codes.
+	"""Try the channels of ``route`` in turn until one accepts the code.
 
 	The whole attempt stays within ``OTP_SEND_BUDGET_SECONDS`` of the request starting, and
-	is skipped when too many codes are already on their way to a provider.
+	is skipped when too many codes are already on their way to a provider. E-mail goes to
+	``recipient`` (see ``email_recipient``).
 	"""
-	from hostel360.hostel_communication.dispatch import send_otp_message
-
-	requested = normalize_channel(requested)
-	order = [requested] if requested in policy.channels else []
-	order += [c for c in policy.channels if c not in order and c in MOBILE_CHANNELS]
+	from hostel360.hostel_communication.dispatch import send_otp_email, send_otp_message
 
 	slot = _acquire_send_slot()
 	if slot is None:
@@ -401,13 +520,19 @@ def _deliver(
 		return False
 	try:
 		deadline = started + OTP_SEND_BUDGET_SECONDS
-		for channel in order:
+		for channel in route:
 			remaining = deadline - _clock()
 			if remaining < MIN_CHANNEL_SECONDS:
 				break
 			timeout = (min(OTP_CONNECT_TIMEOUT, remaining), min(OTP_READ_TIMEOUT, remaining))
 			try:
-				if send_otp_message(mobile, otp_secret, channel, timeout=timeout, language=language):
+				if channel == EMAIL:
+					sent = bool(recipient) and send_otp_email(
+						recipient.email, otp_secret, timeout=timeout, language=language, name=recipient.name
+					)
+				else:
+					sent = send_otp_message(mobile, otp_secret, channel, timeout=timeout, language=language)
+				if sent:
 					return True
 			except Exception:
 				frappe.log_error(
@@ -453,26 +578,28 @@ def _release_send_slot(token: str | None) -> None:
 		frappe.logger("hostel360").warning("Could not release a sign-in code send slot", exc_info=True)
 
 
-def _send_time_key() -> bytes:
-	return _key(SEND_TIME_KEY)
+def _send_time_key(channel: str | None = None) -> bytes:
+	"""Where the typical send time of a route is kept: one for e-mail, one for the mobile channels."""
+	return _key(EMAIL_SEND_TIME_KEY if channel == EMAIL else SEND_TIME_KEY)
 
 
-def _typical_send_seconds() -> float:
+def _typical_send_seconds(channel: str | None = None) -> float:
+	default = DEFAULT_EMAIL_SEND_SECONDS if channel == EMAIL else DEFAULT_SEND_SECONDS
 	try:
-		value = float(frappe.cache.get(_send_time_key()) or DEFAULT_SEND_SECONDS)
+		value = float(frappe.cache.get(_send_time_key(channel)) or default)
 	except TypeError, ValueError:
-		value = DEFAULT_SEND_SECONDS
+		value = default
 	return min(max(value, 0.05), MAX_EQUALISE_SECONDS)
 
 
-def _remember_send_time(seconds: float) -> None:
+def _remember_send_time(seconds: float, channel: str | None = None) -> None:
 	# Exponentially weighted average, so the decoy delay follows the gateway's real latency.
-	average = _typical_send_seconds() * 0.8 + min(seconds, MAX_EQUALISE_SECONDS) * 0.2
-	frappe.cache.set(_send_time_key(), f"{average:.3f}", ex=7 * 24 * HOUR)
+	average = _typical_send_seconds(channel) * 0.8 + min(seconds, MAX_EQUALISE_SECONDS) * 0.2
+	frappe.cache.set(_send_time_key(channel), f"{average:.3f}", ex=7 * 24 * HOUR)
 
 
-def _equalise_timing(started: float) -> None:
-	target = _typical_send_seconds() * _random.uniform(0.85, 1.15)
+def _equalise_timing(started: float, channel: str | None = None) -> None:
+	target = _typical_send_seconds(channel) * _random.uniform(0.85, 1.15)
 	delay = target - (_clock() - started)
 	if delay > 0:
 		_sleep(min(delay, MAX_EQUALISE_SECONDS))
@@ -548,7 +675,12 @@ def verify_code(mobile: str, code: str, kind: str | None = None, ip: str | None 
 	if ip:
 		_decrement(f"ipfail:{ip_ref(ip)}")
 
-	identities = resolve_identities(mobile)
+	registered = resolve_identities(mobile)
+	# An e-mailed code signs in only the records registered with the address it went to.
+	bound_kinds = state.get("k")
+	identities = (
+		[i for i in registered if i.kind in bound_kinds] if isinstance(bound_kinds, list) else registered
+	)
 	if not identities:
 		_clear_code(ref)
 		security_log("otp_no_identity", mobile, ip)
@@ -562,10 +694,16 @@ def verify_code(mobile: str, code: str, kind: str | None = None, ip: str | None 
 		if not identity:
 			# The right code with the wrong portal chosen is not a guess.
 			_decrement(f"attempts:{ref}")
+			if any(i.kind == kind for i in registered):
+				frappe.throw(
+					_(
+						"The code sent by e-mail signs in to the {0} portal only. To sign in to the {1} "
+						"portal, request a code to your mobile number instead."
+					).format(_portal_label(identities[0].kind), _portal_label(kind)),
+					frappe.AuthenticationError,
+				)
 			frappe.throw(
-				_("This number is not registered for the {0} portal.").format(
-					_("student") if kind == KIND_STUDENT else _("parent")
-				),
+				_("This number is not registered for the {0} portal.").format(_portal_label(kind)),
 				frappe.AuthenticationError,
 			)
 	elif len(identities) > 1:
@@ -579,6 +717,10 @@ def verify_code(mobile: str, code: str, kind: str | None = None, ip: str | None 
 	_delete(f"fail:{ref}")
 	security_log("otp_verified", mobile, ip, kind=identity.kind)
 	return {"ok": True, "kind": identity.kind, "doctype": identity.doctype, "name": identity.name}
+
+
+def _portal_label(kind: str) -> str:
+	return _("student") if kind == KIND_STUDENT else _("parent")
 
 
 def _normalise_kind(kind: str | None) -> str | None:

@@ -46,9 +46,14 @@ def flood_limit() -> int:
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 @rate_limit(limit=flood_limit, seconds=60 * 60)
 def send_otp(mobile: str, channel: str | None = None) -> dict:
-	"""Send a sign-in code to a registered student or parent mobile number.
+	"""Send a sign-in code for a registered student or parent mobile number.
 
-	Response: ``{sent, masked, resend_after, expires_in}`` (identical for unknown numbers).
+	``channel`` is "sms", "whatsapp" or, when Messaging Settings allows it, "email": the
+	code then goes to the e-mail address on the record that holds the number.
+
+	Response: ``{sent, masked, resend_after, expires_in}``, identical for unknown numbers
+	and for numbers with no e-mail address on record; ``masked`` is always the masked mobile
+	number, never an e-mail address.
 	"""
 	return otp_codes.request_code(mobile, channel=channel, ip=_client_ip())
 

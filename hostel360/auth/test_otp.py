@@ -1,6 +1,7 @@
 # Copyright (c) 2026, HyFib Solutions Private Limited and contributors
 # For license information, please see license.txt
 
+import json
 import random
 from unittest.mock import MagicMock, patch
 
@@ -51,8 +52,18 @@ class OTPTestCase(IntegrationTestCase):
 			self.languages.append(language)
 			return self.delivery_ok.get(channel, False)
 
+		self.emailed: list[tuple[str, str, str | None]] = []
+		self.email_ok = True
+
+		def fake_email(email, code, timeout=None, language=None, name=None):
+			self.emailed.append((email, code, name))
+			self.timeouts.append(timeout)
+			self.languages.append(language)
+			return self.email_ok
+
 		for target, kwargs in (
 			("hostel360.hostel_communication.dispatch.send_otp_message", {"side_effect": fake_send}),
+			("hostel360.hostel_communication.dispatch.send_otp_email", {"side_effect": fake_email}),
 			(
 				"hostel360.auth.otp.resolve_identities",
 				{"side_effect": lambda mobile: self.known.get(mobile, [])},
@@ -69,7 +80,8 @@ class OTPTestCase(IntegrationTestCase):
 		for mobile in self.mobiles:
 			clear_otp_keys(mobile, TEST_IP)
 
-	def new_mobile(self, *kinds: str) -> str:
+	def new_mobile(self, *kinds: str, emails: dict | None = None) -> str:
+		"""A number held by the given kinds of record; ``emails`` maps a kind to its address."""
 		mobile = random_mobile()
 		self.mobiles.append(mobile)
 		clear_otp_keys(mobile, TEST_IP)
@@ -78,6 +90,8 @@ class OTPTestCase(IntegrationTestCase):
 				kind=kind,
 				doctype=otp.KIND_DOCTYPES[kind],
 				name=f"{kind}-{frappe.generate_hash(length=6)}",
+				display_name=f"{kind.title()} Tester",
+				email=(emails or {}).get(kind),
 			)
 			for kind in kinds
 		]
@@ -405,6 +419,256 @@ class TestCodeLanguage(OTPTestCase):
 			self.assertEqual(otp.request_language(), "en")
 
 
+def masked(mobile: str) -> str:
+	return f"{mobile[:2]}xxxxxx{mobile[-2:]}"
+
+
+class TestEmailCodes(OTPTestCase):
+	"""The mobile number identifies the person; the code goes to the e-mail address on record."""
+
+	def setUp(self):
+		super().setUp()
+		self.policy = otp.get_policy()
+		self.policy.channels = ["SMS", "Email"]
+		patcher = patch("hostel360.auth.otp.get_policy", return_value=self.policy)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+		# A known typical e-mail send time, so the decoy delay is predictable.
+		key = otp._send_time_key("Email")
+		saved = frappe.cache.get(key)
+		frappe.cache.set(key, "1.000")
+		self.addCleanup(lambda: frappe.cache.set(key, saved) if saved else frappe.cache.delete(key))
+
+	def stored_state(self, mobile: str) -> dict:
+		return json.loads(frappe.cache.get(otp._key(f"code:{otp.mobile_ref(mobile)}")))
+
+	def test_code_goes_to_the_registered_email(self):
+		mobile = self.new_mobile(otp.KIND_STUDENT, emails={"student": "meena.s@example.com"})
+		response = otp.request_code(mobile, channel="email", ip=TEST_IP)
+
+		self.assertEqual(
+			response,
+			{
+				"sent": True,
+				"masked": masked(mobile),
+				"resend_after": self.policy.cooldown,
+				"expires_in": self.policy.expiry,
+			},
+		)
+		self.assertEqual(self.sent, [])
+		((address, code, name),) = self.emailed
+		self.assertEqual((address, name), ("meena.s@example.com", "Student Tester"))
+		self.assertTrue(code.isdigit() and len(code) == self.policy.length)
+		connect, read = self.timeouts[-1]
+		self.assertLessEqual(connect, otp.OTP_CONNECT_TIMEOUT)
+		self.assertLessEqual(read, otp.OTP_READ_TIMEOUT)
+
+		# Redis knows whom the code signs in, never the address or the code.
+		raw = frappe.cache.get(otp._key(f"code:{otp.mobile_ref(mobile)}")).decode()
+		self.assertEqual(self.stored_state(mobile)["k"], ["student"])
+		self.assertNotIn("example.com", raw)
+		self.assertNotIn(code, raw)
+
+		result = otp.verify_code(mobile, code, ip=TEST_IP)
+		self.assertEqual((result["ok"], result["kind"]), (True, otp.KIND_STUDENT))
+
+	def test_no_email_on_record_looks_like_an_unknown_number(self):
+		without = self.new_mobile(otp.KIND_STUDENT)
+		unknown = self.new_mobile()
+		with patch("hostel360.auth.otp._typical_send_seconds", wraps=otp._typical_send_seconds) as typical:
+			first = otp.request_code(without, channel="email", ip=TEST_IP)
+			second = otp.request_code(unknown, channel="email", ip=TEST_IP)
+
+		self.assertEqual(self.sent + self.emailed, [])
+		self.assertEqual(set(first), set(second))
+		for key in ("sent", "resend_after", "expires_in"):
+			self.assertEqual(first[key], second[key])
+		self.assertEqual((first["masked"], second["masked"]), (masked(without), masked(unknown)))
+		# Both answers waited about as long as an e-mail takes to send.
+		self.assertEqual(self.mock_sleep.call_count, 2)
+		self.assertEqual([call.args for call in typical.call_args_list], [("Email",), ("Email",)])
+
+		# Verification cannot tell them apart either.
+		wrong = "123456"
+		for _attempt in range(self.policy.max_attempts + 1):
+			self.assertEqual(
+				error_text(otp.verify_code, without, wrong, ip=TEST_IP),
+				error_text(otp.verify_code, unknown, wrong, ip=TEST_IP),
+			)
+
+	def test_placeholder_addresses_are_no_address(self):
+		self.assertIsNone(otp.registered_email("otp-x1y2z3@portal.hostel360.invalid"))
+		self.assertIsNone(otp.registered_email("someone@example.invalid."))
+		self.assertIsNone(otp.registered_email("not an address"))
+		self.assertIsNone(otp.registered_email(None))
+		self.assertEqual(otp.registered_email(" Meena.S@Example.com "), "meena.s@example.com")
+		self.assertIsNone(otp.email_recipient([frappe._dict(kind="student", email=None)]))
+
+	def test_switched_off_email_gets_the_same_answer(self):
+		self.policy.channels = ["SMS"]
+		known = self.new_mobile(otp.KIND_STUDENT, emails={"student": "meena.s@example.com"})
+		unknown = self.new_mobile()
+		known_response = otp.request_code(known, channel="email")
+		unknown_response = otp.request_code(unknown, channel="email")
+
+		self.assertEqual(set(known_response), set(unknown_response))
+		for key in ("sent", "resend_after", "expires_in"):
+			self.assertEqual(known_response[key], unknown_response[key])
+		# Like any channel that is not allowed, the request goes by the mobile channels.
+		self.assertEqual(self.emailed, [])
+		self.assertEqual([(s[0], s[2]) for s in self.sent], [(known, "SMS")])
+		self.assertNotIn("k", self.stored_state(known))
+
+	def test_limits_are_shared_with_the_other_channels(self):
+		mobile = self.new_mobile(otp.KIND_STUDENT, emails={"student": "meena.s@example.com"})
+		otp.request_code(mobile, channel="sms")
+		with self.assertRaises(frappe.RateLimitExceededError):
+			otp.request_code(mobile, channel="email")
+
+		for send in range(self.policy.sends_per_hour - 1):
+			self.allow_resend(mobile)
+			otp.request_code(mobile, channel="email" if send % 2 == 0 else "sms")
+		self.allow_resend(mobile)
+		with self.assertRaises(frappe.RateLimitExceededError):
+			otp.request_code(mobile, channel="email")
+		self.assertEqual(len(self.sent) + len(self.emailed), self.policy.sends_per_hour)
+
+		# A locked number stays locked whichever way the code would go.
+		other = self.new_mobile(otp.KIND_PARENT, emails={"parent": "parent@example.com"})
+		frappe.cache.set(otp._key(f"lock:{otp.mobile_ref(other)}"), "1", ex=otp.LOCKOUT_SECONDS)
+		with self.assertRaises(frappe.RateLimitExceededError):
+			otp.request_code(other, channel="email")
+		self.assertNotIn("parent@example.com", [e[0] for e in self.emailed])
+
+	def test_network_limit_counts_email_requests(self):
+		self.policy.sends_per_ip = 2
+		first, second, third = (
+			self.new_mobile(otp.KIND_STUDENT, emails={"student": f"s{n}@example.com"}) for n in range(3)
+		)
+		otp.request_code(first, channel="email", ip=TEST_IP)
+		otp.request_code(second, channel="email", ip=TEST_IP)
+		with self.assertRaises(frappe.RateLimitExceededError):
+			otp.request_code(third, channel="sms", ip=TEST_IP)
+		self.assertEqual(len(self.emailed), 2)
+
+	def test_wrong_codes_count_as_for_any_other_code(self):
+		mobile = self.new_mobile(otp.KIND_STUDENT, emails={"student": "meena.s@example.com"})
+		otp.request_code(mobile, channel="email")
+		code = self.emailed[-1][1]
+		wrong = "000000" if code != "000000" else "111111"
+		for _attempt in range(self.policy.max_attempts):
+			with self.assertRaises(frappe.AuthenticationError):
+				otp.verify_code(mobile, wrong)
+		with self.assertRaises(frappe.AuthenticationError):
+			otp.verify_code(mobile, code)
+		self.assertEqual(otp._count(f"fail:{otp.mobile_ref(mobile)}"), self.policy.max_attempts)
+
+	def test_emailed_code_signs_in_only_the_owner_of_the_address(self):
+		# A student sharing a parent's phone must not become the parent through their own inbox.
+		mobile = self.new_mobile(
+			otp.KIND_STUDENT,
+			otp.KIND_PARENT,
+			emails={"student": "kid@example.com", "parent": "father@example.com"},
+		)
+		otp.request_code(mobile, channel="email")
+		((address, code, name),) = self.emailed
+		self.assertEqual((address, name), ("kid@example.com", "Student Tester"))
+
+		with self.assertRaises(frappe.AuthenticationError) as refused:
+			otp.verify_code(mobile, code, kind="parent")
+		self.assertIn("e-mail", str(refused.exception))
+		# Not a wrong guess: the code still works, for the student, without asking who it is.
+		self.assertEqual(otp._count(f"attempts:{otp.mobile_ref(mobile)}"), 0)
+		result = otp.verify_code(mobile, code)
+		self.assertEqual((result["ok"], result["kind"]), (True, otp.KIND_STUDENT))
+
+	def test_address_of_the_parent_alone(self):
+		mobile = self.new_mobile(otp.KIND_STUDENT, otp.KIND_PARENT, emails={"parent": "father@example.com"})
+		otp.request_code(mobile, channel="email")
+		((address, code, name),) = self.emailed
+		self.assertEqual((address, name), ("father@example.com", "Parent Tester"))
+		result = otp.verify_code(mobile, code)
+		self.assertEqual((result["ok"], result["kind"]), (True, otp.KIND_PARENT))
+
+	def test_shared_address_still_asks_who_is_signing_in(self):
+		mobile = self.new_mobile(
+			otp.KIND_STUDENT,
+			otp.KIND_PARENT,
+			emails={"student": "family@example.com", "parent": "family@example.com"},
+		)
+		otp.request_code(mobile, channel="email")
+		((address, code, name),) = self.emailed
+		self.assertEqual(address, "family@example.com")
+		self.assertIsNone(name)
+		self.assertEqual(otp.verify_code(mobile, code), {"ok": False, "choose": ["student", "parent"]})
+		self.assertEqual(otp.verify_code(mobile, code, kind="parent")["kind"], otp.KIND_PARENT)
+
+	def test_sms_codes_still_open_every_portal_on_the_number(self):
+		mobile = self.new_mobile(
+			otp.KIND_STUDENT,
+			otp.KIND_PARENT,
+			emails={"student": "kid@example.com", "parent": "father@example.com"},
+		)
+		otp.request_code(mobile, channel="sms")
+		self.assertNotIn("k", self.stored_state(mobile))
+		self.assertEqual(otp.verify_code(mobile, self.last_code())["choose"], ["student", "parent"])
+
+	def test_failed_email_is_not_replaced_by_an_sms(self):
+		self.email_ok = False
+		mobile = self.new_mobile(otp.KIND_STUDENT, emails={"student": "meena.s@example.com"})
+		response = otp.request_code(mobile, channel="email")
+		self.assertTrue(response["sent"])
+		self.assertEqual(len(self.emailed), 1)
+		self.assertEqual(self.sent, [])
+
+	def test_email_language_follows_the_device(self):
+		mobile = self.new_mobile(otp.KIND_STUDENT, emails={"student": "meena.s@example.com"})
+		otp.request_code(mobile, channel="email", language="ta-IN")
+		self.assertEqual(self.languages, ["ta"])
+
+	def test_email_send_time_is_measured_on_its_own(self):
+		keys = (otp._send_time_key("Email"), otp._send_time_key("SMS"))
+		saved = [frappe.cache.get(key) for key in keys]
+		self.addCleanup(
+			lambda: [
+				frappe.cache.set(key, value) if value else frappe.cache.delete(key)
+				for key, value in zip(keys, saved, strict=True)
+			]
+		)
+		frappe.cache.delete(*keys)
+		self.assertEqual(otp._typical_send_seconds("Email"), otp.DEFAULT_EMAIL_SEND_SECONDS)
+		otp._remember_send_time(2.5, "Email")
+		self.assertGreater(otp._typical_send_seconds("Email"), otp.DEFAULT_EMAIL_SEND_SECONDS)
+		self.assertEqual(otp._typical_send_seconds("SMS"), otp.DEFAULT_SEND_SECONDS)
+
+	def test_delivery_route(self):
+		policy = frappe._dict(channels=["SMS", "WhatsApp", "Email"])
+		self.assertEqual(otp.delivery_route("email", policy), ["Email"])
+		self.assertEqual(otp.delivery_route("E-mail", policy), ["Email"])
+		self.assertEqual(otp.delivery_route("whatsapp", policy), ["WhatsApp", "SMS"])
+		self.assertEqual(otp.delivery_route(None, policy), ["SMS", "WhatsApp"])
+		self.assertEqual(otp.delivery_route("in-app", policy), ["SMS", "WhatsApp"])
+		policy.channels = ["SMS"]
+		self.assertEqual(otp.delivery_route("email", policy), ["SMS"])
+
+
+class TestEmailCodeSwitch(IntegrationTestCase):
+	def test_email_codes_need_both_switches(self):
+		settings = frappe.get_doc("Messaging Settings")
+		for allowed, email_on, expected in ((1, 1, True), (1, 0, False), (0, 1, False), (0, 0, False)):
+			settings.otp_email_enabled = allowed
+			settings.email_enabled = email_on
+			self.assertIs(otp.email_codes_enabled(settings), expected, (allowed, email_on))
+			with patch("frappe.get_cached_doc", return_value=settings):
+				self.assertEqual("Email" in otp.get_policy().channels, expected)
+
+	def test_email_codes_are_off_by_default(self):
+		self.assertEqual(frappe.get_meta("Messaging Settings").get_field("otp_email_enabled").default, "0")
+		from hostel360.hostel_communication.setup import SETTINGS_DEFAULTS
+
+		self.assertEqual(SETTINGS_DEFAULTS["otp_email_enabled"], 0)
+
+
 class TestFixedDevelopmentCode(OTPTestCase):
 	def test_fixed_code_is_ignored_without_developer_mode(self):
 		with patch.dict(frappe.conf, {"developer_mode": 0, "hostel360_fixed_otp": "123456"}):
@@ -434,6 +698,21 @@ class TestAuthAPI(OTPTestCase):
 		response = send_otp(mobile=f"+91 {mobile[:5]} {mobile[5:]}", channel="sms")
 		self.assertTrue(response["sent"])
 		self.assertEqual(self.sent[-1][0], mobile)
+
+	def test_send_otp_by_email_reveals_no_address(self):
+		from hostel360.api.auth import send_otp
+
+		policy = otp.get_policy()
+		policy.channels = ["SMS", "Email"]
+		with_email = self.new_mobile(otp.KIND_STUDENT, emails={"student": "meena.s@example.com"})
+		without = self.new_mobile(otp.KIND_STUDENT)
+		with patch("hostel360.auth.otp.get_policy", return_value=policy):
+			responses = [send_otp(mobile=number, channel="email") for number in (with_email, without)]
+		self.assertEqual([e[0] for e in self.emailed], ["meena.s@example.com"])
+		self.assertEqual(responses[0].keys(), responses[1].keys())
+		for response, number in zip(responses, (with_email, without), strict=True):
+			self.assertEqual(response["masked"], masked(number))
+			self.assertNotIn("@", json.dumps(response))
 
 	def test_verify_otp_starts_a_portal_session(self):
 		from hostel360.api.auth import verify_otp
@@ -643,6 +922,68 @@ class TestIdentityResolution(PeopleRecords, IntegrationTestCase):
 
 		frappe.db.set_single_value("Hostel Settings", "parent_portal_enabled", 0)
 		self.assertEqual(otp.resolve_identities(guardian.mobile_number), [])
+
+
+class TestEmailCodesWithRecords(PeopleRecords, IntegrationTestCase):
+	"""E-mail codes against real Hostel Student and Hostel Guardian records."""
+
+	def setUp(self):
+		super().setUp()
+		self.emailed, self.texted = [], []
+		policy = otp.get_policy()
+		policy.channels = ["SMS", "Email"]
+
+		def fake_email(email, code, **kwargs):
+			self.emailed.append((email, code))
+			return True
+
+		def fake_sms(mobile, code, channel, **kwargs):
+			self.texted.append(mobile)
+			return True
+
+		for target, kwargs in (
+			("hostel360.auth.otp.get_policy", {"return_value": policy}),
+			("hostel360.hostel_communication.dispatch.send_otp_email", {"side_effect": fake_email}),
+			("hostel360.hostel_communication.dispatch.send_otp_message", {"side_effect": fake_sms}),
+			("hostel360.auth.otp._sleep", {}),
+			("hostel360.auth.otp._record_failed_sign_in", {}),
+		):
+			patcher = patch(target, **kwargs)
+			patcher.start()
+			self.addCleanup(patcher.stop)
+
+	def request(self, record) -> dict:
+		clear_otp_keys(record.mobile_number)
+		self.addCleanup(clear_otp_keys, record.mobile_number)
+		return otp.request_code(record.mobile_number, channel="email")
+
+	def test_the_address_on_the_record_is_used(self):
+		student = self.make_student()
+		guardian = self.make_guardian(student)
+		frappe.db.set_value("Hostel Student", student.name, "email", "Meena.S@Example.com")
+		frappe.db.set_value("Hostel Guardian", guardian.name, "email", "father@example.com")
+		self.request(student)
+		self.assertEqual([e[0] for e in self.emailed], ["meena.s@example.com"])
+		self.assertTrue(otp.verify_code(student.mobile_number, self.emailed[-1][1])["ok"])
+
+		self.request(guardian)
+		self.assertEqual(self.emailed[-1][0], "father@example.com")
+		self.assertEqual(otp.verify_code(guardian.mobile_number, self.emailed[-1][1])["kind"], "parent")
+
+	def test_placeholder_and_missing_addresses_are_never_written_to(self):
+		placeholder = self.make_student()
+		frappe.db.set_value(
+			"Hostel Student",
+			placeholder.name,
+			"email",
+			f"{placeholder.name.lower()}@portal.hostel360.invalid",
+		)
+		self.assertIsNone(otp.resolve_identities(placeholder.mobile_number)[0].email)
+		missing = self.make_student()
+		for record in (placeholder, missing):
+			self.assertTrue(self.request(record)["sent"])
+		self.assertEqual(self.emailed, [])
+		self.assertEqual(self.texted, [])
 
 
 class TestUnlockScope(PeopleRecords, IntegrationTestCase):

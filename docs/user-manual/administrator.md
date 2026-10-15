@@ -140,7 +140,12 @@ manager. See the [mess manager manual](mess-manager.md).
 3. **E-mail**: uses the site's outgoing e-mail account.
 4. **Sign-in codes**: channels (SMS, WhatsApp, or both), length, expiry and limits (keep the
    defaults); **Trusted Networks** must list the campus's public address(es) so students on
-   hostel Wi-Fi are not limited as one person.
+   hostel Wi-Fi are not limited as one person. Tick **Allow E-mail Sign-in Codes** to offer
+   **E-mail** on the sign-in page as well: students and parents still sign in with their
+   mobile number, and the code goes to the e-mail address on their student or guardian record
+   (never to the placeholder login of someone without an address). It needs **Enable Email**
+   and a default outgoing Email Account that sends by SMTP; the code is sent straight to the
+   mail server and is never kept in the Email Queue or the Message Log. Off by default.
 5. **Test Mode**: messages are logged, not sent. Switch it off once the DLT and WhatsApp
    templates are approved, after **Send Test Message** to a known number on each channel.
 

@@ -30,6 +30,9 @@ IN_APP = "In-App"
 
 CHANNELS = (SMS, WHATSAPP, EMAIL, IN_APP)
 MOBILE_CHANNELS = (SMS, WHATSAPP)
+# Channels a sign-in code may travel by. Never the in-app inbox: whoever asks for a code is
+# not signed in yet.
+OTP_CHANNELS = (SMS, WHATSAPP, EMAIL)
 
 # Template languages. English is the base: its template decides whether an event goes out
 # on a channel at all, and it is what every recipient gets when no translation applies.
@@ -217,9 +220,6 @@ EVENT_CONTEXT = {
 	MESS_LOW_STOCK: ("mess", "item_count", "items_summary", "items"),
 }
 
-# Events that must never be sent over e-mail or the in-app inbox.
-MOBILE_ONLY_EVENTS = frozenset({OTP_LOGIN})
-
 # Events shipped for e-mail and the in-app inbox only: requests for desk staff to act on in
 # Hostel360, not worth an SMS charge or a DLT registration. An administrator may still add
 # SMS or WhatsApp templates for them.
@@ -314,8 +314,8 @@ _SAMPLE_VALUES = {
 
 def default_channels(event: str) -> tuple[str, ...]:
 	"""Channels Hostel360 ships templates for."""
-	if event in MOBILE_ONLY_EVENTS:
-		return MOBILE_CHANNELS
+	if event == OTP_LOGIN:
+		return OTP_CHANNELS
 	if event in DESK_ONLY_EVENTS:
 		return (EMAIL, IN_APP)
 	return CHANNELS

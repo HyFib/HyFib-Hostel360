@@ -28,8 +28,10 @@ class TestDefaultTemplates(IntegrationTestCase):
 			for event in ev.EVENTS:
 				for channel in ev.default_channels(event):
 					self.assertIn(ev.template_name(event, channel, language), names)
-		self.assertNotIn(f"{ev.OTP_LOGIN}-Email", names)
-		self.assertNotIn(f"{ev.OTP_LOGIN}-Email-ta", names)
+		self.assertIn(f"{ev.OTP_LOGIN}-Email", names)
+		self.assertIn(f"{ev.OTP_LOGIN}-Email-ta", names)
+		self.assertNotIn(f"{ev.OTP_LOGIN}-In-App", names)
+		self.assertNotIn(f"{ev.OTP_LOGIN}-In-App-ta", names)
 		self.assertEqual(set(ev.EVENTS), set(ev.EVENT_LABELS))
 		self.assertEqual(set(ev.EVENTS), set(ev.EVENT_CONTEXT))
 
@@ -175,11 +177,30 @@ class TestMessageTemplateValidation(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			self.template(body="{{ student_name.__class__.__mro__ }}").save()
 
-	def test_sign_in_codes_only_by_sms_or_whatsapp(self):
+	def test_sign_in_codes_never_go_to_the_inbox(self):
 		doc = frappe.new_doc("Message Template")
-		doc.update({"event": ev.OTP_LOGIN, "channel": ev.EMAIL, "subject": "Code", "body": "{{ otp }}"})
+		doc.update({"event": ev.OTP_LOGIN, "channel": ev.IN_APP, "subject": "Code", "body": "{{ otp }}"})
 		with self.assertRaises(frappe.ValidationError):
 			doc.insert()
+		# E-mail is a sign-in channel like SMS and WhatsApp.
+		doc = frappe.get_doc("Message Template", f"{ev.OTP_LOGIN}-Email")
+		doc.validate()
+
+	def test_sign_in_code_email_keeps_the_code_out_of_the_subject(self):
+		for language in ev.LANGUAGES:
+			spec = frappe._dict(get_default_template(ev.OTP_LOGIN, ev.EMAIL, language))
+			self.assertEqual(spec.enabled, 1)
+			rendered = render_for_channel(
+				ev.OTP_LOGIN, spec, ev.EMAIL, {"otp": "482913", "expiry_minutes": 5}, sample_recipient()
+			)
+			self.assertNotIn("482913", rendered["subject"], language)
+			self.assertIn("482913", rendered["body"], language)
+			self.assertIn("Karthikeyan R", rendered["body"], language)
+			# Without a name there is no greeting, rather than a guess at "Student" or "Parent".
+			greeting = {ev.ENGLISH: "Dear", ev.TAMIL: "அன்புள்ள"}[language]
+			unnamed = render_for_channel(ev.OTP_LOGIN, spec, ev.EMAIL, {"otp": "482913"}, None)
+			self.assertIn(greeting, rendered["body"], language)
+			self.assertNotIn(greeting, unnamed["body"], language)
 
 	def test_whatsapp_needs_template_name(self):
 		doc = frappe.get_doc("Message Template", f"{ev.FEE_REMINDER}-WhatsApp")

@@ -1,16 +1,16 @@
 # HyFib Hostel360 — Solution Design
 
-Document: HYFIB/H360/SDS/1.1 · Tender ref. ACGCET/4903/B1/2026 · Owner: HyFib Solutions Private Limited
+Document: HYFIB/H360/SDS/1.2 · Tender ref. ACGCET/4903/B1/2026 · Owner: HyFib Solutions Private Limited
 
 This is the authoritative design for HyFib Hostel360 as delivered to ACGCET Hostels. It
 fixes the data model, roles, workflows, service interfaces and portal API that every
 module is built against. Field names, DocType names, status values and function
 signatures written here are contracts: change them only by changing this document.
 
-Revision 1.1 brings the document in line with the delivered implementation (see §11 for
-the change list). Companion documents: [ARCHITECTURE.md](ARCHITECTURE.md),
-[API.md](API.md), [SECURITY.md](SECURITY.md), [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md)
-and [COMPLIANCE-MATRIX.md](COMPLIANCE-MATRIX.md).
+Revision 1.1 brought the document in line with the delivered implementation; revision 1.2
+adds sign-in codes by e-mail (see §11 for the change lists). Companion documents:
+[ARCHITECTURE.md](ARCHITECTURE.md), [API.md](API.md), [SECURITY.md](SECURITY.md),
+[OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md) and [COMPLIANCE-MATRIX.md](COMPLIANCE-MATRIX.md).
 
 ---
 
@@ -483,7 +483,8 @@ buttons that run the leave's own actions at the server's current time. Gate staf
 WhatsApp: `whatsapp_enabled`, `whatsapp_phone_number_id`, `whatsapp_business_account_id`, `whatsapp_access_token` Password,
 `whatsapp_api_version` ("v21.0"), `alert_whatsapp_template`, `alert_whatsapp_language`;
 `email_enabled` Check (uses Frappe Email Account);
-OTP: `otp_channels` Select (SMS/WhatsApp/SMS and WhatsApp), `otp_length` Int (6), `otp_expiry_seconds` Int (300), `otp_max_attempts` Int (5),
+OTP: `otp_channels` Select (SMS/WhatsApp/SMS and WhatsApp; the mobile channels), `otp_email_enabled` Check (0; codes may also be
+e-mailed, needs `email_enabled` and a default outgoing Email Account that sends by SMTP), `otp_length` Int (6), `otp_expiry_seconds` Int (300), `otp_max_attempts` Int (5),
 `otp_resend_cooldown_seconds` Int (60), `otp_max_sends_per_hour` Int (5), `otp_max_sends_per_ip_per_hour` Int (20),
 `otp_trusted_networks` Small Text (campus egress CIDRs exempt from the per-IP limit);
 `test_mode` Check (log only, do not send), `prefer_whatsapp` Check, `provider_timeout_seconds` Int (10),
@@ -494,7 +495,8 @@ OTP: `otp_channels` Select (SMS/WhatsApp/SMS and WhatsApp), `otp_length` Int (6)
 `subject`, `body` Code (Jinja, sandboxed), `available_variables` (ro), `dlt_template_id`, `msg91_template_id`,
 `whatsapp_template_name`, `whatsapp_language` (en/en_US/en_GB/ta), `template_parameters`, `standard_hash` (hidden).
 Every event ships in English and Tamil; a shipped template is updated on migrate only while nobody has edited it.
-Sign-in codes (`otp_login`) can only be sent by SMS or WhatsApp. Desk action **Preview**.
+Sign-in codes (`otp_login`) can be sent by SMS, WhatsApp or e-mail, never to the in-app inbox; an e-mailed code goes straight to the
+SMTP server through `send_otp_email`, never through the Email Queue or `notify`, and its subject never carries the code. Desk action **Preview**.
 
 **Message Log** — autoname hash; `channel`, `event`, `recipient` (masked), `recipient_user`, `reference_doctype`, `reference_name`,
 `template`, `provider`, `status` Select (Queued/Sent/Failed/Skipped), `provider_message_id`, `error`, `attempts` Int, `sent_on`,
@@ -662,6 +664,8 @@ recipients_for_users(users: list[str]) -> list[dict]
 recipients_for_approvers(role: str, hostel: str | None = None, block: str | None = None, student: str | None = None) -> list[dict]
         # role holders whose staff scope covers the hostel/block (or the student's), plus every warden and administrator
 send_otp_message(mobile: str, otp: str, channel: str, timeout=None, language: str | None = None) -> bool   # synchronous, never logs the OTP
+send_otp_email(email: str, otp: str, timeout=None, language: str | None = None, name: str | None = None) -> bool
+        # synchronous, straight to the SMTP server (no Email Queue copy), never logs the OTP; refuses .invalid addresses
 
 # hostel360/hostel_operations/alerts.py
 raise_alert(key, title, severity, category, source="App", description="", details=None, is_outage=False) -> str
@@ -722,7 +726,7 @@ response shapes: [API.md](API.md).
 ### Authentication — `hostel360.api.auth`
 | Method | Guest | Request | Response |
 |---|---|---|---|
-| `send_otp` | yes | `mobile`, `channel` ("sms"\|"whatsapp") | `{sent: true, masked: "98xxxxxx10", resend_after: 60, expires_in: 300}` — identical response for unknown numbers |
+| `send_otp` | yes | `mobile`, `channel` ("sms"\|"whatsapp"\|"email") | `{sent: true, masked: "98xxxxxx10", resend_after: 60, expires_in: 300}` — identical response for unknown numbers, for numbers without an e-mail address on record and for "email" while e-mail codes are off; `masked` is always the masked mobile |
 | `verify_otp` | yes | `mobile`, `otp`, `kind?` | `{ok: true, kind: "student"\|"parent", redirect: "/hostel"}` and session cookie; or `{ok: false, choose: ["student","parent"]}` when the number belongs to both |
 | `get_csrf_token` | no | – | `{csrf_token}` |
 | `unlock_sign_in` | no (Hostel Administrator, Warden, Office Staff, System Manager) | `mobile` | `{ok: true}` — lifts the one-hour lock after repeated wrong codes |
@@ -731,7 +735,16 @@ Limits: 5 sends/hour/mobile, 60 s cooldown, 20 sends/hour/IP (trusted networks i
 5 wrong attempts invalidate the OTP, 10 failed verifications/hour lock the number for 1 hour, and a coarse
 flood guard of 3,000 calls/hour/IP (100,000 for trusted networks). OTPs are random (secrets), stored only as
 HMAC-SHA256 in Redis. Unknown, unvalidated and closed numbers get the same response, the same timing and the
-same limits.
+same limits. The limits are per number whatever the channel.
+
+E-mail codes (`otp_email_enabled`): the mobile number identifies the student or parent exactly as for SMS; the
+code goes to the `email` on that Hostel Student / Hostel Guardian record (real addresses only, never a
+`.invalid` placeholder). The first record with an address (student before parent) decides where it goes, and
+the code then signs in only the records registered with that address (stored with the code as its allowed
+kinds), so a student who shares a parent's phone cannot sign in as the parent from their own inbox. A number
+with no address on record stores a code nobody receives and waits as long as a typical e-mail send (measured
+apart from SMS). An e-mail that fails is not replaced by an SMS. While e-mail codes are off, "email" is treated
+like any channel that is not allowed (the allowed mobile channels).
 
 ### Portal — `hostel360.api.portal`
 | Method | Request | Response (message) |
@@ -814,7 +827,8 @@ sends desk users to the desk. The template carries them without inline script:
 ```
 
 `boot_json` (already JSON-escaped for HTML) = `{site_name, institution_name, institution_short_name,
-logo, office_phone, office_email, support_phone, support_email, is_logged_in, kind, lang}`. The SPA
+logo, office_phone, office_email, support_phone, support_email, is_logged_in, kind, lang, otp_email}`;
+`otp_email` (site-wide, says nothing about any number) makes the sign-in page offer E-mail as a third channel. The SPA
 reads both at start-up and calls `hostel360.api.portal.get_session` for everything else.
 
 ## 8. Security controls
@@ -899,3 +913,4 @@ with the regression checks in `deploy/tests/`; application behaviour with the se
 |---|---|---|
 | 1.0 | 2026-10-15 | First issue. |
 | 1.1 | 2026-10-15 | Aligned with the delivered implementation: Hostel Security role and gate-pass page; block scoping, guardian scoping and the row-level permission hooks; `last_hostel`; validation-before-sign-in rule; PayU gateway, test payers and the extended gateway contract; new fee, mess, student-services and operations fields; Security Incident, Ops Ingest Receipt, Exit Export Log, Migration Run/Entity/Record Map (with `source_system`); Message Log permlevels; Tamil templates and new events (`leave_checked_out`, `leave_returned`, `bonafide_requested`); new portal endpoints and response fields; `ops.ingest` status codes and `message_id`; the `alerts` queue; upload limits 5 MB portal / 10 MB staff; bench commands; revised hooks table. |
+| 1.2 | 2026-10-16 | Sign-in codes by e-mail (clause 3.2): Messaging Settings `otp_email_enabled`; `send_otp` channel "email" with the e-mail rules in §6; Message Templates `otp_login-Email` and `otp_login-Email-ta`; `dispatch.send_otp_email`; boot `otp_email`. |

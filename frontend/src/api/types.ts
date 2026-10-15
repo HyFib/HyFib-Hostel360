@@ -1,7 +1,8 @@
 /** Shapes of the portal API (docs/SOLUTION-DESIGN.md §6). Optional fields may be absent. */
 
 export type PortalKind = "student" | "parent";
-export type OtpChannel = "sms" | "whatsapp";
+/** "email" only while Messaging Settings allows e-mail codes (boot `otp_email`). */
+export type OtpChannel = "sms" | "whatsapp" | "email";
 
 export interface SendOtpResult {
 	sent: boolean;

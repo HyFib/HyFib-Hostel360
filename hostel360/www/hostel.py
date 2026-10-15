@@ -82,7 +82,20 @@ def get_boot(user: str | None) -> dict:
 		"is_logged_in": bool(user),
 		"kind": kind,
 		"lang": getattr(frappe.local, "lang", None) or "en",
+		# Whether the sign-in page offers e-mail codes: a site-wide setting, nothing about anyone.
+		"otp_email": email_codes_offered(),
 	}
+
+
+def email_codes_offered() -> bool:
+	from hostel360.auth.otp import email_codes_enabled
+
+	try:
+		return email_codes_enabled()
+	except Exception:
+		# The page must open even when Messaging Settings cannot be read; SMS still works.
+		frappe.logger("hostel360").warning("Could not read the sign-in code settings", exc_info=True)
+		return False
 
 
 def html_safe_json(value) -> Markup:

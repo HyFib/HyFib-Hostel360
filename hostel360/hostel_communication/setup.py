@@ -29,6 +29,9 @@ SETTINGS_DEFAULTS = {
 	"alert_whatsapp_language": "en",
 	"email_enabled": 1,
 	"otp_channels": "SMS",
+	# Off until the institution decides to offer it; sites installed before the option
+	# existed start with it off too.
+	"otp_email_enabled": 0,
 	"otp_length": 6,
 	"otp_expiry_seconds": 300,
 	"otp_max_attempts": 5,

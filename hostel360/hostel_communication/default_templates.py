@@ -106,6 +106,26 @@ def _wa(name: str) -> str:
 	return f"h360_{name}"
 
 
+# The sign-in code in an e-mail: large, spaced and in a fixed-width face, so it is easy to
+# copy by eye from a phone screen. The code stays out of the subject, which mail servers log
+# and lock screens show.
+CODE_BOX = (
+	'<p style="margin:20px 0;font-size:28px;font-weight:700;letter-spacing:6px;'
+	'font-family:Consolas,Menlo,monospace">{{ otp }}</p>'
+)
+
+
+def _code_email(greeting: str, *paragraphs: str, footer: str) -> str:
+	"""Sign-in code e-mail. The greeting is left out when the name is not known, rather than
+	guessing whether a student or a parent asked for the code."""
+	parts = ["{%% if recipient_name %%}<p>%s {{ recipient_name }},</p>{%% endif %%}" % greeting]
+	parts.extend(
+		paragraph if paragraph.startswith("<") else f"<p>{paragraph}</p>" for paragraph in paragraphs
+	)
+	parts.append(footer)
+	return "\n".join(parts)
+
+
 TEMPLATES = {
 	ev.OTP_LOGIN: {
 		ev.SMS: {
@@ -118,6 +138,19 @@ TEMPLATES = {
 			"body": "{{ otp }} is your verification code for the {{ institution_short_name }} Hostel "
 			"portal. For your security, do not share this code.",
 			"template_parameters": "otp",
+		},
+		ev.EMAIL: {
+			"subject": "Your sign-in code for the {{ institution_short_name }} Hostel portal",
+			"body": _code_email(
+				"Dear",
+				"Use this code to sign in to the {{ institution_short_name }} Hostel portal:",
+				CODE_BOX,
+				"It is valid for {{ expiry_minutes }} minutes and works only once. Do not share it with "
+				"anyone, not even hostel staff: the hostel office will never ask you for it.",
+				"If you did not try to sign in, you can ignore this e-mail. Nobody can sign in without "
+				"the code.",
+				footer=_FOOTER,
+			),
 		},
 	},
 	ev.STUDENT_VALIDATED: {

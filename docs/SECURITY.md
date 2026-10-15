@@ -96,10 +96,10 @@ flowchart LR
 | Control | Value |
 |---|---|
 | Code | 6 random digits from `secrets`, valid 300 seconds; stored only as HMAC-SHA256 (key derived from the site encryption key, bound to the number) in Redis; Redis keys carry an HMAC of the number, never the number |
-| Channels | SMS (DLT-registered template) or WhatsApp authentication template |
+| Channels | SMS (DLT-registered template) or WhatsApp authentication template to the number; optionally e-mail (Messaging Settings > *Allow E-mail Sign-in Codes*) to the address on the student or guardian record that holds the number, never to a placeholder `.invalid` portal address. An e-mailed code signs in only the records registered with that address, so a student sharing a parent's phone cannot sign in as the parent from their own inbox. E-mailed codes go straight to the SMTP server inside the request: no Email Queue copy of the code, 3-second steps, circuit breaker; the code is kept out of the subject line |
 | Per number | resend after 60 s, 5 codes an hour, 5 wrong guesses invalidate a code, 10 failed verifications an hour lock the number for an hour (staff can lift it with **Unlock Sign-in**) |
 | Per address | 20 codes an hour (campus egress addresses in Messaging Settings > Trusted Networks exempt), 100 failed verifications an hour, coarse flood guard of 3,000 calls an hour |
-| Enumeration | Unknown, unvalidated and closed numbers get the same response and timing, and count against the same limits |
+| Enumeration | Unknown, unvalidated and closed numbers, numbers with no e-mail address on record and e-mail requests while e-mail codes are off get the same response (always the masked mobile number, never an address) and timing (measured separately for e-mail), and count against the same limits; the limits are shared by every channel |
 | Who may sign in | Only validated students who are not Vacated/Alumni, and parents linked to at least one such student (3.1, 4.1); asked again on every portal call |
 | Separation | A portal account can never hold a desk role (`auth/events.validate_user`) |
 | Security log | Sign-ins, blocks, locks and unlocks in `logs/hostel360_security.log` with masked numbers and hashed user IDs |

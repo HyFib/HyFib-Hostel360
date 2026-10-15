@@ -8,6 +8,17 @@ All notable changes to HyFib Hostel360. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Sign-in codes by e-mail (compliance statement clause 3.2), off until *Allow E-mail Sign-in
+  Codes* is ticked in Messaging Settings. Students and parents still sign in with their
+  mobile number; the code goes to the e-mail address on their student or guardian record
+  (never to a placeholder portal address), straight to the SMTP server with the same short
+  time budget as an SMS, and signs in only the records registered with that address. The
+  sign-in page offers **E-mail** as a third choice while it is on. Answers, timing and limits
+  are the same as for SMS and WhatsApp, including for numbers with no address on record.
+  English and Tamil templates `otp_login-Email` and `otp_login-Email-ta`.
+
 ## [1.0.0] — 2026-10-16
 
 First release, for ACGCET Hostels, Karaikudi (tender ACGCET/4903/B1/2026).

@@ -82,6 +82,7 @@ BOOT_KEYS = {
 	"is_logged_in",
 	"kind",
 	"lang",
+	"otp_email",
 }
 
 
@@ -1503,6 +1504,25 @@ class TestPortalPage(IntegrationTestCase):
 		for character in ("<", ">", "&", "\u2028"):
 			self.assertNotIn(character, str(context.boot_json))
 		self.assertEqual(json.loads(context.boot_json)["institution_name"], hostile)
+
+	def test_boot_says_whether_email_codes_are_offered(self):
+		# Guests see it before typing a number; it is the site-wide switch and nothing else.
+		for offered in (True, False):
+			with (
+				patch("hostel360.auth.otp.email_codes_enabled", return_value=offered) as enabled,
+				self.set_user("Guest"),
+			):
+				boot = json.loads(hostel_page.get_context(frappe._dict()).boot_json)
+			self.assertIs(boot["otp_email"], offered)
+			enabled.assert_called_once_with()
+
+	def test_unreadable_settings_hide_email_codes(self):
+		with (
+			patch("hostel360.auth.otp.email_codes_enabled", side_effect=RuntimeError("no settings")),
+			self.set_user("Guest"),
+		):
+			boot = json.loads(hostel_page.get_context(frappe._dict()).boot_json)
+		self.assertFalse(boot["otp_email"])
 
 	def test_desk_user_is_sent_to_the_desk(self):
 		with self.set_user(self.staff):

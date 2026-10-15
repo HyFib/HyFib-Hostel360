@@ -48,6 +48,7 @@
   "otp_tab",
   "otp_section",
   "otp_channels",
+  "otp_email_enabled",
   "otp_length",
   "otp_expiry_seconds",
   "otp_max_attempts",
@@ -332,7 +333,7 @@
    "fieldname": "otp_section",
    "fieldtype": "Section Break",
    "label": "One-Time Passwords",
-   "description": "Students and parents sign in to the portal with a code sent to their registered mobile number."
+   "description": "Students and parents sign in to the portal with their registered mobile number and a one-time code sent to that number or, if allowed below, to their registered e-mail address."
   },
   {
    "fieldname": "otp_channels",
@@ -340,7 +341,15 @@
    "label": "Send Codes By",
    "options": "SMS\nWhatsApp\nSMS and WhatsApp",
    "default": "SMS",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Codes sent to the registered mobile number."
+  },
+  {
+   "fieldname": "otp_email_enabled",
+   "fieldtype": "Check",
+   "label": "Allow E-mail Sign-in Codes",
+   "default": "0",
+   "description": "Students and parents may choose to get the code by e-mail instead. They still sign in with their mobile number; the code goes to the e-mail address the hostel office has on their student or guardian record (never to a portal placeholder address), straight through the default outgoing Email Account, which must send by SMTP. Needs Enable Email on the Email tab."
   },
   {
    "fieldname": "otp_length",
@@ -442,7 +451,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-15 21:30:00.000000",
+ "modified": "2026-10-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Communication",
  "name": "Messaging Settings",

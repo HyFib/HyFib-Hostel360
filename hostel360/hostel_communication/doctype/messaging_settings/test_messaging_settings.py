@@ -63,6 +63,22 @@ class TestMessagingSettings(IntegrationTestCase):
 				self.settings(sms_api_url="http://sms.example.com/send").save()
 			self.settings(sms_api_url="https://sms.example.com/send").save()
 
+	def test_email_codes_warn_about_missing_email_set_up(self):
+		with (
+			patch("frappe.msgprint") as msgprint,
+			patch("hostel360.hostel_communication.providers.email.outgoing_smtp_account", return_value=None),
+		):
+			self.settings(test_mode=0, otp_email_enabled=1, email_enabled=0).warn_about_otp_channels()
+			self.assertIn("Email", msgprint.call_args_list[0].args[0])
+			msgprint.reset_mock()
+			self.settings(test_mode=0, otp_email_enabled=1, email_enabled=1).warn_about_otp_channels()
+			self.assertTrue(any("SMTP" in call.args[0] for call in msgprint.call_args_list))
+			msgprint.reset_mock()
+			self.settings(
+				test_mode=0, otp_channels="SMS", sms_enabled=1, otp_email_enabled=0
+			).warn_about_otp_channels()
+			msgprint.assert_not_called()
+
 	def test_test_message_requires_role(self):
 		from hostel360.hostel_communication.doctype.messaging_settings.messaging_settings import (
 			MessagingSettings,

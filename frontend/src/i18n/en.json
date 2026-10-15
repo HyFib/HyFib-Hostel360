@@ -108,10 +108,13 @@
 		"channelLabel": "Send the code by",
 		"sms": "SMS",
 		"whatsapp": "WhatsApp",
+		"email": "E-mail",
+		"emailHint": "The code goes to the e-mail address the hostel office has for this mobile number. If you have not given the office an e-mail address, choose SMS or WhatsApp.",
 		"sendCode": "Send code",
 		"sending": "Sending…",
 		"codeTitle": "Enter the code",
 		"codeSent": "If {mobile} is registered, a {length}-digit code has been sent to it by {channel}.",
+		"codeSentEmail": "If {mobile} is registered and the hostel office has an e-mail address for it, a {length}-digit code has been sent to that address. Check your inbox and spam folder.",
 		"codeLabel": "Sign-in code",
 		"digitLabel": "Digit {n} of {total}",
 		"codeIncomplete": "Enter all {length} digits of the code.",
@@ -604,7 +607,7 @@
 		"faq": {
 			"otp": {
 				"q": "I didn't receive the sign-in code.",
-				"a": "Wait a minute, then tap Resend. Try WhatsApp instead of SMS, check that the number is the one registered with the hostel office, and make sure your phone has signal. Codes are valid for five minutes."
+				"a": "Wait a minute, then tap Resend. Try WhatsApp instead of SMS, check that the number is the one registered with the hostel office, and make sure your phone has signal. A code asked for by e-mail goes only to the address the hostel office has on record: look in your spam folder too. Codes are valid for five minutes."
 			},
 			"wrongNumber": {
 				"q": "My mobile number has changed.",

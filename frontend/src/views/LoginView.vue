@@ -2,8 +2,12 @@
 /**
  * OTP sign-in for students and parents: mobile number → code → (if the number belongs to
  * both a student and a parent) choose who is signing in.
+ *
+ * The code goes by SMS or WhatsApp to the number, or, where the hostel allows it, to the
+ * e-mail address the hostel office has for that number. The mobile number identifies the
+ * person either way, and the server's answer never says whether an address exists.
  */
-import { ArrowRight, CircleAlert, LifeBuoy, MessageCircle, ShieldCheck, Smartphone } from "@lucide/vue";
+import { ArrowRight, CircleAlert, LifeBuoy, Mail, MessageCircle, ShieldCheck, Smartphone } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { sendOtp, verifyOtp } from "@/api/auth";
@@ -15,11 +19,23 @@ import OtpInput from "@/components/OtpInput.vue";
 import { t } from "@/i18n";
 import { safeRedirect } from "@/router/guards";
 import { clearClosedReason, completeSignIn, useSession } from "@/stores/session";
+import { readBoot } from "@/utils/boot";
 import { formatMobile, normalizeMobile } from "@/utils/format";
 import { getItem, setItem } from "@/utils/storage";
 
 const OTP_LENGTH = 6;
 type Step = "mobile" | "code" | "choose";
+
+/** E-mail is offered only while the site allows it (`otp_email` in the page's boot data). */
+const channelOptions: readonly OtpChannel[] =
+	readBoot().otp_email === true ? ["sms", "whatsapp", "email"] : ["sms", "whatsapp"];
+
+function rememberedChannel(): OtpChannel {
+	const saved = getItem("otp-channel");
+	return channelOptions.find((option) => option === saved) ?? "sms";
+}
+
+const CHANNEL_ICONS = { sms: Smartphone, whatsapp: MessageCircle, email: Mail } as const;
 
 const route = useRoute();
 const router = useRouter();
@@ -32,7 +48,7 @@ const preferredKind = computed<PortalKind | null>(() =>
 const step = ref<Step>("mobile");
 const mobileInput = ref("");
 const mobile = ref("");
-const channel = ref<OtpChannel>(getItem("otp-channel") === "whatsapp" ? "whatsapp" : "sms");
+const channel = ref<OtpChannel>(rememberedChannel());
 const code = ref("");
 const masked = ref("");
 const expiresIn = ref(300);
@@ -55,7 +71,19 @@ const title = computed(() =>
 			? t("login.studentTitle")
 			: t("login.title"),
 );
-const channelLabel = computed(() => (channel.value === "whatsapp" ? t("login.whatsapp") : t("login.sms")));
+function optionLabel(option: OtpChannel): string {
+	return option === "email" ? t("login.email") : option === "whatsapp" ? t("login.whatsapp") : t("login.sms");
+}
+
+/** The channel the code was requested by, for the code step's wording. */
+const sentBy = ref<OtpChannel>(channel.value);
+// The server answers the same whether or not the number (or an e-mail address for it) is on
+// record, so the wording stays conditional too.
+const codeSentText = computed(() =>
+	sentBy.value === "email"
+		? t("login.codeSentEmail", { length: OTP_LENGTH, mobile: masked.value })
+		: t("login.codeSent", { length: OTP_LENGTH, mobile: masked.value, channel: optionLabel(sentBy.value) }),
+);
 
 function startCountdown(seconds: number) {
 	resendIn.value = Math.max(0, Math.round(seconds));
@@ -100,6 +128,7 @@ async function requestCode(isResend = false) {
 	busy.value = true;
 	try {
 		const result = await sendOtp(normalised, channel.value);
+		sentBy.value = channel.value;
 		mobile.value = normalised;
 		masked.value = result.masked || formatMobile(normalised);
 		expiresIn.value = result.expires_in || 300;
@@ -262,23 +291,29 @@ onBeforeUnmount(() => {
 					</p>
 					<p id="login-mobile-hint" class="field-hint">{{ t("login.mobileHint") }}</p>
 
-					<fieldset class="mt-5">
+					<fieldset class="mt-5" :aria-describedby="channel === 'email' ? 'login-email-hint' : undefined">
 						<legend class="field-label">{{ t("login.channelLabel") }}</legend>
-						<div class="grid grid-cols-2 gap-2">
+						<div class="grid gap-2" :class="channelOptions.length > 2 ? 'grid-cols-3' : 'grid-cols-2'">
 							<label
-								v-for="option in ['sms', 'whatsapp'] as const"
+								v-for="option in channelOptions"
 								:key="option"
-								class="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-focus"
-								:class="
-									channel === option ? 'border-brand bg-brand-soft text-brand-ink' : 'border-line bg-surface text-ink'
-								"
+								class="flex cursor-pointer items-center justify-center rounded-xl border text-center font-semibold transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-focus"
+								:class="[
+									channel === option ? 'border-brand bg-brand-soft text-brand-ink' : 'border-line bg-surface text-ink',
+									channelOptions.length > 2
+										? 'min-h-14 flex-col gap-1 px-1 py-2 text-[0.8125rem] leading-tight'
+										: 'min-h-12 gap-2 px-3 text-sm',
+								]"
+								:data-test="`channel-${option}`"
 							>
 								<input v-model="channel" class="sr-only" type="radio" name="channel" :value="option" />
-								<Smartphone v-if="option === 'sms'" :size="18" aria-hidden="true" />
-								<MessageCircle v-else :size="18" aria-hidden="true" />
-								{{ option === "sms" ? t("login.sms") : t("login.whatsapp") }}
+								<component :is="CHANNEL_ICONS[option]" :size="18" aria-hidden="true" />
+								<span class="break-words">{{ optionLabel(option) }}</span>
 							</label>
 						</div>
+						<p v-if="channel === 'email'" id="login-email-hint" class="field-hint" data-test="email-hint">
+							{{ t("login.emailHint") }}
+						</p>
 					</fieldset>
 
 					<p
@@ -298,9 +333,7 @@ onBeforeUnmount(() => {
 				<!-- Step 2: code -->
 				<form v-else-if="step === 'code'" novalidate @submit.prevent="submitCode()">
 					<h2 class="text-lg font-semibold text-ink" tabindex="-1" data-step-title>{{ t("login.codeTitle") }}</h2>
-					<p id="otp-help" class="mt-1 text-sm text-muted">
-						{{ t("login.codeSent", { length: OTP_LENGTH, mobile: masked, channel: channelLabel }) }}
-					</p>
+					<p id="otp-help" class="mt-1 text-sm text-muted">{{ codeSentText }}</p>
 					<p id="otp-label" class="sr-only">{{ t("login.codeLabel") }}</p>
 					<div class="mt-5">
 						<OtpInput

@@ -16,7 +16,8 @@ reports) and **Fees** (invoices, receipts, structures, online payments, reports)
 2. **Academic**: programme (the department fills in), year of study, admission year,
    academic year.
 3. **Contact**: the student's **mobile number** (10 digits; it is their portal sign-in, and
-   must be unique), e-mail, address, emergency contact.
+   must be unique), e-mail (where sign-in codes go if the student chooses E-mail, when the
+   hostel offers it), address, emergency contact.
 4. **Guardians**: add rows linking **Hostel Guardian** records (create them from the row if
    new: name, relation, **mobile number** — the parent's portal sign-in — e-mail). Tick
    *Is Primary* for the main contact; *Can Approve Leave* (on by default) decides who is

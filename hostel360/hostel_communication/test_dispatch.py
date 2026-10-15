@@ -406,6 +406,157 @@ class TestOtpAndDirectMessages(DispatchTestCase):
 		self.assertFalse(dispatch.send_direct("Email", "ops@portal.hostel360.invalid", "x", "y"))
 
 
+def smtp_account():
+	"""An outgoing SMTP account as the e-mail provider sees it (never saved, never connected)."""
+	account = frappe.new_doc("Email Account")
+	account.update(
+		{
+			"email_account_name": "Hostel Office",
+			"email_id": "hostel.office@example.com",
+			"smtp_server": "smtp.example.com",
+			"smtp_port": 587,
+			"use_tls": 1,
+			"enable_outgoing": 1,
+			"default_outgoing": 1,
+		}
+	)
+	return account
+
+
+def html_part(message: str) -> str:
+	import email
+	from email import policy
+
+	parsed = email.message_from_string(message, policy=policy.default)
+	return parsed.get_body(preferencelist=("html",)).get_content()
+
+
+class TestEmailedSignInCodes(DispatchTestCase):
+	"""Sign-in codes by e-mail go straight to the mail server and are never stored."""
+
+	def setUp(self):
+		super().setUp()
+		# Masked addresses keep the domain, so a domain of its own keeps each test's logs apart.
+		self.address = f"meena@{frappe.generate_hash(length=8)}.example.com"
+		for target, kwargs in (
+			(
+				"hostel360.hostel_communication.providers.email.outgoing_smtp_account",
+				{"return_value": smtp_account()},
+			),
+			("hostel360.hostel_communication.providers.email._transmit", {}),
+		):
+			patcher = patch(target, **kwargs)
+			setattr(self, target.rsplit(".", 1)[1].lstrip("_"), patcher.start())
+			self.addCleanup(patcher.stop)
+
+	def code_logs(self, address: str | None = None) -> list[frappe._dict]:
+		from hostel360.utils.validation import mask_email
+
+		return frappe.get_all(
+			"Message Log",
+			filters={
+				"event": ev.OTP_LOGIN,
+				"channel": "Email",
+				"recipient": mask_email(address or self.address),
+			},
+			fields=["*"],
+			order_by="creation asc",
+		)
+
+	def test_code_is_never_stored(self):
+		queued = frappe.db.count("Email Queue")
+		self.assertTrue(dispatch.send_otp_email(self.address, "482913"))
+		(log,) = self.code_logs()
+		self.assertEqual((log.status, log.template), ("Skipped", f"{ev.OTP_LOGIN}-Email"))
+		self.assertNotIn("482913", json.dumps(log, default=str))
+		self.assertIsNone(log.payload)
+		self.assertFalse(log.subject)
+		self.assertEqual(frappe.db.count("Email Queue"), queued)
+		self.transmit.assert_not_called()
+
+	def test_message_goes_straight_to_the_mail_server(self):
+		self.settings.test_mode = 0
+		queued = frappe.db.count("Email Queue")
+		self.assertTrue(
+			dispatch.send_otp_email(self.address.upper(), "482913", timeout=(2.0, 3.0), name="Meena S")
+		)
+		_account, sender, to, message, timeout = self.transmit.call_args.args
+		self.assertEqual((sender, to, timeout), ("hostel.office@example.com", self.address, 3.0))
+		import email
+
+		headers = email.message_from_string(message)
+		self.assertEqual(headers["To"], self.address)
+		self.assertTrue(headers["Message-Id"])
+		self.assertNotIn("482913", headers["Subject"])
+		body = html_part(message)
+		self.assertIn("482913", body)
+		self.assertIn("Dear Meena S", body)
+		self.assertIn("5 minutes", body)
+		for placeholder in ("<!--recipient-->", "<!--email_open_check-->", "<!--unsubscribe_url-->"):
+			self.assertNotIn(placeholder, message)
+
+		(log,) = self.code_logs()
+		self.assertEqual((log.status, log.provider), ("Sent", "SMTP"))
+		self.assertNotIn("482913", json.dumps(log, default=str))
+		self.assertEqual(frappe.db.count("Email Queue"), queued)
+
+	def test_code_email_in_tamil(self):
+		self.settings.test_mode = 0
+		self.assertTrue(dispatch.send_otp_email(self.address, "482913", language="ta"))
+		body = html_part(self.transmit.call_args.args[3])
+		self.assertIn("482913", body)
+		self.assertIn("யாரிடமும் இதைப் பகிர வேண்டாம்", body)
+		# No name, no greeting: the code may be for a student or a parent.
+		self.assertNotIn("அன்புள்ள", body)
+		self.assertEqual(self.code_logs()[0].template, f"{ev.OTP_LOGIN}-Email-ta")
+
+	def test_placeholder_and_invalid_addresses_are_refused(self):
+		self.settings.test_mode = 0
+		placeholder = f"ward@{frappe.generate_hash(length=8)}.portal.hostel360.invalid"
+		for address in (placeholder, "not-an-address", ""):
+			self.assertFalse(dispatch.send_otp_email(address, "482913"))
+		self.assertFalse(dispatch.send_otp_email(self.address, ""))
+		self.transmit.assert_not_called()
+		self.assertEqual(self.code_logs(placeholder), [])
+		self.assertEqual(self.code_logs(), [])
+
+	def test_mail_server_errors_are_scrubbed_and_kept_from_the_caller(self):
+		self.settings.test_mode = 0
+		before = list(frappe.local.message_log)
+
+		def refuse(*args):
+			frappe.throw("Invalid Outgoing Mail Server or Port: message 482913 was refused")
+
+		self.transmit.side_effect = refuse
+		self.assertFalse(dispatch.send_otp_email(self.address, "482913"))
+		self.assertEqual(frappe.local.message_log, before)
+		(log,) = self.code_logs()
+		self.assertEqual((log.status, log.provider), ("Failed", "SMTP"))
+		self.assertIn("******", log.error)
+		self.assertNotIn("482913", log.error)
+		self.assertIsNone(log.payload)
+
+	def test_switched_off_email_or_template_sends_nothing(self):
+		self.settings.test_mode = 0
+		self.set_template(f"{ev.OTP_LOGIN}-Email", "enabled", 0)
+		self.assertFalse(dispatch.send_otp_email(self.address, "482913"))
+		self.set_template(f"{ev.OTP_LOGIN}-Email", "enabled", 1)
+		self.settings.email_enabled = 0
+		self.assertFalse(dispatch.send_otp_email(self.address, "482913"))
+		self.transmit.assert_not_called()
+
+	def test_failing_mail_server_is_skipped(self):
+		self.settings.test_mode = 0
+		with patch("hostel360.hostel_communication.dispatch.provider_paused", return_value=True):
+			self.assertFalse(dispatch.send_otp_email(self.address, "482913"))
+		self.transmit.assert_not_called()
+		(log,) = self.code_logs()
+		self.assertTrue(log.error.startswith("Not sent"))
+
+	def test_notifications_never_email_a_sign_in_code(self):
+		self.assertNotIn("Email", dispatch._templates_for(ev.OTP_LOGIN, None, self.settings))
+
+
 class TestDeliveryTransactions(DispatchTestCase):
 	"""A delivery job keeps what it has sent, and never swallows its own timeout."""
 

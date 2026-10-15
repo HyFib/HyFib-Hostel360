@@ -36,8 +36,8 @@ class MessageTemplate(Document):
 	def validate(self):
 		if not ev.is_valid_event(self.event):
 			frappe.throw(_("Choose an event for this template."))
-		if self.event in ev.MOBILE_ONLY_EVENTS and self.channel not in ev.MOBILE_CHANNELS:
-			frappe.throw(_("Sign-in codes can only be sent by SMS or WhatsApp."))
+		if self.event == ev.OTP_LOGIN and self.channel not in ev.OTP_CHANNELS:
+			frappe.throw(_("Sign-in codes can only be sent by SMS, WhatsApp or e-mail."))
 
 		self.normalise()
 		self.validate_syntax()

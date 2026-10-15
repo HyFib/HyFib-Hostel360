@@ -118,7 +118,12 @@ class MessagingSettings(Document):
 			missing.append(_("SMS"))
 		if self.otp_channels in ("WhatsApp", "SMS and WhatsApp") and not cint(self.whatsapp_enabled):
 			missing.append(_("WhatsApp"))
-		if missing and not cint(self.test_mode):
+		email_codes = cint(self.otp_email_enabled)
+		if email_codes and not cint(self.email_enabled):
+			missing.append(_("Email"))
+		if cint(self.test_mode):
+			return
+		if missing:
 			frappe.msgprint(
 				_(
 					"Sign-in codes are set to go by {0}, which is not enabled. Students and parents "
@@ -127,6 +132,24 @@ class MessagingSettings(Document):
 				title=_("Sign-in Codes"),
 				indicator="orange",
 			)
+		if email_codes and cint(self.email_enabled) and not self.smtp_account_ready():
+			frappe.msgprint(
+				_(
+					"E-mail sign-in codes need a default outgoing Email Account that sends by SMTP. "
+					"Until one is set up, codes requested by e-mail will not arrive."
+				),
+				title=_("Sign-in Codes"),
+				indicator="orange",
+			)
+
+	def smtp_account_ready(self) -> bool:
+		from hostel360.hostel_communication.providers.email import outgoing_smtp_account
+
+		try:
+			return bool(outgoing_smtp_account())
+		except Exception:
+			frappe.logger("hostel360").warning("Could not look up the outgoing Email Account", exc_info=True)
+			return False
 
 	@frappe.whitelist(methods=["POST"])
 	def send_test_message(self, channel: str, to: str) -> dict:

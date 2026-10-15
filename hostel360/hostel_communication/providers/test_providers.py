@@ -422,6 +422,108 @@ class TestEmail(IntegrationTestCase):
 		self.assertTrue(result.retryable)
 
 
+class TestEmailNow(IntegrationTestCase):
+	"""The direct path sign-in codes take: no Email Queue, a short timeout."""
+
+	def account(self, **values):
+		doc = frappe.new_doc("Email Account")
+		doc.update(
+			{
+				"email_account_name": "Hostel Office",
+				"email_id": "hostel.office@example.com",
+				"smtp_server": "smtp.example.com",
+				"enable_outgoing": 1,
+				**values,
+			}
+		)
+		return doc
+
+	def test_message_skips_the_email_queue(self):
+		with (
+			patch.object(email, "outgoing_smtp_account", return_value=self.account()),
+			patch.object(email, "_transmit") as transmit,
+			patch("frappe.sendmail") as sendmail,
+		):
+			result = email.send_email_now(
+				"Parent@Example.com",
+				"Sign-in code",
+				"<p>Your code is 482913</p>",
+				timeout=(2, 3),
+				settings=settings(),
+			)
+		self.assertTrue(result.ok)
+		self.assertEqual(result.provider, email.DIRECT_PROVIDER)
+		sendmail.assert_not_called()
+		_account, _sender, to, message, timeout = transmit.call_args.args
+		self.assertEqual((to, timeout), ("Parent@Example.com", 3.0))
+		self.assertIn("482913", message)
+
+	def test_refusals_before_any_connection(self):
+		with (
+			patch.object(email, "outgoing_smtp_account", return_value=self.account()) as account,
+			patch.object(email, "_transmit") as transmit,
+		):
+			placeholder = email.send_email_now("x@portal.hostel360.invalid", "s", "b", settings=settings())
+			invalid = email.send_email_now("not-an-address", "s", "b", settings=settings())
+			disabled = email.send_email_now("a@example.com", "s", "b", settings=settings(email_enabled=0))
+			test_mode = email.send_email_now("a@example.com", "s", "b", settings=settings(test_mode=1))
+			with patch("frappe.are_emails_muted", return_value=True):
+				muted = email.send_email_now("a@example.com", "s", "b", settings=settings())
+			account.return_value = None
+			no_account = email.send_email_now("a@example.com", "s", "b", settings=settings())
+		transmit.assert_not_called()
+		self.assertTrue(placeholder.skipped and not placeholder.ok)
+		self.assertFalse(invalid.ok)
+		self.assertTrue(disabled.skipped)
+		self.assertTrue(test_mode.ok and test_mode.skipped)
+		self.assertTrue(muted.skipped and not muted.ok)
+		self.assertFalse(no_account.ok)
+		self.assertIn("SMTP", no_account.error)
+
+	def test_mail_server_trouble_is_a_retryable_failure_without_messages(self):
+		before = list(frappe.local.message_log)
+
+		def refuse(*args):
+			frappe.throw("Invalid Outgoing Mail Server or Port: [Errno 111] Connection refused")
+
+		with (
+			patch.object(email, "outgoing_smtp_account", return_value=self.account()),
+			patch.object(email, "_transmit", side_effect=refuse),
+		):
+			result = email.send_email_now("a@example.com", "s", "b", settings=settings())
+		self.assertFalse(result.ok)
+		self.assertTrue(result.retryable)
+		self.assertIn("Connection refused", result.error)
+		self.assertEqual(frappe.local.message_log, before)
+
+	def test_only_smtp_accounts_send_codes(self):
+		from frappe.email.doctype.email_account.email_account import EmailAccount
+
+		for account, usable in (
+			(self.account(), True),
+			(self.account(service="Frappe Mail"), False),
+			(self.account(smtp_server=""), False),
+			(None, False),
+		):
+			with patch.object(EmailAccount, "find_outgoing", return_value=account):
+				self.assertEqual(bool(email.outgoing_smtp_account()), usable)
+
+	def test_transmit_uses_the_given_timeout(self):
+		with (
+			patch.object(frappe, "in_test", False),
+			patch("frappe.email.smtp.SMTPServer") as server,
+		):
+			email._transmit(
+				self.account(no_smtp_authentication=1), "office@example.com", "a@example.com", "message", 3.0
+			)
+		self.assertEqual(server.call_args.kwargs["timeout"], 3.0)
+		self.assertEqual(server.call_args.kwargs["server"], "smtp.example.com")
+		server.return_value.session.sendmail.assert_called_once_with(
+			from_addr="office@example.com", to_addrs=["a@example.com"], msg=b"message"
+		)
+		server.return_value.quit.assert_called_once_with()
+
+
 class TestProviderHealthAlerts(IntegrationTestCase):
 	def setUp(self):
 		super().setUp()

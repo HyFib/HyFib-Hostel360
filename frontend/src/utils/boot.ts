@@ -18,6 +18,8 @@ export interface BootData {
 	is_logged_in?: boolean;
 	kind?: "student" | "parent" | null;
 	lang?: string;
+	/** The sign-in page may offer codes by e-mail (a site-wide setting). */
+	otp_email?: boolean;
 }
 
 let cached: BootData | null = null;

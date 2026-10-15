@@ -15,12 +15,15 @@ templates, with ``template_parameters`` in the order the values appear in the Ta
 
 from hostel360.hostel_communication import events as ev
 from hostel360.hostel_communication.default_templates import (
+	_FOOTERS,
 	BED,
+	CODE_BOX,
 	GRIEVANCE_MESSAGE,
 	LEAVE_REMARKS,
 	OUTSTANDING,
 	ROOM,
 	TICKET_UPDATE,
+	_code_email,
 	_quote,
 	_rows,
 )
@@ -54,6 +57,20 @@ TEMPLATES = {
 			"body": "{{ otp }} என்பது {{ institution_short_name }} விடுதி இணையதளத்திற்கான உங்கள் "
 			"சரிபார்ப்புக் குறியீடு. உங்கள் பாதுகாப்பிற்காக இந்தக் குறியீட்டை யாரிடமும் பகிர வேண்டாம்.",
 			"template_parameters": "otp",
+		},
+		ev.EMAIL: {
+			"subject": "{{ institution_short_name }} விடுதி இணையதளத்தில் உள்நுழைவதற்கான உங்கள் குறியீடு",
+			"body": _code_email(
+				"அன்புள்ள",
+				"{{ institution_short_name }} விடுதி இணையதளத்தில் உள்நுழைய இந்தக் குறியீட்டைப் பயன்படுத்தவும்:",
+				CODE_BOX,
+				"இது {{ expiry_minutes }} நிமிடங்கள் மட்டுமே செல்லுபடியாகும்; ஒருமுறை மட்டுமே பயன்படுத்த "
+				"முடியும். விடுதிப் பணியாளர்கள் உட்பட யாரிடமும் இதைப் பகிர வேண்டாம்: விடுதி அலுவலகம் "
+				"ஒருபோதும் இதைக் கேட்காது.",
+				"நீங்கள் உள்நுழைய முயற்சிக்கவில்லை என்றால் இந்த மின்னஞ்சலைப் புறக்கணிக்கலாம். இந்தக் "
+				"குறியீடு இல்லாமல் யாரும் உள்நுழைய முடியாது.",
+				footer=_FOOTERS[ev.TAMIL][0],
+			),
 		},
 	},
 	ev.STUDENT_VALIDATED: {
