@@ -18,6 +18,7 @@ MODULE_SETUP_HOOKS = (
 	"hostel360.student_services.setup.install_defaults",
 	"hostel360.hostel_communication.setup.install_defaults",
 	"hostel360.hostel_operations.setup.install_defaults",
+	"hostel360.hostel_migration.setup.install_defaults",
 )
 
 # Regional defaults for an Indian institution.

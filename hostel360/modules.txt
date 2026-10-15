@@ -5,3 +5,4 @@ Hostel Mess
 Student Services
 Hostel Communication
 Hostel Operations
+Hostel Migration
