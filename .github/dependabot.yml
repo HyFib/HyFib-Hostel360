@@ -29,6 +29,14 @@ updates:
     cooldown:
       default-days: 14
     open-pull-requests-limit: 5
+    ignore:
+      # The portal is built, tested and served on Node 24; its type definitions follow that major.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # vue-tsc type-checks through TypeScript's JavaScript API, which TypeScript 7 (the native
+      # compiler) does not ship; stay on 6.x until vue-tsc supports it.
+      - dependency-name: "typescript"
+        versions: [">=7"]
     groups:
       portal-dev-tooling:
         dependency-type: development
