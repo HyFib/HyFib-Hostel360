@@ -536,7 +536,7 @@ nightly reset); the tunnel opens only for a site in demo mode.
 
 ```
 cloudflared tunnel create hostel360-demo                       # once; then TUNNEL_ID in ~/hostel360-demo/demo.env
-cloudflared tunnel route dns hostel360-demo hostel360.hyfib.com
+cloudflared --config /dev/null tunnel route dns <TUNNEL_ID> hostel360.hyfib.com
 deploy/demo/up.sh                                              # build, start, prepare the demo, open the tunnel
 deploy/demo/down.sh                                            # close the tunnel and stop (data kept)
 ```

@@ -122,7 +122,7 @@ Run once, on the Mac, as the user who runs the demo:
 ```
 cloudflared tunnel login                                   # only if ~/.cloudflared/cert.pem is missing
 cloudflared tunnel create hostel360-demo                   # prints the tunnel id, writes ~/.cloudflared/<id>.json
-cloudflared tunnel route dns hostel360-demo hostel360.hyfib.com
+cloudflared --config /dev/null tunnel route dns <TUNNEL_ID> hostel360.hyfib.com   # the id, and no default config: see below
 ```
 
 Then put the id into `~/hostel360-demo/demo.env` (`up.sh` creates that file on its first run; or
@@ -133,7 +133,11 @@ TUNNEL_ID=<the id that "cloudflared tunnel create" printed>
 ```
 
 `cloudflared tunnel list` shows the tunnel, and `hostel360.hyfib.com` becomes a proxied CNAME to
-`<id>.cfargotunnel.com`. If a DNS record for `hostel360` already exists, `route dns` refuses;
+`<id>.cfargotunnel.com`. Pass the tunnel **id** and `--config /dev/null`: with a default `~/.cloudflared/config.yml`
+present, cloudflared takes the `tunnel:` named there instead of the one on the command line and
+points the record at that other tunnel (with `/dev/null` it logs "Configuration file /dev/null
+was empty", which is expected). Check with `dig +short hostel360.hyfib.com CNAME
+@<zone name server>` or the Cloudflare dashboard that the record targets `<TUNNEL_ID>.cfargotunnel.com`. If a DNS record for `hostel360` already exists, `route dns` refuses;
 remove that record in the Cloudflare dashboard first. The credentials file stays where
 `cloudflared` wrote it; `CLOUDFLARED_CREDENTIALS_FILE` in `demo.env` points elsewhere if needed.
 
