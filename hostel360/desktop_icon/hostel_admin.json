@@ -10,7 +10,7 @@
  "label": "Hostel Admin",
  "link_to": "Hostel Admin",
  "link_type": "Workspace Sidebar",
- "modified": "2026-10-15 19:00:00.000000",
+ "modified": "2026-10-16 12:00:00.000000",
  "modified_by": "Administrator",
  "name": "Hostel Admin",
  "owner": "Administrator",
@@ -30,16 +30,7 @@
    "role": "Hostel Office Staff"
   },
   {
-   "role": "Mess Manager"
-  },
-  {
-   "role": "Mess Staff"
-  },
-  {
    "role": "Institution Auditor"
-  },
-  {
-   "role": "HyFib Operations"
   },
   {
    "role": "System Manager"

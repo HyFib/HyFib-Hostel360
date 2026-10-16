@@ -1532,4 +1532,4 @@ class TestPortalPage(IntegrationTestCase):
 			with self.assertRaises(frappe.Redirect) as raised:
 				hostel_page.get_context(frappe._dict())
 		self.assertEqual(raised.exception.http_status_code, 302)
-		self.assertEqual(frappe.local.flags.redirect_location, "/desk")
+		self.assertEqual(frappe.local.flags.redirect_location, "/staff")

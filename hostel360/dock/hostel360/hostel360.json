@@ -48,6 +48,14 @@
   {
    "added": 0,
    "hidden": 0,
+   "icon": "door-open",
+   "link_to": "Gate",
+   "link_type": "Sidebar",
+   "title": "Gate"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
    "icon": "activity",
    "link_to": "HyFib Operations",
    "link_type": "Sidebar",
@@ -70,7 +78,7 @@
    "title": "Data Migration"
   }
  ],
- "modified": "2026-10-15 19:00:00.000000",
+ "modified": "2026-10-16 12:00:00.000000",
  "modified_by": "Administrator",
  "name": "hostel360",
  "owner": "Administrator",

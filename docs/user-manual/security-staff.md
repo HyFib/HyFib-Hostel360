@@ -9,7 +9,9 @@ leave. You cannot open student records, fees or reports.
 
 1. Open the portal address `/login` (for ACGCET, e.g. `https://hostel.accet.ac.in/login`).
 2. Your e-mail and password, then the 6-digit code from the authenticator app on your phone.
-3. Open **Gate Pass** (the page opens at `/desk/gate-pass`; bookmark it on the tablet).
+3. Hostel360 opens on your **Gate** workspace: *Students on Leave Now*, **Gate Pass** and
+   **Leave** (with the number checked out right now). Open **Gate Pass** (it is also at
+   `/desk/gate-pass`; bookmark it on the tablet).
 
 Do not share your login. Sign out (avatar, top right > *Log out*) at the end of your shift
 if the tablet is shared.

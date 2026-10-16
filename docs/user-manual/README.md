@@ -42,8 +42,11 @@ back as it was every night. Do not enter real details there. How it works:
   something you need is missing, ask the Hostel Administrator.
 - **Language**: your user settings (top-right avatar > *My Settings* > Language) offer English
   and தமிழ்.
-- **Help**: *Hostel Admin > Get Support* raises a ticket with the HyFib helpdesk; or call
-  **+91 96060 60596** / e-mail **support@hyfib.com**, 24×7.
+- **Your home**: Hostel360 opens on your own workspace (*Hostel Admin*, *Mess*, *Gate* or
+  *HyFib Operations*, by role) and the bar on the left offers only the areas of your work;
+  the address `/staff` always brings you back home.
+- **Help**: *Get Support* on the *Hostel Admin* and *Mess* workspaces raises a ticket with the
+  HyFib helpdesk; or call **+91 96060 60596** / e-mail **support@hyfib.com**, 24×7.
 
 ## Common desk actions
 

@@ -5,11 +5,15 @@ def extend_bootinfo(bootinfo) -> None:
 	"""Expose institution branding to the desk (used by desk scripts and print previews).
 
 	``demo`` is set only on a demonstration site (``hostel360.demo``); the desk bundle then
-	shows the demonstration banner on every page.
+	shows the demonstration banner on every page. The Hostel360 dock is narrowed to the areas
+	the person works in (``hostel360.setup.landing.filter_dock``).
 	"""
 	if frappe.session.user == "Guest":
 		return
 	from hostel360.demo import desk_boot
+	from hostel360.setup.landing import filter_dock
+
+	filter_dock(bootinfo)
 
 	info = {"demo": desk_boot()}
 	try:

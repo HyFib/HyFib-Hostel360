@@ -6,3 +6,4 @@ Student Services
 Hostel Communication
 Hostel Operations
 Hostel Migration
+Hostel Gate

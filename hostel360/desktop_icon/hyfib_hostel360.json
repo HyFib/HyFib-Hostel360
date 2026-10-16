@@ -7,10 +7,10 @@
  "icon_type": "App",
  "idx": 0,
  "label": "HyFib Hostel360",
- "link": "/desk/hostel-admin",
+ "link": "/staff",
  "link_type": "External",
  "logo_url": "/assets/hostel360/images/hostel360-logo.svg",
- "modified": "2026-10-15 19:00:00.000000",
+ "modified": "2026-10-16 12:00:00.000000",
  "modified_by": "Administrator",
  "name": "HyFib Hostel360",
  "owner": "Administrator",
@@ -33,6 +33,9 @@
   },
   {
    "role": "Mess Staff"
+  },
+  {
+   "role": "Hostel Security"
   },
   {
    "role": "Institution Auditor"

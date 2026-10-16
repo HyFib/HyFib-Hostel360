@@ -44,8 +44,18 @@ def get_students_on_leave(filters: str | list | dict | None = None) -> dict:
 	return {
 		"value": len(away),
 		"fieldtype": "Int",
-		"route": ["query-report", "Students On Leave"],
+		"route": card_route(),
 	}
+
+
+def card_route() -> list[str]:
+	"""Where the card opens: the Students On Leave report, or for people without reports (gate
+	security, the mess manager) the gate pass page or the leave list, whichever they may open."""
+	if frappe.get_cached_doc("Report", "Students On Leave").is_permitted():
+		return ["query-report", "Students On Leave"]
+	if frappe.get_cached_doc("Page", "gate-pass").is_permitted():
+		return ["gate-pass"]
+	return ["List", "Home Visit Leave"]
 
 
 def is_away(leave, as_of) -> bool:

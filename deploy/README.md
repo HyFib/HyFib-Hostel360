@@ -149,6 +149,17 @@ argument values on exactly these two paths (rule 10111). Headers, cookies, argum
 the protocol rules are still enforced, and the application trusts nothing posted until the
 PayU hash checks out and PayU's verify API confirms the payment.
 
+**Desk false positives.** Three ordinary desk requests matched CRS rules and came back 403,
+which the desk shows as "Not permitted ... contact your manager": every dashboard number card
+(the card's JSON, whose `"[]"` filters match the JSON SQL injection rule 942550), the user
+settings the desk saves on every page (`frappe.model.utils.user_settings.save`, whose `.save`
+the restricted file extension rule 920440 takes for a backup file) and realtime long polling
+(`/socket.io/` posts `text/plain`, which rule 920420 refuses). Rule 10108 lifts the attack
+rules from the `doc` argument of the two number card methods only, rule 10112 lifts 920440 from
+whitelisted method names only (files keep it), and rule 10121 allows `text/plain` on
+`/socket.io/` only. `deploy/tests/waf/run.sh` checks each of them passes and that attacks on
+the same endpoints are still blocked.
+
 **Print PDFs.** Frappe renders receipts, certificates, invoices and the monthly report with
 wkhtmltopdf, which loads the logo and other `/files` and `/assets` URLs from the site's public
 URL (`host_name`, set by the configurator to `PUBLIC_URL`). Inside the stack the portal host

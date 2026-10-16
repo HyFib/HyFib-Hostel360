@@ -5,11 +5,13 @@ in order — institution settings, hostels and rooms, staff logins, fee and mess
 messaging, and access. Read the [staff introduction](README.md#before-you-start-staff)
 first.
 
-Your home is the **Hostel Admin** workspace (`/desk/hostel-admin`): shortcuts to the Room
+Your home is the **Hostel Admin** workspace (`/desk/hostel-admin`; Hostel360 opens there): shortcuts to the Room
 Board, Approvals, Students, Fee Invoices, Grievances and *Get Support*; number cards for
 beds, occupancy, leave, approvals, grievances, collections, dues, critical alerts and open
 tickets; and links to every master, setting and report. You also see the *People and
-Rooms*, *Fees*, *Mess*, *Student Services* and (read only) *HyFib Operations* workspaces.
+Rooms*, *Fees*, *Mess*, *Student Services*, *Gate* and (read only) *HyFib Operations*
+workspaces. Mess, gate and HyFib operations staff do not see *Hostel Admin*: each of them
+opens on their own workspace.
 
 The **Get started with Hostel360** onboarding panel on the workspace lists the set-up steps
 below and ticks them off as they are done.
@@ -197,7 +199,7 @@ Auditors cannot change records and are never assigned grievances.
 
 ## 12. Getting help
 
-*Hostel Admin > Get Support* opens a **Support Ticket** to the HyFib helpdesk: subject,
+*Hostel Admin > Get Support* (also on the *Mess* workspace) opens a **Support Ticket** to the HyFib helpdesk: subject,
 category (Outage, Bug, Data Correction, Access or Login, How To, Change Request, Other),
 priority and description. The helpdesk responds within 1 hour and resolves within 4 hours;
 you see the status on the ticket and get notified of updates. When it is resolved, **Confirm

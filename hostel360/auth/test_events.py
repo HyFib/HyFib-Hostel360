@@ -60,8 +60,8 @@ class TestPortalUserRules(IntegrationTestCase):
 	def test_home_pages(self):
 		self.assertEqual(events.get_website_user_home_page(make_user(STUDENT_ROLE)), "hostel")
 		self.assertEqual(events.get_website_user_home_page(make_user(PARENT_ROLE)), "hostel")
-		self.assertEqual(events.get_website_user_home_page(make_user(OFFICE_ROLE)), "desk")
-		self.assertEqual(events.get_website_user_home_page("Administrator"), "desk")
+		self.assertEqual(events.get_website_user_home_page(make_user(OFFICE_ROLE)), "staff")
+		self.assertEqual(events.get_website_user_home_page("Administrator"), "staff")
 		self.assertIsNone(events.get_website_user_home_page("Guest"))
 
 

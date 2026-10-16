@@ -5,8 +5,9 @@ and the boot data in a ``<script type="application/json">`` block, so the page n
 inline script (the portal runs under a strict Content Security Policy). Everything else
 the app loads through ``hostel360.api.portal.get_session``.
 
-Desk users are sent to the desk: the portal only works for students and parents, and a
-staff member landing here by habit should not see a sign-in screen meant for residents.
+Desk users are sent to their desk home (``/staff``): the portal only works for students and
+parents, and a staff member landing here by habit should not see a sign-in screen meant for
+residents.
 """
 
 import json
@@ -18,7 +19,7 @@ from markupsafe import Markup
 no_cache = 1
 sitemap = 0
 
-DESK_HOME = "/desk"
+DESK_HOME = "/staff"
 
 # Characters that could end the <script> block or open markup inside it. JSON allows these
 # \u escapes, so JSON.parse returns the original text.

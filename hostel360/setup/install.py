@@ -97,6 +97,7 @@ def after_install():
 
 
 def after_migrate():
+	sync_system_defaults()
 	sync_roles()
 	enforce_log_retention()
 	enable_languages()
@@ -122,6 +123,28 @@ def apply_settings(doctype: str, values: dict) -> None:
 		if meta.has_field(fieldname):
 			frappe.db.set_single_value(doctype, fieldname, value)
 	frappe.clear_document_cache(doctype, doctype)
+	if doctype == "System Settings":
+		sync_system_defaults()
+
+
+def sync_system_defaults() -> None:
+	"""Copy System Settings' regional values into the global defaults the desk formats with.
+
+	Saving System Settings does this in Frappe (SystemSettings.set_defaults), but the values
+	here are written directly, so the defaults would keep the setup wizard's (or none): the
+	desk then shows "$" for Currency fields and US number and date formats.
+	"""
+	changed = False
+	for fieldname in REGIONAL_SETTINGS:
+		value = frappe.db.get_single_value("System Settings", fieldname)
+		if value not in (None, "") and frappe.db.get_default(fieldname) != str(value):
+			frappe.db.set_default(fieldname, value)
+			changed = True
+	if frappe.db.exists("Currency", "INR") and not frappe.db.get_value("Currency", "INR", "enabled"):
+		frappe.db.set_value("Currency", "INR", "enabled", 1, update_modified=False)
+		changed = True
+	if changed:
+		frappe.clear_cache()
 
 
 def sync_roles() -> None:

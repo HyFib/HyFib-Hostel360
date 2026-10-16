@@ -21,7 +21,7 @@ Related runbooks: [security incidents](../deploy/monitoring/security-incident-ru
 | Onsite support | An engineer goes to ACGCET Hostels, Karaikudi, at no cost when an issue cannot be fixed remotely within the SLA | Support Ticket timeline |
 
 **Helpdesk channels**: phone **+91 96060 60596**, e-mail **support@hyfib.com**, and the
-online ticket form (desk: *Hostel Admin > Get Support*, which creates a Support Ticket).
+online ticket form (desk: *Get Support* on the *Hostel Admin* and *Mess* workspaces, which creates a Support Ticket).
 Every ticket opens an Ops Alert (`support.ticket.<TKT>`), so tickets page the helpdesk
 through the same channels and escalation as technical alerts.
 
