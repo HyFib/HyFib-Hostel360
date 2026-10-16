@@ -23,6 +23,7 @@ import json
 import frappe
 from frappe import _
 
+from hostel360.demo import is_demo_site
 from hostel360.hostel_fees import alerting
 from hostel360.hostel_fees.constants import TRANSACTION
 from hostel360.hostel_fees.gateways import gateway_in_use, get_webhook_gateway
@@ -48,6 +49,9 @@ def handle_razorpay_webhook(
 	body: bytes, signature: str | None, event_id: str | None = None
 ) -> tuple[int, dict]:
 	"""Verify and apply one webhook delivery. Returns (HTTP status, response body)."""
+	if is_demo_site():
+		# No payment is ever started on a demonstration site; nothing here can be ours.
+		return 400, {"status": "not_configured"}
 	# Razorpay deliveries are verified with Razorpay's secret even after the institution has
 	# switched to another gateway: payments started before the switch still report here.
 	gateway = get_webhook_gateway(gateway_name="Razorpay")
@@ -203,6 +207,8 @@ def handle_payu_webhook(fields: dict) -> tuple[int, dict]:
 	"""Verify and apply one PayU webhook post. Returns (HTTP status, response body)."""
 	from hostel360.hostel_fees.services import confirm_gateway_return
 
+	if is_demo_site():
+		return 400, {"status": "not_configured"}
 	outcome = confirm_gateway_return("PayU", fields, source="webhook")
 	if outcome.result == "not_configured":
 		if gateway_in_use("PayU"):

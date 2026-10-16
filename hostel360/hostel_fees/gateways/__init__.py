@@ -7,6 +7,10 @@ are still confirmed by the gateway that took them.
 ``get_gateway()`` returns a ready adapter or raises ``GatewayNotConfiguredError`` with a message
 that can be shown to the payer. Starting a payment needs online payments enabled; confirming
 or settling one that already exists needs only the gateway's credentials.
+
+On a demonstration site (``hostel360.demo``) no adapter is ever handed out, whatever the
+settings say, so no gateway is called: online payment is refused with a message saying so,
+and reconciliation, webhooks and the desk checks find no gateway to ask.
 """
 
 import frappe
@@ -43,6 +47,14 @@ def _settings(settings=None):
 	return get_payment_settings()
 
 
+def refuse_on_demo_site() -> None:
+	from hostel360.demo import is_demo_site, payment_off_message
+
+	if is_demo_site():
+		# Thrown, not raised, so the portal and the desk show the reason to whoever asked.
+		frappe.throw(payment_off_message(), GatewayNotConfiguredError, title=_("Online payment unavailable"))
+
+
 def get_gateway_class(gateway_name: str | None):
 	path = GATEWAYS.get(gateway_name or DEFAULT_GATEWAY)
 	if not path:
@@ -58,6 +70,7 @@ def get_gateway(
 	``require_enabled`` is for starting payments only; pass False to confirm or settle a payment
 	that was started before online collection was switched off.
 	"""
+	refuse_on_demo_site()
 	settings = _settings(settings)
 	if require_enabled and not settings.get("enabled"):
 		raise GatewayNotConfiguredError(_("Online payment is not enabled. Please pay at the hostel office."))
@@ -80,6 +93,7 @@ def get_webhook_gateway(settings=None, gateway_name: str | None = None) -> Payme
 
 	Payments started before online collection was switched off must still be confirmed.
 	"""
+	refuse_on_demo_site()
 	settings = _settings(settings)
 	return get_gateway_class(gateway_name or settings.get("gateway"))(settings)
 
@@ -99,8 +113,10 @@ def gateway_in_use(gateway_name: str, settings=None) -> bool:
 
 def is_gateway_configured(settings=None) -> bool:
 	"""True only when online payments are enabled and the selected gateway's keys are present."""
+	from hostel360.demo import is_demo_site
+
 	settings = _settings(settings)
-	if not settings.get("enabled"):
+	if not settings.get("enabled") or is_demo_site():
 		return False
 	try:
 		return get_gateway_class(settings.get("gateway"))(settings).is_configured()
@@ -148,5 +164,6 @@ __all__ = [
 	"get_settlement_gateway",
 	"get_webhook_gateway",
 	"is_gateway_configured",
+	"refuse_on_demo_site",
 	"to_minor_units",
 ]

@@ -125,6 +125,13 @@ override_doctype_class = {
 	"File": "hostel360.security.files.HostelFile",
 }
 
+# Demonstration sites: Frappe's own password change and API key generation refuse the
+# published demo accounts; everywhere else they pass straight through to Frappe.
+override_whitelisted_methods = {
+	"frappe.core.doctype.user.user.update_password": "hostel360.demo.accounts.update_password",
+	"frappe.core.doctype.user.user.generate_keys": "hostel360.demo.accounts.generate_keys",
+}
+
 # Request Events
 # --------------
 # Portal users may only upload through hostel360.api.portal.upload_attachment
@@ -140,6 +147,8 @@ doc_events = {
 	},
 	"User": {
 		"validate": "hostel360.auth.events.validate_user",
+		"on_trash": "hostel360.demo.accounts.protect_user_on_trash",
+		"before_rename": "hostel360.demo.accounts.protect_user_rename",
 	},
 	# A HyFib reply on a Support Ticket counts as the first response straight away
 	"Comment": {

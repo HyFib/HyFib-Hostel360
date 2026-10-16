@@ -134,9 +134,16 @@ def on_session_creation(login_manager) -> None:
 
 
 def validate_user(doc, method=None) -> None:
-	"""A portal user may not hold desk roles and must stay a Website User."""
+	"""A portal user may not hold desk roles and must stay a Website User.
+
+	On a demonstration site the published demo accounts are also kept as the demo command
+	set them (``hostel360.demo.accounts``).
+	"""
 	if doc.name in ("Administrator", "Guest"):
 		return
+	from hostel360.demo.accounts import validate_demo_user
+
+	validate_demo_user(doc)
 	roles = {row.role for row in doc.get("roles") or [] if row.role}
 	portal_roles = roles & PORTAL_ROLES
 	if not portal_roles:

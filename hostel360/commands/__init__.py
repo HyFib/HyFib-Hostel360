@@ -7,6 +7,8 @@
     bench --site <site> h360-purge-institution-data --confirm-site <site> --acknowledgement-reference REF [--execute]
     bench [--site <site>] h360-verify-deletion-certificate --path FILE [--key-file FILE]
     bench --site <site> h360-demo-data [--students N] [--seed N]
+    bench --site <site> h360-demo-site [--students N] [--seed N] [--portal-url URL] [--keep-password]
+    bench --site <site> h360-demo-reset
 
 Exit codes: 0 success; 1 failure; 2 finished but with rows or checks that need attention.
 """
@@ -589,6 +591,107 @@ def h360_demo_data(context, students, seed):
 		sys.exit(EXIT_ATTENTION)
 
 
+# ------------------------------------------------------------- demonstration site
+
+
+@click.command("h360-demo-site")
+@click.option("--students", default=240, show_default=True, type=int, help="Number of demo students.")
+@click.option("--seed", default=2026, show_default=True, type=int, help="Random seed; same seed, same data.")
+@click.option("--portal-url", default=None, help="Public address (default: https://<site>).")
+@click.option(
+	"--keep-password",
+	is_flag=True,
+	default=False,
+	help="Keep the shared demo password instead of making a new one.",
+)
+@pass_context
+def h360_demo_site(context, students, seed, portal_url, keep_password):
+	"""Prepare (or refresh) the open demonstration site and take its golden snapshot.
+
+	Switches demonstration mode on (nothing is ever sent from the site), fills it with
+	fictitious data, creates the published demo accounts and saves the snapshot that
+	h360-demo-reset restores. Refuses a site that holds anything but demonstration data.
+	"""
+	import frappe
+
+	from hostel360.demo.site import DemoSiteError, prepare_demo_site
+
+	site = _connect(context)
+	try:
+		result = prepare_demo_site(
+			students=students,
+			seed=seed,
+			portal_url=portal_url,
+			keep_password=keep_password,
+			progress=_progress,
+		)
+	except DemoSiteError as e:
+		raise click.ClickException(str(e)) from e
+	finally:
+		frappe.destroy()
+
+	click.echo("")
+	click.secho(f"{site} is ready as a demonstration site.", fg="green", bold=True)
+	_print_demo_sign_ins(result)
+	if result["errors"]:
+		click.secho(f"{len(result['errors'])} demo records could not be created:", fg="yellow")
+		for error in result["errors"][:50]:
+			click.echo(f"  {error}")
+		sys.exit(EXIT_ATTENTION)
+
+
+def _print_demo_sign_ins(result: dict) -> None:
+	click.echo(f"Snapshot        : {result['snapshot']['taken_at']} (sites/{result['site']}/private/demo)")
+	click.echo("Sign-in details : /demo on the site shows these to every visitor.")
+	click.echo("")
+	click.secho("Staff desk (/login), password for every account:", bold=True)
+	click.secho(f"    {result['password']}", bold=True)
+	for row in result["accounts"]:
+		if row["kind"] == "staff":
+			click.echo(f"  {row['role']:<22} {row['user']:<30} {row['name']}")
+	click.echo("")
+	click.secho(f"Student and parent portal (/hostel), code {result['otp']}:", bold=True)
+	for row in result["accounts"]:
+		if row["kind"] != "staff":
+			click.echo(f"  {row['mobile']:<12} {row['name']:<28} {row['role']}")
+
+
+@click.command("h360-demo-reset")
+@pass_context
+def h360_demo_reset(context):
+	"""Restore the demonstration site from its golden snapshot (meant to run every night).
+
+	Brings the snapshot's dates to today, adds this week's menus and last month's mess bills
+	and signs everybody out. Refuses unless the site is a demonstration site.
+	"""
+	import frappe
+
+	from hostel360.demo.site import DemoSiteError, reset_demo_site
+
+	site = _connect(context)
+	try:
+		result = reset_demo_site(progress=_progress)
+	except DemoSiteError as e:
+		raise click.ClickException(str(e)) from e
+	finally:
+		frappe.destroy()
+
+	click.secho(
+		f"{site} restored from the snapshot of {result['snapshot_taken_at']}; dates moved forward by "
+		f"{result['days']} days ({result['rows_shifted']:,} rows).",
+		fg="green",
+	)
+	if result["migrated"]:
+		click.echo("The code had changed: the site was migrated and a new snapshot taken.")
+	for doctype, count in sorted(result["created"].items()):
+		click.echo(f"  added {doctype:<30} {count:>6}")
+	if result["errors"]:
+		click.secho(f"{len(result['errors'])} records could not be added:", fg="yellow")
+		for error in result["errors"][:50]:
+			click.echo(f"  {error}")
+		sys.exit(EXIT_ATTENTION)
+
+
 commands = [
 	h360_setup,
 	h360_migrate,
@@ -597,4 +700,6 @@ commands = [
 	h360_purge_institution_data,
 	h360_verify_deletion_certificate,
 	h360_demo_data,
+	h360_demo_site,
+	h360_demo_reset,
 ]

@@ -104,6 +104,19 @@
 		dd { margin: 0; font-weight: 600; word-break: break-word; }
 		.help { margin-top: 18px; color: var(--muted); font-size: 0.9rem; }
 		footer { margin-top: 18px; color: var(--muted); font-size: 0.85rem; text-align: center; }
+		.demo-strip {
+			width: 100%;
+			max-width: 560px;
+			margin: -8px 0 18px;
+			padding: 10px 14px;
+			border-radius: 10px;
+			border: 1px solid var(--warn);
+			background: var(--warn-bg);
+			color: var(--text);
+			font-size: 0.9rem;
+		}
+		.demo-strip strong { display: block; }
+		.demo-strip a { color: var(--text); font-weight: 600; }
 		@media (max-width: 420px) {
 			.card { padding: 18px; }
 			button { width: 100%; }
@@ -113,6 +126,13 @@
 	</style>
 </head>
 <body>
+	{% if demo %}
+	<div class="demo-strip" role="note">
+		<strong>{{ demo.en | e }}</strong>
+		<span lang="ta">{{ demo.ta | e }}</span>
+		· <a href="{{ demo.url | e }}">{{ demo.link_en | e }}</a>
+	</div>
+	{% endif %}
 	<div class="wrap">
 		<header>
 			{% if institution.logo %}<img src="{{ institution.logo | e }}" alt="">{% endif %}

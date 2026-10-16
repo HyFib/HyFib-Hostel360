@@ -523,3 +523,22 @@ see `tests/load/README.md` and the results kept in `tests/load/results/`.
 | TR 15 | 1,500 concurrent users | k6 load test `tests/load/` (1,500 portal + 40 desk users, p95 < 800 ms, < 1 % errors, ~150 req/s) run on staging; results in `tests/load/results/` |
 | TR 22 | Exit: data handed over, then deleted everywhere, with a certificate | [EXIT.md](EXIT.md): application purge, `h360-decommission`, `terraform/oci/exit-purge.sh`, CERT-In log hold |
 | Security | Firewall, WAF, malware scanning, HTTPS, encrypted backups, CERT-In log retention and NTP, incident reporting within six hours | section 2, [security incident runbook](monitoring/security-incident-runbook.md) |
+
+## 7. Public demo
+
+`demo/` runs this same production stack on HyFib's Mac (Docker Desktop, arm64) as the open
+demo at **https://hostel360.hyfib.com**, published through a Cloudflare named tunnel instead of
+the OCI load balancer: fictitious data only, the demo sign-ins listed at `/demo`, no real SMS,
+WhatsApp, e-mail or payment ever sent, and the data rebuilt from a golden snapshot every night
+at 02:30 IST. `demo/compose.demo.yml` overrides only what a shared workstation and a tunnel need
+(WAF on `127.0.0.1` only, smaller memory limits, the tunnel as the WAF's only trusted proxy, the
+nightly reset); the tunnel opens only for a site in demo mode.
+
+```
+cloudflared tunnel create hostel360-demo                       # once; then TUNNEL_ID in ~/hostel360-demo/demo.env
+cloudflared tunnel route dns hostel360-demo hostel360.hyfib.com
+deploy/demo/up.sh                                              # build, start, prepare the demo, open the tunnel
+deploy/demo/down.sh                                            # close the tunnel and stop (data kept)
+```
+
+Prerequisites, safety notes, updates and troubleshooting: [demo/README.md](demo/README.md).

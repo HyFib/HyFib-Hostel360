@@ -1,0 +1,144 @@
+#!/bin/bash
+# Nightly rebuild of the public demo; the command of the demo-reset service.
+#
+# Every night at DEMO_RESET_AT (default 02:30; the container's time zone is Asia/Kolkata):
+#
+#   bench --site "$SITE_NAME" h360-demo-reset     restore from the golden snapshot that
+#                                                 h360-demo-site took (sites/<site>/private/demo)
+#   bench --site "$SITE_NAME" clear-cache         no visitor sees a cached copy of yesterday
+#   bench --site "$SITE_NAME" scheduler enable    the restore brings back System Settings too
+#
+# The loop follows the wall clock instead of sleeping once until 02:30: Docker Desktop's VM
+# stops while the Mac sleeps, and one long sleep would then end hours late, in the middle of
+# the next day's demonstrations. It wakes at least every five minutes and resets only inside
+# a window after the set time (DEMO_RESET_WINDOW_MINUTES, default 90). A night missed because
+# the Mac was asleep or the stack was down is logged and skipped; the demo is never reset
+# during the day by surprise. A failed reset is retried every ten minutes while the window
+# lasts, three attempts at most. Nothing is reset unless the site is in demo mode.
+#
+# The date of the last successful reset is kept in logs/h360-demo-reset.last (the logs
+# directory survives the container), so a restart inside the window does not reset twice.
+# Everything is logged to standard output: deploy/demo/compose.sh logs -f demo-reset
+#
+#   demo-reset-loop          the nightly loop (the service's command)
+#   demo-reset-loop --now    one reset straight away, then exit (deploy/demo/reset.sh)
+set -Euo pipefail
+
+: "${SITE_NAME:?SITE_NAME must be set}"
+: "${DEMO_RESET_AT:=02:30}"
+: "${DEMO_RESET_WINDOW_MINUTES:=90}"
+: "${DEMO_RESET_TIMEOUT_MINUTES:=60}"
+: "${DEMO_RESET_ATTEMPTS:=3}"
+
+bench_dir=/home/frappe/frappe-bench
+state_file="${bench_dir}/logs/h360-demo-reset.last"
+mode_check=/opt/hostel360-demo/demo-mode-check
+poll_seconds=300
+retry_seconds=600
+
+log() {
+	printf '%s h360-demo-reset: %s\n' "$(date -Iseconds)" "$*"
+}
+
+if [[ ! "${DEMO_RESET_AT}" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]]; then
+	log "DEMO_RESET_AT must be a time as HH:MM (got '${DEMO_RESET_AT}')"
+	exit 64
+fi
+for setting in DEMO_RESET_WINDOW_MINUTES DEMO_RESET_TIMEOUT_MINUTES DEMO_RESET_ATTEMPTS; do
+	if [[ ! "${!setting}" =~ ^[1-9][0-9]{0,3}$ ]]; then
+		log "${setting} must be a whole number (got '${!setting}')"
+		exit 64
+	fi
+done
+
+cd "${bench_dir}" || exit 64
+
+# Sleep in the background and wait for it, so "docker stop" (SIGTERM) ends the loop at once.
+pause() {
+	sleep "$1" &
+	wait "$!"
+}
+trap 'log "stopping"; exit 0' TERM INT
+
+reset_site() {
+	local status
+	log "resetting ${SITE_NAME} from its golden snapshot"
+	timeout --kill-after=60 "$((DEMO_RESET_TIMEOUT_MINUTES * 60))" \
+		bench --site "${SITE_NAME}" h360-demo-reset
+	status=$?
+	if ((status != 0)); then
+		log "h360-demo-reset failed (exit status ${status})"
+		return 1
+	fi
+	bench --site "${SITE_NAME}" clear-cache || log "clear-cache failed; the restore itself succeeded"
+	bench --site "${SITE_NAME}" scheduler enable >/dev/null || log "could not enable the scheduler"
+	return 0
+}
+
+next_reset() {
+	# next_reset <now>: epoch seconds of the next DEMO_RESET_AT after <now>
+	local today_at
+	today_at="$(date -d "$(date -d "@$1" +%F) ${DEMO_RESET_AT}" +%s)"
+	if (($1 < today_at)); then
+		echo "${today_at}"
+	else
+		date -d "$(date -d "@$1" +%F) ${DEMO_RESET_AT} tomorrow" +%s
+	fi
+}
+
+if [[ "${1:-}" == --now ]]; then
+	bash "${mode_check}" || exit 1
+	reset_site || exit 1
+	log "reset finished"
+	exit 0
+fi
+
+started_at="$(date +%s)"
+log "nightly reset of ${SITE_NAME} at ${DEMO_RESET_AT} $(date +%Z), window ${DEMO_RESET_WINDOW_MINUTES} min;" \
+	"next at $(date -d "@$(next_reset "${started_at}")" '+%Y-%m-%d %H:%M %Z')"
+
+attempt_day=""
+attempts=0
+missed_day=""
+while true; do
+	now="$(date +%s)"
+	today="$(date -d "@${now}" +%F)"
+	window_start="$(date -d "${today} ${DEMO_RESET_AT}" +%s)"
+	window_end=$((window_start + DEMO_RESET_WINDOW_MINUTES * 60))
+	last_reset="$(cat "${state_file}" 2>/dev/null || true)"
+	if [[ "${attempt_day}" != "${today}" ]]; then
+		attempt_day="${today}"
+		attempts=0
+	fi
+
+	if [[ "${last_reset}" != "${today}" ]] && ((now >= window_start && now < window_end && attempts < DEMO_RESET_ATTEMPTS)); then
+		attempts=$((attempts + 1))
+		if ! bash "${mode_check}"; then
+			log "not resetting tonight: the site is not in demo mode"
+			attempts="${DEMO_RESET_ATTEMPTS}"
+		elif reset_site; then
+			printf '%s\n' "${today}" >"${state_file}.tmp" && mv -f "${state_file}.tmp" "${state_file}"
+			log "reset finished; next at $(date -d "@$(next_reset "$(date +%s)")" '+%Y-%m-%d %H:%M %Z')"
+		elif ((attempts < DEMO_RESET_ATTEMPTS)); then
+			log "attempt ${attempts} of ${DEMO_RESET_ATTEMPTS} failed; trying again in $((retry_seconds / 60)) minutes"
+			pause "${retry_seconds}"
+			continue
+		else
+			log "giving up for tonight after ${attempts} attempts; the demo keeps today's data"
+		fi
+	elif [[ "${last_reset}" != "${today}" && "${missed_day}" != "${today}" ]] &&
+		((now >= window_end && attempts == 0 && started_at < window_start)); then
+		# Running before the window opened, yet never woken inside it: the VM was stopped.
+		log "tonight's reset window (${DEMO_RESET_AT}, ${DEMO_RESET_WINDOW_MINUTES} min) passed while the host was asleep or stopped; the next reset is tomorrow"
+		missed_day="${today}"
+	fi
+
+	now="$(date +%s)"
+	wait_seconds=$(($(next_reset "${now}") - now))
+	if ((wait_seconds > poll_seconds)); then
+		wait_seconds="${poll_seconds}"
+	elif ((wait_seconds < 1)); then
+		wait_seconds=1
+	fi
+	pause "${wait_seconds}"
+done

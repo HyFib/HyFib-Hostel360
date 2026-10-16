@@ -84,7 +84,16 @@ def get_boot(user: str | None) -> dict:
 		"lang": getattr(frappe.local, "lang", None) or "en",
 		# Whether the sign-in page offers e-mail codes: a site-wide setting, nothing about anyone.
 		"otp_email": email_codes_offered(),
+		# Only on a demonstration site: the banner, and the published demo sign-ins (all
+		# fictitious) for the sign-in page's helper. None everywhere else.
+		"demo": portal_demo(),
 	}
+
+
+def portal_demo() -> dict | None:
+	from hostel360.demo import portal_boot
+
+	return portal_boot()
 
 
 def email_codes_offered() -> bool:

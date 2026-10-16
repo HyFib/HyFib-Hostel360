@@ -105,3 +105,47 @@
 .desk-page .ce-block:has(.number-widget-box) {
 	align-self: flex-start;
 }
+
+/* Demonstration site --------------------------------------------------------------------- */
+/* Fixed to the bottom of the window so it never covers the navbar or a form's own header;
+   the page gets the same room at the bottom so nothing is hidden behind it. */
+
+.h360-demo-banner {
+	position: fixed;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 1030;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 4px 14px;
+	padding: 6px 16px;
+	border-top: 1px solid var(--h360-warning-fg);
+	background: var(--h360-warning-bg);
+	color: var(--text-color, #1f272e);
+	font-size: var(--text-sm, 13px);
+	font-weight: 500;
+	text-align: center;
+}
+
+.h360-demo-banner a {
+	color: inherit;
+	font-weight: 600;
+	text-decoration: underline;
+}
+
+body.h360-demo {
+	padding-bottom: 40px;
+}
+
+@media print {
+	.h360-demo-banner {
+		display: none;
+	}
+
+	body.h360-demo {
+		padding-bottom: 0;
+	}
+}

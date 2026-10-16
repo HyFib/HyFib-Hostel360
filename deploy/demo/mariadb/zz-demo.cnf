@@ -1,0 +1,23 @@
+# HyFib Hostel360 public demo: MariaDB sizing for a workstation (Docker Desktop, about 12 GB
+# shared with other projects). Read after ../../mariadb/hostel360.cnf, whose settings
+# (character set, connection and per-query buffers, slow query log) otherwise apply as in
+# production. The demo holds a few hundred fictitious residents.
+
+[mariadb]
+innodb_buffer_pool_size = 1G
+innodb_log_file_size = 256M
+innodb_log_buffer_size = 16M
+# Docker Desktop's virtual disk, not a block volume with 24,000 IOPS
+innodb_io_capacity = 1000
+innodb_io_capacity_max = 2000
+innodb_read_io_threads = 4
+innodb_write_io_threads = 4
+
+max_connections = 100
+table_open_cache = 2000
+table_definition_cache = 2000
+thread_cache_size = 16
+
+# The demo is restored from its golden snapshot every night, so binary logs would hold
+# nothing worth replaying, only another copy of every restore.
+skip-log-bin

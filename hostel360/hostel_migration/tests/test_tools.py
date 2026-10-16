@@ -264,6 +264,8 @@ class TestCommandHelpers(UnitTestCase):
 			sorted(c.name for c in commands),
 			[
 				"h360-demo-data",
+				"h360-demo-reset",
+				"h360-demo-site",
 				"h360-export",
 				"h360-migrate",
 				"h360-purge-institution-data",

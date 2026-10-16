@@ -6,6 +6,9 @@
  * The code goes by SMS or WhatsApp to the number, or, where the hostel allows it, to the
  * e-mail address the hostel office has for that number. The mobile number identifies the
  * person either way, and the server's answer never says whether an address exists.
+ *
+ * On a demonstration site the page also lists the published (fictitious) demo accounts and
+ * the demonstration code, which works for each of them without anything being sent.
  */
 import { ArrowRight, CircleAlert, LifeBuoy, Mail, MessageCircle, ShieldCheck, Smartphone } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
@@ -13,6 +16,7 @@ import { useRoute, useRouter } from "vue-router";
 import { sendOtp, verifyOtp } from "@/api/auth";
 import { ApiError, errorMessage } from "@/api/client";
 import type { OtpChannel, PortalKind } from "@/api/types";
+import DemoSignIn from "@/components/DemoSignIn.vue";
 import InstitutionMark from "@/components/InstitutionMark.vue";
 import LanguageSwitch from "@/components/LanguageSwitch.vue";
 import OtpInput from "@/components/OtpInput.vue";
@@ -20,6 +24,7 @@ import { t } from "@/i18n";
 import { safeRedirect } from "@/router/guards";
 import { clearClosedReason, completeSignIn, useSession } from "@/stores/session";
 import { readBoot } from "@/utils/boot";
+import { demoBoot } from "@/utils/demo";
 import { formatMobile, normalizeMobile } from "@/utils/format";
 import { getItem, setItem } from "@/utils/storage";
 
@@ -36,6 +41,8 @@ function rememberedChannel(): OtpChannel {
 }
 
 const CHANNEL_ICONS = { sms: Smartphone, whatsapp: MessageCircle, email: Mail } as const;
+/** Only on a demonstration site: the published demo accounts and code. */
+const demo = demoBoot();
 
 const route = useRoute();
 const router = useRouter();
@@ -141,6 +148,17 @@ async function requestCode(isResend = false) {
 		await nextTick();
 		otpRef.value?.clear();
 	} catch (caught) {
+		if (demo?.otp && caught instanceof ApiError && caught.kind === "rate_limit" && step.value === "mobile") {
+			// Someone else just asked for this demo account's code. The demonstration code works
+			// without a fresh one, so carry on to the code step instead of making the visitor wait.
+			mobile.value = normalised;
+			masked.value = formatMobile(normalised);
+			sentBy.value = channel.value;
+			code.value = "";
+			step.value = "code";
+			info.value = t("demo.codeStillWorks");
+			return;
+		}
 		error.value = errorMessage(caught);
 		const wait = /(\d+)\s*(seconds|second|வினாடி)/i.exec(error.value);
 		if (caught instanceof ApiError && caught.kind === "rate_limit" && wait && step.value === "code") {
@@ -205,6 +223,12 @@ async function submitCode(kind?: PortalKind) {
 	} finally {
 		busy.value = false;
 	}
+}
+
+/** The demo helper: fill in the account's number and ask for its code. */
+function useDemoAccount(number: string) {
+	mobileInput.value = formatMobile(number);
+	void requestCode();
 }
 
 function changeNumber() {
@@ -351,6 +375,13 @@ onBeforeUnmount(() => {
 					<p class="mt-2 text-xs text-muted">
 						{{ t("login.expiresIn", { minutes: Math.max(1, Math.round(expiresIn / 60)) }) }}
 					</p>
+					<p
+						v-if="demo?.otp"
+						class="mt-3 rounded-xl bg-warning-soft p-3 text-sm font-medium text-ink"
+						data-test="demo-code-hint"
+					>
+						{{ t("demo.codeHint", { code: demo.otp }) }}
+					</p>
 
 					<p
 						v-if="error"
@@ -425,6 +456,14 @@ onBeforeUnmount(() => {
 					</button>
 				</div>
 			</section>
+
+			<DemoSignIn
+				v-if="demo && demo.accounts.length && step === 'mobile'"
+				:accounts="demo.accounts"
+				:code="demo.otp"
+				:busy="busy"
+				@choose="useDemoAccount"
+			/>
 
 			<p class="mt-4 flex items-start gap-2 px-1 text-xs text-muted">
 				<ShieldCheck :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />

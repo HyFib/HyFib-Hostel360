@@ -83,6 +83,8 @@ BOOT_KEYS = {
 	"kind",
 	"lang",
 	"otp_email",
+	# Only filled on a demonstration site (hostel360.demo); None everywhere else.
+	"demo",
 }
 
 
@@ -1483,6 +1485,7 @@ class TestPortalPage(IntegrationTestCase):
 		self.assertEqual(set(boot), BOOT_KEYS)
 		self.assertFalse(boot["is_logged_in"])
 		self.assertIsNone(boot["kind"])
+		self.assertIsNone(boot["demo"])
 		self.assertEqual(boot["site_name"], frappe.local.site)
 
 	def test_student_gets_session_token(self):

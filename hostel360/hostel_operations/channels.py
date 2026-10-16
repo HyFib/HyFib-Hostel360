@@ -300,9 +300,18 @@ PAYLOAD_BUILDERS = {
 # Senders --------------------------------------------------------------------
 
 
+def _demo_site() -> bool:
+	# Defence in depth: notification.deliver already stops before any sender on a demo site.
+	from hostel360.demo import is_demo_site
+
+	return is_demo_site()
+
+
 def send_email(recipients: list[str], message: dict) -> tuple[bool, str]:
 	if not recipients:
 		return True, "no recipients"
+	if _demo_site():
+		return False, "demonstration site"
 	critical = message["severity"] == CRITICAL and message["event"] != "resolved"
 	try:
 		frappe.sendmail(
@@ -322,6 +331,8 @@ def send_email(recipients: list[str], message: dict) -> tuple[bool, str]:
 
 
 def send_text(channel: str, mobile: str, message: dict) -> tuple[bool, str]:
+	if _demo_site():
+		return False, "demonstration site"
 	try:
 		from hostel360.hostel_communication.dispatch import send_direct
 	except ImportError:
@@ -362,6 +373,8 @@ def post_json(
 
 	if not url:
 		return False, "no URL configured"
+	if _demo_site():
+		return False, "demonstration site"
 	if not (url.startswith("https://") or (allow_http and url.startswith("http://"))):
 		return False, "URL must use https"
 

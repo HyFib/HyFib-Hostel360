@@ -820,8 +820,12 @@ def _ready(results: list[CheckResult]) -> bool:
 def send_heartbeat(settings, now) -> bool | None:
 	import requests
 
+	from hostel360.demo import is_demo_site
+
 	url = (settings.get("heartbeat_url") or "").strip()
-	if not url:
+	if not url or is_demo_site():
+		# A demonstration site never calls out, and must not keep a production dead-man
+		# switch quiet either.
 		return None
 	if not (
 		url.startswith("https://")

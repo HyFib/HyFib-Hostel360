@@ -1,0 +1,274 @@
+# HyFib Hostel360 public demo: the production stack (deploy/compose/compose.yml) on one
+# workstation with Docker Desktop (arm64, about 12 GB shared with other projects), published
+# at https://hostel360.hyfib.com through a Cloudflare named tunnel.
+#
+# This file only overrides. Every image, WAF rule, header, rate limit, network and security
+# option of the production stack applies unchanged; what differs is what a shared
+# workstation and a tunnel need:
+#
+#   - the WAF ports are published on 127.0.0.1 only (local checks, never the LAN); visitors
+#     arrive through "tunnel", a cloudflared container on the edge network at a fixed
+#     address (H360_TUNNEL_IP). LB_SUBNET_CIDR is that address alone (/32), so the WAF takes
+#     X-Forwarded-For from cloudflared and from nothing else, and every visitor keeps their
+#     own address for the per-address sign-in limits
+#   - memory: MariaDB buffer pool 1 GB (mariadb/zz-demo.cnf), gunicorn 3 workers x 4 threads
+#     (demo.env), one short-queue worker and one long-queue worker, Redis 128 MB each;
+#     ClamAV keeps its full signature set
+#   - MariaDB, the Redis queue and the ClamAV signatures live in Docker volumes (InnoDB on a
+#     macOS file share is several times slower); sites and logs stay under H360_DATA_DIR
+#     (~/hostel360-demo/data), where the golden snapshot (sites/<site>/private/demo) is
+#   - the application image is the one deploy/docker/build.sh built from this checkout and
+#     is never pulled
+#   - "demo-reset" restores the demo site from its golden snapshot every night
+#   - "demo-guard" refuses to let the tunnel start unless the site is in demo mode
+#
+# Use it through deploy/demo/up.sh, down.sh and compose.sh, which pass both compose files and
+# both env files (demo.env with the settings, runtime.env written by up.sh):
+#
+#   docker compose -p hostel360-demo --project-directory deploy/compose \
+#       -f deploy/compose/compose.yml -f deploy/demo/compose.demo.yml \
+#       --env-file ~/hostel360-demo/demo.env --env-file ~/hostel360-demo/config/runtime.env ...
+#
+# Relative paths below are resolved from the project directory, deploy/compose, like the
+# ones in the production file.
+
+name: hostel360-demo
+
+services:
+  configurator:
+    pull_policy: never
+
+  backend:
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+
+  websocket:
+    pull_policy: never
+
+  queue-short:
+    pull_policy: never
+    deploy:
+      replicas: 1
+
+  queue-long:
+    pull_policy: never
+
+  scheduler:
+    pull_policy: never
+
+  frontend:
+    pull_policy: never
+
+  # waf: unchanged. Its ports come from WAF_BIND_ADDRESS, WAF_HTTP_PORT and WAF_HTTPS_PORT
+  # in demo.env (127.0.0.1, 18080, 18443); up.sh refuses an address that is not loopback.
+
+  php-fpm:
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  mariadb:
+    volumes:
+      - mariadb:/var/lib/mysql
+      # Read after hostel360.cnf (conf.d is read in name order), so its values win.
+      - ../demo/mariadb/zz-demo.cnf:/etc/mysql/conf.d/zz-demo.cnf:ro
+    deploy:
+      resources:
+        limits:
+          memory: 1792m
+
+  redis-cache:
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--maxmemory", "128mb"]
+    deploy:
+      resources:
+        limits:
+          memory: 192m
+
+  redis-queue:
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--maxmemory", "128mb"]
+    volumes:
+      - redis-queue:/data
+    deploy:
+      resources:
+        limits:
+          memory: 192m
+
+  clamav:
+    volumes:
+      - clamav:/var/lib/clamav
+      # No Linux Malware Detect on a workstation, so clamd's unix socket stays inside the
+      # container (a socket on a macOS file share is not reliable).
+      - type: tmpfs
+        target: /run/clamav
+        tmpfs:
+          size: 1048576
+
+  # One-shot check before the tunnel: the site must exist and be in demo mode
+  # (hostel360_demo_mode = 1 in its site_config.json, set only by "bench h360-demo-site").
+  # Compose runs it again on every "up" of the tunnel, by up.sh or by hand, so a site that is
+  # not a demo is never published.
+  demo-guard:
+    image: ${H360_IMAGE:?H360_IMAGE must be set}:${H360_IMAGE_TAG:?H360_IMAGE_TAG must be set}
+    pull_policy: never
+    profiles: ["tunnel"]
+    restart: "no"
+    init: true
+    command: ["bash", "/opt/hostel360-demo/demo-mode-check"]
+    environment:
+      SITE_NAME: ${SITE_NAME:?SITE_NAME must be set}
+      TZ: Asia/Kolkata
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - ${H360_DATA_DIR:?H360_DATA_DIR must be set}/sites:/home/frappe/frappe-bench/sites:ro
+      - ../demo/bin/demo-mode-check:/opt/hostel360-demo/demo-mode-check:ro
+    entrypoint: []
+    network_mode: none
+    healthcheck:
+      disable: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  # Cloudflare named tunnel: the only way in from the internet. It reaches the WAF over the
+  # edge network exactly as the load balancer does in production (plain HTTP to :8080, the
+  # visitor's address in X-Forwarded-For) and has no other route into the stack.
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.3
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: ["tunnel", "--config", "/etc/cloudflared/config.yml", "run"]
+    environment:
+      TZ: Asia/Kolkata
+    user: "65532:65532"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      # Written by up.sh from deploy/demo/cloudflared/config.yml.template
+      - type: bind
+        source: ${H360_CONFIG_DIR:?H360_CONFIG_DIR must be set}/cloudflared/config.yml
+        target: /etc/cloudflared/config.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      # The tunnel's credentials stay where "cloudflared tunnel create" wrote them
+      # (~/.cloudflared/<tunnel id>.json); they are never copied into the repository or the
+      # demo directory.
+      - type: bind
+        source: ${CLOUDFLARED_CREDENTIALS_FILE:-/nonexistent/cloudflared-credentials.json}
+        target: /etc/cloudflared/credentials.json
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      edge:
+        ipv4_address: ${H360_TUNNEL_IP:?H360_TUNNEL_IP must be set}
+    depends_on:
+      demo-guard:
+        condition: service_completed_successfully
+      waf:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 35s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+        tag: "{{.Name}}"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  # Nightly rebuild: "bench --site SITE h360-demo-reset" at DEMO_RESET_AT (02:30) Asia/Kolkata,
+  # see bin/demo-reset-loop. It needs the database and Redis only, so it has no route out.
+  demo-reset:
+    image: ${H360_IMAGE:?H360_IMAGE must be set}:${H360_IMAGE_TAG:?H360_IMAGE_TAG must be set}
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    command: ["bash", "/opt/hostel360-demo/demo-reset-loop"]
+    environment:
+      SITE_NAME: ${SITE_NAME:?SITE_NAME must be set}
+      TZ: Asia/Kolkata
+      DEMO_RESET_AT: ${DEMO_RESET_AT:-02:30}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ${H360_DATA_DIR:?H360_DATA_DIR must be set}/sites:/home/frappe/frappe-bench/sites
+      - ${H360_DATA_DIR:?H360_DATA_DIR must be set}/logs/frappe:/home/frappe/frappe-bench/logs
+      - ../demo/bin/demo-reset-loop:/opt/hostel360-demo/demo-reset-loop:ro
+      - ../demo/bin/demo-mode-check:/opt/hostel360-demo/demo-mode-check:ro
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    networks:
+      - internal
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    # A loop that dies ends the container and the restart policy brings it back; a health
+    # check would only report the image's generic one.
+    healthcheck:
+      disable: true
+    # A reset in progress is allowed to finish (the loop exits after it): stopping it halfway
+    # would leave a half-restored database until the next night.
+    stop_grace_period: 10m
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+        tag: "{{.Name}}"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+volumes:
+  mariadb:
+  redis-queue:
+  clamav:
+
+# Several stacks share this Docker Desktop; let Docker name the bridges (the production
+# names h360-edge, h360-internal and h360-php would collide with a second stack).
+networks:
+  edge:
+    driver_opts: !reset {}
+  internal:
+    driver_opts: !reset {}
+  php:
+    driver_opts: !reset {}

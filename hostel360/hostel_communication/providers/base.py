@@ -81,6 +81,20 @@ def test_mode_result(provider: str) -> DeliveryResult:
 	)
 
 
+def demo_mode_result(provider: str) -> DeliveryResult | None:
+	"""On a demonstration site nothing is ever handed to a provider (see ``hostel360.demo``).
+
+	Checked before anything else a provider does, so no setting a desk user can change
+	(enabling a channel, entering real gateway keys, switching test mode off) lets a message
+	out. The Message Log row says Skipped, with the reason.
+	"""
+	from hostel360.demo import DEMO_REASON, is_demo_site
+
+	if not is_demo_site():
+		return None
+	return DeliveryResult(ok=True, provider=provider, error=DEMO_REASON, skipped=True)
+
+
 def http_failure(provider: str, response) -> DeliveryResult:
 	status = response.status_code
 	return DeliveryResult.failed(

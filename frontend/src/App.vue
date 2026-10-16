@@ -4,6 +4,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppShell from "@/components/AppShell.vue";
 import ConfirmHost from "@/components/ConfirmHost.vue";
+import DemoBanner from "@/components/DemoBanner.vue";
 import OfflineBanner from "@/components/OfflineBanner.vue";
 import ToastHost from "@/components/ToastHost.vue";
 import { locale, t } from "@/i18n";
@@ -55,6 +56,7 @@ async function retry() {
 
 <template>
 	<div v-if="unreachable" class="flex min-h-dvh flex-col">
+		<DemoBanner />
 		<OfflineBanner />
 		<main class="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-6 text-center">
 			<span
@@ -76,6 +78,7 @@ async function retry() {
 	</div>
 	<template v-else>
 		<RouterView v-if="bare" v-slot="{ Component }">
+			<DemoBanner />
 			<OfflineBanner />
 			<component :is="Component" />
 		</RouterView>

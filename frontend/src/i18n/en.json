@@ -764,5 +764,29 @@
 		"Brother": "Brother",
 		"Sister": "Sister",
 		"Other": "Other"
+	},
+	"demo": {
+		"banner": "Demonstration site — all data is fictitious",
+		"about": "About this demo",
+		"signInTitle": "Demo sign-in",
+		"signInBody": "Choose a demo student or parent. Their names and numbers are invented and no code is sent to any phone: enter the demonstration code instead.",
+		"codeLabel": "Demonstration code:",
+		"codeHint": "Demonstration site: enter {code}. No code is sent to any phone.",
+		"codeStillWorks": "This demo account was used a moment ago. Enter the demonstration code below.",
+		"staffHint": "Staff desk sign-ins and what to try",
+		"paymentOff": "Online payment is switched off on this demonstration site; the office records payments.",
+		"joinNames": "{first} and {last}",
+		"roles": {
+			"student": "Student",
+			"studentIn": "Student, {hostel}",
+			"parent": "Parent",
+			"parentOf": "Parent of {wards}"
+		},
+		"stories": {
+			"dues": "fees due",
+			"leave": "leave waiting for the parent",
+			"approveLeave": "can approve a leave",
+			"twoWards": "two wards"
+		}
 	}
 }

@@ -52,8 +52,9 @@ session):
 - `no_cache = 1` (module attribute and `context.no_cache = 1`)
 - `csrf_token`: `frappe.sessions.get_csrf_token()` for signed-in users, empty for guests
 - `boot_json`: JSON of `{site_name, institution_name, institution_short_name, logo, office_phone,
-  office_email, support_phone, support_email, is_logged_in, kind, lang}` with `<`, `>` and `&` escaped as `<`, `>`,
-  `&` (Frappe's Jinja does not autoescape)
+  office_email, support_phone, support_email, is_logged_in, kind, lang, otp_email, demo}` with `<`, `>` and `&` escaped as `<`, `>`,
+  `&` (Frappe's Jinja does not autoescape). `demo` is null except on a demonstration site, where it
+  carries `{info_url, otp, accounts}` for the banner and the sign-in helper (see `docs/DEMO.md`)
 
 `hostel360/public/frontend/index.html` (same markup, empty values) is the offline shell the
 service worker falls back to; it never contains personal data.
