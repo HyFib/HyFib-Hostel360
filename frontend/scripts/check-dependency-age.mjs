@@ -29,7 +29,7 @@ const fresh = [];
 const failed = [];
 async function check(name) {
 	try {
-		const response = await fetch(`https://registry.npmjs.org/${name.replace("/", "%2F")}`, {
+		const response = await fetch(`https://registry.npmjs.org/${name.replaceAll("/", "%2F")}`, {
 			headers: { Accept: "application/json" },
 		});
 		const time = (await response.json()).time || {};

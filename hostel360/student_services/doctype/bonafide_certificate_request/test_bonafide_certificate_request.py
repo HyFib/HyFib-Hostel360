@@ -50,7 +50,7 @@ def offline_pdf(get_pdf):
 	"""
 
 	def render(html, *args, **kwargs):
-		html = re.sub(r"<link[^>]*>|<script[^>]*>.*?</script>", "", html, flags=re.S)
+		html = re.sub(r"<link\b[^>]*>|<script\b[^>]*>.*?</script\b[^>]*>", "", html, flags=re.S | re.I)
 		return get_pdf(html, *args, **kwargs)
 
 	return render

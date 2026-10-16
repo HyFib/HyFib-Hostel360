@@ -11,6 +11,13 @@ describe("parseBoot", () => {
 		expect(parseBoot("")).toEqual({});
 		expect(parseBoot("{{ boot_json }}")).toEqual({});
 		expect(parseBoot("{&#34;lang&#34;: &#34;ta&#34;}")).toEqual({ lang: "ta" });
+		expect(parseBoot("{&quot;name&quot;: &quot;A &amp; B &lt;x&gt; &#x41;&#39;&quot;}")).toEqual({
+			name: "A & B <x> A'",
+		});
+		// Decoding is string work only: markup inside the payload stays inert text.
+		expect(parseBoot("{&quot;logo&quot;: &quot;&lt;img src=x onerror=alert(1)&gt;&quot;}")).toEqual({
+			logo: "<img src=x onerror=alert(1)>",
+		});
 		expect(parseBoot("[1, 2]")).toEqual({});
 	});
 });

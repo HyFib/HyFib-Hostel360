@@ -91,6 +91,7 @@ export function htmlToText(html: string | null | undefined): string {
 		const parsed = new DOMParser().parseFromString(withBreaks, "text/html");
 		return (parsed.body.textContent || "").replace(/[ \t]+/g, " ").trim();
 	} catch {
-		return withBreaks.replace(/<[^>]*>/g, "").trim();
+		// Without a parser, drop every angle bracket: a tag-stripping regex can leave fragments.
+		return withBreaks.replace(/[<>]/g, "").trim();
 	}
 }

@@ -38,12 +38,24 @@ export function parseBoot(text: string | null | undefined): BootData {
 		// Fall through: some template setups HTML-escape the payload.
 	}
 	try {
-		const decoder = document.createElement("textarea");
-		decoder.innerHTML = source;
-		return asObject(JSON.parse(decoder.value));
+		return asObject(JSON.parse(decodeEntities(source)));
 	} catch {
 		return {};
 	}
+}
+
+const NAMED_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+
+/** Undo HTML entity escaping as plain string work; the payload is never parsed as HTML. */
+function decodeEntities(text: string): string {
+	return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (match, code: string) => {
+		if (code[0] === "#") {
+			const hex = code[1] === "x" || code[1] === "X";
+			const point = Number.parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
+			return Number.isInteger(point) && point >= 0 && point <= 0x10ffff ? String.fromCodePoint(point) : match;
+		}
+		return NAMED_ENTITIES[code.toLowerCase()] ?? match;
+	});
 }
 
 export function readBoot(): BootData {

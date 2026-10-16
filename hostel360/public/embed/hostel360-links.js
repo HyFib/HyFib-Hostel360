@@ -69,15 +69,18 @@
 	/** Origin of the portal, accepting https (or http only for local testing). */
 	function portalOrigin(value) {
 		if (!value) return null;
-		var parser = document.createElement("a");
-		parser.href = value;
-		var protocol = parser.protocol;
-		var hostname = parser.hostname;
+		var url;
+		try {
+			url = new URL(value, window.location.href);
+		} catch (error) {
+			return null;
+		}
+		var protocol = url.protocol;
+		var hostname = url.hostname;
 		var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(hostname);
 		if (!hostname || !(protocol === "https:" || (protocol === "http:" && local))) return null;
-		// Old browsers report default ports in `host`; drop them for a clean origin.
-		var host = parser.host.replace(/:(443|80)$/, "");
-		return protocol + "//" + host;
+		// URL.origin already leaves out default ports.
+		return url.origin;
 	}
 
 	function icon(kind) {

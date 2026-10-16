@@ -519,6 +519,8 @@ def check_tls(ctx) -> CheckResult | None:
 
 def _inspect_certificate(host: str, port: int) -> dict:
 	context = ssl.create_default_context()
+	# The portal only offers TLS 1.2 and 1.3; never negotiate anything older.
+	context.minimum_version = ssl.TLSVersion.TLSv1_2
 	try:
 		with socket.create_connection((host, port), timeout=HTTP_TIMEOUT_SECONDS) as sock:
 			with context.wrap_socket(sock, server_hostname=host) as tls:

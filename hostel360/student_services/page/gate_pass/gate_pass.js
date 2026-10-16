@@ -18,6 +18,15 @@ const H360_GATE_API = "hostel360.student_services.page.gate_pass.gate_pass.";
 const H360_GATE_REFRESH_MS = 60 * 1000;
 const H360_GATE_MIN_SEARCH = 2;
 
+// Replaces a student photo that failed to load with the student's initials.
+function show_initials(img) {
+	const $img = $(img);
+	const $initials = $('<div class="h360-gate-avatar h360-gate-initials" aria-hidden="true"></div>')
+		.toggleClass("h360-gate-avatar-lg", $img.attr("data-large") === "1")
+		.text($img.attr("data-initials") || "");
+	$img.replaceWith($initials);
+}
+
 class Hostel360GatePass {
 	constructor(page) {
 		this.page = page;
@@ -213,7 +222,7 @@ class Hostel360GatePass {
 		}
 		this.$list.html(cards.map((card, index) => this.card_html(card, index)).join(""));
 		this.$list.find("img.h360-gate-photo").on("error", function () {
-			$(this).replaceWith($(this).attr("data-fallback"));
+			show_initials(this);
 		});
 	}
 
@@ -273,14 +282,18 @@ class Hostel360GatePass {
 	}
 
 	avatar(card, large) {
+		const e = frappe.utils.escape_html;
 		const size = large ? "h360-gate-avatar-lg" : "";
-		const initials = frappe.utils.escape_html(frappe.get_abbr(card.student_name || card.student, 2));
-		const fallback = `<div class="h360-gate-avatar h360-gate-initials ${size}" aria-hidden="true">${initials}</div>`;
-		if (!card.has_photo) return fallback;
+		const initials = frappe.get_abbr(card.student_name || card.student, 2);
+		if (!card.has_photo) {
+			return `<div class="h360-gate-avatar h360-gate-initials ${size}" aria-hidden="true">${e(initials)}</div>`;
+		}
 		const src = `/api/method/${H360_GATE_API}student_photo?student=${encodeURIComponent(card.student)}`;
-		return `<img class="h360-gate-avatar h360-gate-photo ${size}" src="${src}" alt="${frappe.utils.escape_html(
+		// The fallback keeps only plain values in data attributes; show_initials() builds the
+		// element with text(), so nothing read back from the page is ever parsed as HTML.
+		return `<img class="h360-gate-avatar h360-gate-photo ${size}" src="${src}" alt="${e(
 			__("Photo of {0}", [card.student_name])
-		)}" loading="lazy" data-fallback="${frappe.utils.escape_html(fallback)}">`;
+		)}" loading="lazy" data-initials="${e(initials)}" data-large="${large ? 1 : 0}">`;
 	}
 
 	status_pill(leave) {
@@ -346,7 +359,7 @@ class Hostel360GatePass {
 			}</p>
 		</div>`);
 		dialog.$wrapper.find("img.h360-gate-photo").on("error", function () {
-			$(this).replaceWith($(this).attr("data-fallback"));
+			show_initials(this);
 		});
 		dialog.show();
 	}
