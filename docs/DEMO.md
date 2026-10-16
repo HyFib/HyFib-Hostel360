@@ -169,7 +169,7 @@ snapshot is a generation folder `g-<time>-<random>/` holding `database.sql.gz`,
 versions and fingerprints, the demo keys, the sizes and SHA-256 of the files), and the file
 `current` names the one in use. A new generation is complete and flushed to disk before `current`
 is switched to it with one rename, so a snapshot that fails or is killed leaves the previous one
-whole; older generations are removed after the switch. A `current` that names nothing usable is
+whole; older generations are removed once the switch is on disk too. A `current` that names nothing usable is
 refused rather than taken for "no snapshot". A snapshot from an earlier release (the four files
 directly in `private/demo/`) is still restored, and replaced by the first new generation. After
 rolling the demo back to an image from before generations, remove `current` and the `g-*` folders

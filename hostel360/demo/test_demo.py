@@ -731,10 +731,16 @@ class TestSnapshotGenerations(SnapshotSandbox):
 				raise OSError("EIO")
 			return real_flush(path)
 
+		first = self.take()
 		with patch.object(snapshot, "_flush", side_effect=flush):
 			taken = self.take()
 		self.assertEqual(snapshot.read_manifest()["generation"], taken["generation"])
 		snapshot.restore_snapshot(snapshot.read_manifest())
+		# The switch may not be on disk: the generation a crash could fall back to stays...
+		self.assertEqual(self.listing(), sorted([first["generation"], taken["generation"], snapshot.POINTER]))
+		# ...until the next snapshot.
+		third = self.take()
+		self.assertEqual(self.listing(), sorted([third["generation"], snapshot.POINTER]))
 
 	def test_damaged_pointer_is_refused(self):
 		snapshot = self.snapshot
@@ -798,8 +804,8 @@ class TestSnapshotGenerations(SnapshotSandbox):
 		import stat
 
 		snapshot = self.snapshot
-		# Looser than the snapshot folder may be (group may read): take_snapshot must tighten it.
-		os.chmod(self.root, 0o740)
+		# A folder left with another mode (here not even writable): take_snapshot sets 0700 itself.
+		os.chmod(self.root, 0o500)
 		name = self.take()["generation"]
 		self.assertRegex(name, snapshot.GENERATION)
 		mode = lambda path: stat.S_IMODE(os.stat(path).st_mode)  # noqa: E731

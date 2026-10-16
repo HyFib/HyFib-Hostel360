@@ -9,8 +9,8 @@ again), uploaded files are replaced by the snapshot's, and nothing a visitor add
 Each snapshot is a generation: a folder ``g-<time>-<random>`` holding the dump, the two file
 archives and the manifest, and the file ``current`` names the generation in use. A new
 generation is written and flushed to disk completely before ``current`` is switched to it
-with one rename, and older generations are removed only after that, so a snapshot that fails
-or is killed at any point leaves the previous one whole. A ``current`` that names nothing
+with one rename, and older generations are removed only once that switch is on disk too, so a
+snapshot that fails or is killed at any point leaves the previous one whole. A ``current`` that names nothing
 usable is refused, never read as "no snapshot": h360-demo-site would then snapshot whatever
 visitors left on the site. Snapshots from earlier releases (the same four files directly in
 the folder) are still read and restored; the first generation written replaces them.
@@ -246,9 +246,13 @@ def take_snapshot(config: dict) -> dict:
 	try:
 		_flush(root)
 	except OSError:
-		# The new generation is already the one in use; only how durably that is recorded is
-		# in doubt, and the next snapshot flushes the folder again.
-		frappe.logger("hostel360").warning("Demonstration snapshot: could not flush %s", root, exc_info=True)
+		# The new generation is already the one in use, but the switch may not be on disk yet:
+		# after a crash ``current`` could still name the previous generation, so that one is
+		# kept. The next snapshot removes it.
+		frappe.logger("hostel360").warning(
+			"Demonstration snapshot: could not flush %s; the previous snapshot is kept", root, exc_info=True
+		)
+		return manifest
 	_remove_unused(root, keep=folder, legacy=True)
 	return manifest
 
