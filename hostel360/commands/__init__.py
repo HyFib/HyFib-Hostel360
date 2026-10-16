@@ -610,11 +610,13 @@ def h360_demo_site(context, students, seed, portal_url, keep_password):
 
 	Switches demonstration mode on (nothing is ever sent from the site), fills it with
 	fictitious data, creates the published demo accounts and saves the snapshot that
-	h360-demo-reset restores. Refuses a site that holds anything but demonstration data.
+	h360-demo-reset restores. Only a new site (or one this command already prepared) is
+	accepted.
 	"""
 	import frappe
 
 	from hostel360.demo.site import DemoSiteError, prepare_demo_site
+	from hostel360.demo.snapshot import SnapshotError
 
 	site = _connect(context)
 	try:
@@ -625,7 +627,7 @@ def h360_demo_site(context, students, seed, portal_url, keep_password):
 			keep_password=keep_password,
 			progress=_progress,
 		)
-	except DemoSiteError as e:
+	except (DemoSiteError, SnapshotError) as e:
 		raise click.ClickException(str(e)) from e
 	finally:
 		frappe.destroy()
@@ -641,7 +643,10 @@ def h360_demo_site(context, students, seed, portal_url, keep_password):
 
 
 def _print_demo_sign_ins(result: dict) -> None:
-	click.echo(f"Snapshot        : {result['snapshot']['taken_at']} (sites/{result['site']}/private/demo)")
+	click.echo(
+		f"Snapshot        : {result['snapshot']['taken_at']} "
+		f"(sites/{result['site']}/private/demo/{result['snapshot']['generation']})"
+	)
 	click.echo("Sign-in details : /demo on the site shows these to every visitor.")
 	click.echo("")
 	click.secho("Staff desk (/login), password for every account:", bold=True)
@@ -667,11 +672,12 @@ def h360_demo_reset(context):
 	import frappe
 
 	from hostel360.demo.site import DemoSiteError, reset_demo_site
+	from hostel360.demo.snapshot import SnapshotError
 
 	site = _connect(context)
 	try:
 		result = reset_demo_site(progress=_progress)
-	except DemoSiteError as e:
+	except (DemoSiteError, SnapshotError) as e:
 		raise click.ClickException(str(e)) from e
 	finally:
 		frappe.destroy()

@@ -28,8 +28,12 @@ PASSWORD_KEY = "hostel360_demo_password"  # noqa: S105 - the site_config key, no
 OTP_KEY = "hostel360_demo_otp"
 USERS_KEY = "hostel360_demo_users"
 ACCOUNTS_KEY = "hostel360_demo_accounts"
+# How the site came to be a demonstration (see demo.site.check_site_origin).
+ORIGIN_KEY = "hostel360_demo_origin"
 # Every key the demo command writes into site_config.json (re-applied after a reset).
-CONFIG_KEYS = (DEMO_MODE_KEY, PASSWORD_KEY, OTP_KEY, USERS_KEY, ACCOUNTS_KEY, "mute_emails")
+CONFIG_KEYS = (DEMO_MODE_KEY, PASSWORD_KEY, OTP_KEY, USERS_KEY, ACCOUNTS_KEY, ORIGIN_KEY, "mute_emails")
+# Set only while a reset loads the snapshot (demo.site); never one of CONFIG_KEYS.
+RESTORING_KEY = "hostel360_demo_restoring"
 
 DEFAULT_OTP = "246810"
 # Recorded on every message that was not sent because the site is a demonstration.
@@ -143,3 +147,19 @@ def banner_text() -> dict:
 		"link_en": "About this demo",
 		"link_ta": "விவரம்",
 	}
+
+
+def refuse_jobs_while_restoring(method: str | None = None, **kwargs) -> None:
+	"""before_job hook: no background job of a demonstration site runs while its snapshot loads.
+
+	Frappe's workers run a site's jobs in maintenance mode (only scheduled jobs refuse), so a
+	job a visitor started before the reset (a student import, a mess bill run) could write into
+	tables the dump is dropping, or into the freshly restored data. Frappe calls before_job
+	hooks before the job's own error handling, so the refusal writes nothing to the database.
+	Jobs read site_config.json without a cache, so a worker sees the flag at once. The flag
+	only counts together with maintenance mode: switching maintenance off by hand lets jobs
+	run again.
+	"""
+	conf = _conf()
+	if conf.get(RESTORING_KEY) and conf.get("maintenance_mode"):
+		raise frappe.InReadOnlyMode(_("{0}: the demonstration site is being restored").format(method))

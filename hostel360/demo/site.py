@@ -5,18 +5,23 @@ ACGCET hostels: it switches demonstration mode on before anything else (so nothi
 sent from then on), runs the ordinary site setup, fills the site with the demonstration
 data set, creates one desk account per hostel role and three students and two parents for
 the portal, makes the site safe to open to anyone, and finally takes the golden snapshot
-that every reset goes back to. It refuses a site that holds anything but demonstration
-data, and running it again is safe: it first puts the site back to its snapshot, then tops
-up whatever is missing, rotates the shared password and takes a new snapshot.
+that every reset goes back to. Only a new site can become a demonstration
+(``check_site_origin``), and running it again is safe: it first puts the site back to its
+snapshot, then tops up whatever is missing, rotates the shared password and takes a new
+snapshot, with the site closed to visitors throughout.
 
 ``reset_demo_site`` restores the snapshot, moves its dates to today (``redate``), adds what
 belongs to the current week and month, and signs everybody out. It is meant to run every
-night.
+night. While the snapshot loads, the site is closed to requests, the scheduler and its own
+background jobs (``close_site``).
 """
 
 import datetime
+import os
+import re
 import secrets
 import time
+from contextlib import suppress
 
 import frappe
 from frappe import _
@@ -26,8 +31,10 @@ from hostel360.demo import (
 	ACCOUNTS_KEY,
 	CONFIG_KEYS,
 	DEMO_MODE_KEY,
+	ORIGIN_KEY,
 	OTP_KEY,
 	PASSWORD_KEY,
+	RESTORING_KEY,
 	USERS_KEY,
 	demo_otp,
 	demo_password,
@@ -58,6 +65,39 @@ LOCK_NAME = "hostel360_demo"
 LOCK_TIMEOUT_SECONDS = 600
 # Site config is cached for 60 seconds in every web worker (frappe.config).
 MAINTENANCE_GRACE_SECONDS = 65
+# Frappe's workers run a site's jobs in maintenance mode (only scheduled jobs refuse), and a
+# visitor can start one that runs for an hour (a student import, a mess bill run). The reset
+# waits this long for the site's running jobs, then stops them: the restore replaces
+# everything they would have changed.
+JOB_WAIT_SECONDS = 180
+JOB_STOP_SECONDS = 60
+JOB_POLL_SECONDS = 3
+# Document.lock files (frappe.utils.file_lock) are named by a sha224 of "doctype:name".
+DOCUMENT_LOCK_FILE = re.compile(r"[0-9a-f]{56}\.lock")
+
+# Set once a demonstration has had a golden snapshot: from then on visitors have used it, so it
+# may never be snapshotted again from the state they left it in.
+SNAPSHOT_TAKEN_KEY = "hostel360_demo_snapshot_taken"
+# How a site came to be a demonstration (ORIGIN_KEY).
+ORIGIN_NEW_SITE = "new site"
+ORIGIN_EARLIER_RELEASE = "earlier release"
+# What a new site with Hostel360 installed already holds: masters the installation creates.
+INSTALLED_RECORDS = frozenset(
+	{"Hostel Academic Year", "Hostel Fee Head", "Mess Item", "Message Template", "Room Facility"}
+)
+FRAMEWORK_USERS = ("Administrator", "Guest")
+# Frappe records that would hold people's details or messages; a new site has none.
+FRAMEWORK_PERSONAL_RECORDS = (
+	"Contact",
+	"Address",
+	"Communication",
+	"Email Queue",
+	"Data Import",
+	"Note",
+	"Event",
+	"ToDo",
+)
+DEMO_APPS = ("frappe", "hostel360")
 
 # login, name, role, Hostel Staff designation (None: no staff record), hostels, looks after
 STAFF = (
@@ -127,6 +167,7 @@ def set_config(values: dict) -> None:
 			frappe.local.conf.pop(key, None)
 		else:
 			update_site_config(key, value)
+			frappe.local.conf[key] = value
 
 
 def current_config() -> dict:
@@ -162,49 +203,93 @@ def prepare_demo_site(
 	progress=None,
 ) -> dict:
 	"""Prepare (or refresh) the demonstration site. See the module docstring."""
-	from hostel360.demo.snapshot import read_manifest
+	from hostel360.demo.snapshot import read_manifest, restore_snapshot, verify_snapshot
 
 	say = progress or (lambda message: None)
-	if is_demo_site() and read_manifest():
-		say(_("Putting the site back to its last snapshot first"))
-		reset_demo_site(progress=progress)
-	check_only_demo_data()
-
 	with demo_lock():
-		# Demonstration mode first: from this moment no message, alert or payment can leave.
-		set_config({DEMO_MODE_KEY: 1, "mute_emails": 1, OTP_KEY: demo_otp()})
-		previous_password = demo_password()
-		with setup_mode():
-			say(_("Site setup"))
-			run_site_setup(portal_url or f"https://{frappe.local.site}")
-			apply_safe_settings()
-			frappe.db.commit()  # nosemgrep
+		# A damaged snapshot refuses here, before anything on the site is changed.
+		manifest = read_manifest()
+		origin = check_site_origin(manifest)
+		live = is_demo_site()
+		if origin == ORIGIN_EARLIER_RELEASE and not frappe.local.conf.get(ORIGIN_KEY):
+			# A demonstration from an earlier release, recognised by its snapshot: recorded at
+			# once, so it stays recognised should that snapshot turn out to be damaged.
+			set_config({ORIGIN_KEY: origin, SNAPSHOT_TAKEN_KEY: manifest["taken_at"]})
+		if live and not manifest and frappe.local.conf.get(SNAPSHOT_TAKEN_KEY):
+			raise DemoSiteError(
+				_(
+					"{0} had a golden snapshot (taken {1}) that is missing now. Visitors have used the site "
+					"since, so a new snapshot of it as it is would keep whatever they entered or uploaded. "
+					"Put sites/{0}/private/demo back from a backup of the demo host, or start the "
+					"demonstration over on a new site (deploy/demo/README.md, Start over)."
+				).format(frappe.local.site, frappe.local.conf.get(SNAPSHOT_TAKEN_KEY))
+			)
+		if live:
+			if manifest:
+				verify_snapshot(manifest)
+			# Visitors must not write while the site is reset, topped up and snapshotted:
+			# whatever they add would be frozen into the golden snapshot.
+			close_site(say)
+		changing = False
+		try:
+			if live and manifest:
+				say(_("Putting the site back to its last snapshot first"))
+				changing = True
+				restore_snapshot(manifest)
+				after_restore()
+				bring_to_today(manifest, say)
+			elif live:
+				# Nothing to restore: the site's jobs may run again (it stays closed to requests).
+				set_config({RESTORING_KEY: None})
 
-			say(_("Demonstration data"))
-			from hostel360.hostel_migration.demo_data import generate
+			changing = True
+			# Demonstration mode first: from this moment no message, alert or payment can leave.
+			set_config({DEMO_MODE_KEY: 1, "mute_emails": 1, OTP_KEY: demo_otp(), ORIGIN_KEY: origin})
+			previous_password = demo_password()
+			with setup_mode():
+				say(_("Site setup"))
+				run_site_setup(portal_url or f"https://{frappe.local.site}")
+				apply_safe_settings()
+				frappe.db.commit()  # nosemgrep
 
-			data = generate(students=students, seed=seed, progress=progress)
+				say(_("Demonstration data"))
+				from hostel360.hostel_migration.demo_data import generate
 
-			say(_("Demonstration accounts"))
-			password = previous_password if keep_password and previous_password else new_password()
-			staff = ensure_staff_accounts(password)
-			portal = ensure_portal_accounts()
-			assign_work({row["role"]: row["user"] for row in staff})
-			frappe.db.commit()  # nosemgrep
+				data = generate(students=students, seed=seed, progress=progress)
 
-		accounts = staff + portal
-		set_config(
-			{
-				PASSWORD_KEY: password,
-				USERS_KEY: [row["user"] for row in accounts],
-				ACCOUNTS_KEY: accounts,
-			}
-		)
-		sign_everyone_out()
-		frappe.clear_cache()
+				say(_("Demonstration accounts"))
+				password = previous_password if keep_password and previous_password else new_password()
+				staff = ensure_staff_accounts(password)
+				portal = ensure_portal_accounts()
+				assign_work({row["role"]: row["user"] for row in staff})
+				frappe.db.commit()  # nosemgrep
 
-		say(_("Golden snapshot"))
-		manifest = snapshot(students=students, seed=seed)
+			accounts = staff + portal
+			set_config(
+				{
+					PASSWORD_KEY: password,
+					USERS_KEY: [row["user"] for row in accounts],
+					ACCOUNTS_KEY: accounts,
+				}
+			)
+			sign_everyone_out()
+			frappe.clear_cache()
+
+			say(_("Golden snapshot"))
+			manifest = snapshot(students=students, seed=seed)
+			set_config({SNAPSHOT_TAKEN_KEY: manifest["taken_at"]})
+		except BaseException:
+			if live and changing:
+				# A half-prepared demonstration must not be served: it stays closed until a run
+				# of h360-demo-site or h360-demo-reset succeeds.
+				frappe.logger("hostel360").error(
+					"Demonstration preparation failed; the site stays in maintenance mode", exc_info=True
+				)
+			elif live:
+				open_site()
+			raise
+		if live:
+			open_site()
 	return {
 		"site": frappe.local.site,
 		"created": data.get("created") or {},
@@ -216,25 +301,100 @@ def prepare_demo_site(
 	}
 
 
-def check_only_demo_data() -> None:
-	"""Refuse a site that holds real records: the demonstration is open to anyone."""
-	real_students = frappe.db.count("Hostel Student", {"register_number": ["not like", "UAT%"]})
-	if real_students:
+def check_site_origin(manifest: dict | None) -> str:
+	"""How the site came to be a demonstration; refuses one that may hold real people's data.
+
+	The demonstration is open to anyone, its accounts read and export every student, guardian
+	and payment, and its snapshot is restored every night, so it may hold nothing but the
+	demonstration data set. That cannot be judged from the records themselves (a register
+	number or an e-mail address only follows a convention), so it is judged from where the
+	site came from:
+
+	* a site this command found new, recorded in ORIGIN_KEY when demonstration mode was
+	  switched on: everything on it since was generated here or typed by visitors, and every
+	  reset removes the latter;
+	* a demonstration prepared by an earlier release (demonstration mode and a snapshot, no
+	  ORIGIN_KEY): those releases refused sites with real students or staff, and were always
+	  run on a new site; accepted once and recorded;
+	* anything else must be a new site, holding only what installing Hostel360 creates.
+	"""
+	if is_demo_site():
+		origin = frappe.local.conf.get(ORIGIN_KEY)
+		if origin:
+			return origin
+		if manifest:
+			return ORIGIN_EARLIER_RELEASE
+	found = records_a_new_site_does_not_have()
+	if found:
+		lines = "\n".join(f"  {what}: {count}" for what, count in found)
 		raise DemoSiteError(
 			_(
-				"This site holds {0} students that are not demonstration records (their register "
-				"numbers do not start with UAT). A demonstration site is open to anyone, so it can only "
-				"be prepared on a site that holds nothing but demonstration data. Use a new site."
-			).format(real_students)
+				"A demonstration site is open to anyone and its accounts can read and export every "
+				"record on it, so it can only be prepared on a new site (bench new-site ... "
+				"--install-app hostel360). {0} holds records a new site does not have:\n{1}"
+			).format(frappe.local.site, lines)
 		)
-	real_staff = frappe.db.count("Hostel Staff", {"email": ["not like", f"%@{STAFF_DOMAIN}"]})
-	if real_staff:
-		raise DemoSiteError(
-			_(
-				"This site holds {0} staff records that are not demonstration accounts. Use a new site for "
-				"the demonstration."
-			).format(real_staff)
-		)
+	return ORIGIN_NEW_SITE
+
+
+def records_a_new_site_does_not_have() -> list[tuple[str, int]]:
+	"""What the site holds beyond a new installation of Frappe and Hostel360, as (what, count).
+
+	Every Hostel360 DocType counts unless the installation itself fills it (INSTALLED_RECORDS),
+	so a DocType added later is checked without anyone remembering to list it.
+	"""
+	found = []
+	others = sorted(set(frappe.get_installed_apps()) - set(DEMO_APPS))
+	if others:
+		# Their tables are not checked here, so they could hold anything.
+		found.append((_("Other apps installed ({0})").format(", ".join(others)), len(others)))
+	users = frappe.db.count("User", {"name": ["not in", FRAMEWORK_USERS]})
+	if users:
+		found.append(("User", users))
+	modules = frappe.get_all("Module Def", filters={"app_name": "hostel360"}, pluck="name")
+	checked = ["User", "File"]
+	for doctype in frappe.get_all(
+		"DocType",
+		filters={"module": ["in", modules], "istable": 0, "issingle": 0, "is_virtual": 0},
+		pluck="name",
+		order_by="name",
+	):
+		if doctype in INSTALLED_RECORDS:
+			continue
+		checked.append(doctype)
+		if count := frappe.db.count(doctype):
+			found.append((doctype, count))
+	for doctype in FRAMEWORK_PERSONAL_RECORDS:
+		if frappe.db.table_exists(doctype):
+			checked.append(doctype)
+			if count := frappe.db.count(doctype):
+				found.append((doctype, count))
+	# Deleted records of those kinds, but not the workspaces, icons or scheduled jobs that a
+	# migrate removes from a new site when the code drops them.
+	deleted = frappe.db.count("Deleted Document", {"deleted_doctype": ["in", checked]})
+	if deleted:
+		found.append(("Deleted Document", deleted))
+	uploads = frappe.db.count("File", {"is_folder": 0})
+	if uploads:
+		found.append(("File", uploads))
+	stored = files_on_disk()
+	if stored:
+		found.append((_("Files in public/files and private/files"), stored))
+	return found
+
+
+def files_on_disk() -> int:
+	"""Files under the site's public/files and private/files, but for those Frappe writes itself."""
+	from hostel360.hostel_migration.purge import FRAMEWORK_FILE_FOLDERS
+
+	count = 0
+	for folder in ("public", "private"):
+		base = os.path.abspath(frappe.get_site_path(folder, "files"))
+		for path, subfolders, files in os.walk(base):
+			if path == base:
+				subfolders[:] = [name for name in subfolders if name not in FRAMEWORK_FILE_FOLDERS]
+			count += len(files)
+	return count
 
 
 def run_site_setup(portal_url: str) -> None:
@@ -713,9 +873,7 @@ def snapshot(students: int | None = None, seed: int | None = None) -> dict:
 
 def reset_demo_site(progress=None) -> dict:
 	"""Restore the golden snapshot and bring it to today. See the module docstring."""
-	from hostel360.demo.redate import interval, shift_dates
-	from hostel360.demo.snapshot import app_versions, read_manifest, restore_snapshot
-	from hostel360.hostel_migration.demo_data import refresh_calendar
+	from hostel360.demo.snapshot import read_manifest, restore_snapshot, verify_snapshot
 
 	say = progress or (lambda message: None)
 	if not is_demo_site():
@@ -725,48 +883,30 @@ def reset_demo_site(progress=None) -> dict:
 				"with h360-demo-site."
 			)
 		)
-	manifest = read_manifest()
-	if not manifest:
-		raise DemoSiteError(_("This site has no demonstration snapshot yet. Run h360-demo-site first."))
 	site = frappe.local.site
-	config = {key: value for key, value in (manifest.get("config") or {}).items() if key in CONFIG_KEYS}
-	config[DEMO_MODE_KEY] = 1
 
 	with demo_lock():
-		set_config({"maintenance_mode": 1})
+		# Read under the lock: a snapshot taken while this reset waited is the one to restore.
+		manifest = read_manifest()
+		if not manifest:
+			raise DemoSiteError(_("This site has no demonstration snapshot yet. Run h360-demo-site first."))
+		# A damaged snapshot leaves yesterday's demonstration running.
+		verify_snapshot(manifest)
+		close_site(say)
 		loading = False
 		try:
-			if not frappe.flags.in_test:
-				# Web workers and the scheduler read site_config.json at most a minute late;
-				# let them all see maintenance mode before the tables are dropped.
-				say(_("Waiting for the site to stop taking requests"))
-				time.sleep(MAINTENANCE_GRACE_SECONDS)
 			say(_("Restoring the snapshot of {0}").format(manifest.get("taken_at")))
 			loading = True
 			restore_snapshot(manifest)
-			set_config(config)
-			migrated = False
-			if manifest.get("apps") != app_versions():
-				say(_("The code changed since the snapshot: migrating"))
-				migrate(site)
-				migrated = True
-
-			seconds, days = interval(manifest["taken_at"])
-			say(_("Moving dates forward by {0} days").format(days))
-			touched = shift_dates(seconds, days)
-			frappe.db.commit()  # nosemgrep
-
-			say(_("This week's menus and last month's bills"))
-			refreshed = refresh_calendar(
-				seed=cint((manifest.get("config") or {}).get("hostel360_demo_seed")) or DEFAULT_SEED
-			)
-			sign_everyone_out()
-			forget_cached_state()
-			frappe.db.commit()  # nosemgrep
-			if migrated:
+			after_restore()
+			result = bring_to_today(manifest, say)
+			# The restored site is complete and committed; a failure from here on must not keep
+			# it closed.
+			loading = False
+			if result["migrated"]:
 				say(_("Taking a new snapshot for the migrated code"))
 				snapshot()
-		except Exception:
+		except BaseException:
 			if loading:
 				# Half a restore must not be served to visitors: the site stays in maintenance
 				# mode until a reset succeeds.
@@ -775,19 +915,209 @@ def reset_demo_site(progress=None) -> dict:
 					exc_info=True,
 				)
 				raise
-			set_config({"maintenance_mode": None})
+			open_site()
 			raise
-		set_config({"maintenance_mode": None})
+		open_site()
 		frappe.clear_cache()
+	return {"site": site, "snapshot_taken_at": manifest.get("taken_at"), **result}
+
+
+def close_site(say) -> None:
+	"""Stop requests, the scheduler and this site's background jobs before its data is replaced.
+
+	Maintenance mode stops requests (once every web worker has seen it) and the scheduler.
+	After that grace, RESTORING_KEY makes workers refuse this site's jobs
+	(hostel360.demo.refuse_jobs_while_restoring), and the jobs already running are waited for,
+	then stopped. If they will not stop, nothing is restored and the site is left as it was
+	found: opened again, or still closed when an earlier failed run had left it closed over half
+	a restore.
+	"""
+	was_closed = bool(site_config_value("maintenance_mode"))
+	set_config({"maintenance_mode": 1})
+	try:
+		if not frappe.flags.in_test:
+			# Web workers read site_config.json at most a minute late; let them all see
+			# maintenance mode before the tables are dropped. Jobs visitors start meanwhile
+			# still run, and are waited for below.
+			say(_("Waiting for the site to stop taking requests"))
+			time.sleep(MAINTENANCE_GRACE_SECONDS)
+		set_config({RESTORING_KEY: 1})
+		say(_("Waiting for the site's background jobs to finish"))
+		drain_background_jobs(frappe.local.site, say)
+	except BaseException:
+		if not was_closed:
+			release_document_locks_if_idle()
+			open_site()
+		raise
+
+
+def site_config_value(key: str):
+	"""``key`` as site_config.json has it now (this process's copy may be older)."""
+	import json
+
+	with open(frappe.get_site_path("site_config.json"), encoding="utf-8") as f:
+		return json.load(f).get(key)
+
+
+def release_document_locks_if_idle() -> None:
+	"""On an aborted close: the locks of jobs the reset refused or dropped, if none still runs.
+
+	A job that will not stop still holds its document lock, so nothing is cleared then.
+	"""
+	with suppress(Exception):
+		if not site_jobs(frappe.local.site)[1]:
+			clear_document_locks()
+
+
+def open_site() -> None:
+	set_config({"maintenance_mode": None, RESTORING_KEY: None})
+
+
+def after_restore() -> None:
+	"""Right after the load: nothing queued before it may run on the restored data.
+
+	A job queued meanwhile came from a request that was still running when the reset began.
+	Document locks belong to the site before the restore: a job the reset dropped or stopped
+	never released its own (a mess bill run would show as queued, and refuse publishing, for
+	hours). Jobs queued from here on (by a migrate, or the calendar refresh) belong to the
+	restored site and may run.
+	"""
+	drop_queued_jobs(frappe.local.site)
+	clear_document_locks()
+	set_config({RESTORING_KEY: None})
+
+
+def bring_to_today(manifest: dict, say) -> dict:
+	"""After a restore: the demo keys, a migrate if the code changed, dates and the calendar."""
+	from hostel360.demo.redate import interval, shift_dates
+	from hostel360.demo.snapshot import app_versions
+	from hostel360.hostel_migration.demo_data import refresh_calendar
+
+	config = {key: value for key, value in (manifest.get("config") or {}).items() if key in CONFIG_KEYS}
+	config[DEMO_MODE_KEY] = 1
+	set_config(config)
+	migrated = False
+	if manifest.get("apps") != app_versions():
+		say(_("The code changed since the snapshot: migrating"))
+		migrate(frappe.local.site)
+		migrated = True
+
+	seconds, days = interval(manifest["taken_at"])
+	say(_("Moving dates forward by {0} days").format(days))
+	touched = shift_dates(seconds, days)
+	frappe.db.commit()  # nosemgrep
+
+	say(_("This week's menus and last month's bills"))
+	refreshed = refresh_calendar(
+		seed=cint((manifest.get("config") or {}).get("hostel360_demo_seed")) or DEFAULT_SEED
+	)
+	sign_everyone_out()
+	forget_cached_state()
+	frappe.db.commit()  # nosemgrep
 	return {
-		"site": site,
-		"snapshot_taken_at": manifest.get("taken_at"),
 		"days": days,
 		"rows_shifted": sum(touched.values()),
 		"created": refreshed.get("created") or {},
 		"errors": refreshed.get("errors") or [],
 		"migrated": migrated,
 	}
+
+
+# --------------------------------------------------------------------------- background jobs
+
+
+def _clock() -> float:
+	return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+	time.sleep(seconds)
+
+
+def site_jobs(site: str) -> tuple[list[str], list[str]]:
+	"""This site's jobs as (queued, running) RQ job ids. Frappe names them "<site>||<id>"."""
+	from frappe.utils.background_jobs import get_queue, get_queue_list
+
+	prefix = f"{site}||"
+	queued, running = [], []
+	for name in get_queue_list():
+		queue = get_queue(name)
+		queued += [job_id for job_id in queue.get_job_ids() if job_id.startswith(prefix)]
+		running += [
+			job_id for job_id in queue.started_job_registry.get_job_ids() if job_id.startswith(prefix)
+		]
+	return queued, running
+
+
+def drop_queued_jobs(site: str) -> int:
+	"""Delete this site's jobs that are still waiting in a queue; returns how many."""
+	from frappe.utils.background_jobs import get_queue, get_queue_list
+	from rq.exceptions import NoSuchJobError
+	from rq.job import Job
+
+	prefix = f"{site}||"
+	dropped = 0
+	for name in get_queue_list():
+		queue = get_queue(name)
+		for job_id in queue.get_job_ids():
+			# Taken out of the queue first: a worker may pick the job up meanwhile, and only a
+			# job that was really taken out is deleted.
+			if job_id.startswith(prefix) and queue.remove(job_id):
+				with suppress(NoSuchJobError):
+					Job.fetch(job_id, connection=queue.connection).delete(remove_from_queue=False)
+				dropped += 1
+	return dropped
+
+
+def drain_background_jobs(site: str, say) -> None:
+	"""Wait for this site's running jobs to end, and stop them after JOB_WAIT_SECONDS.
+
+	RESTORING_KEY is already set, so a job a worker takes from now on refuses to start, and
+	queued jobs are dropped every round. One quiet poll is enough: RQ records a job as started
+	before the worker forks to run it. Raises DemoSiteError when a job will not stop.
+	"""
+	from frappe.utils.background_jobs import get_redis_conn
+	from rq.command import send_stop_job_command
+	from rq.exceptions import InvalidJobOperation, NoSuchJobError
+
+	started = _clock()
+	stopped = set()
+	while True:
+		drop_queued_jobs(site)
+		running = site_jobs(site)[1]
+		if not running:
+			return
+		waited = _clock() - started
+		if waited >= JOB_WAIT_SECONDS + JOB_STOP_SECONDS:
+			raise DemoSiteError(
+				_("Background jobs of {0} did not stop, so nothing was restored: {1}").format(
+					site, ", ".join(running)
+				)
+			)
+		if waited >= JOB_WAIT_SECONDS:
+			for job_id in running:
+				if job_id in stopped:
+					continue
+				try:
+					# What the RQ Job form's Stop does; MariaDB rolls the job's open transaction back.
+					send_stop_job_command(get_redis_conn(), job_id)
+				except InvalidJobOperation, NoSuchJobError:
+					# A worker names itself on a job a moment after taking it: next round.
+					continue
+				stopped.add(job_id)
+				say(_("Stopped background job {0}").format(job_id))
+		_sleep(JOB_POLL_SECONDS)
+
+
+def clear_document_locks() -> None:
+	"""Delete Frappe's document locks (the demo lock, held by this process, is not one)."""
+	folder = frappe.get_site_path("locks")
+	if not os.path.isdir(folder):
+		return
+	for name in os.listdir(folder):
+		if DOCUMENT_LOCK_FILE.fullmatch(name):
+			with suppress(FileNotFoundError):
+				os.remove(os.path.join(folder, name))
 
 
 def migrate(site: str) -> None:
