@@ -5,11 +5,12 @@
 # Tool versions are pinned; container images by digest. Reviewed exceptions live in
 # .github/security/ with the reason for each.
 #
-# CodeQL: this repository uses GitHub's default CodeQL setup (Settings > Code security), which
-# scans Python and JavaScript/TypeScript on every pull request. GitHub refuses results from a
-# second, workflow-based CodeQL analysis while default setup is on, so the job below only runs
-# when the repository variable ENABLE_CODEQL is "true" - set it after switching default setup
-# off if the pinned queries and path filters here are wanted instead.
+# CodeQL: the job below runs the security-extended queries on every pull request and fails on
+# high or critical findings (.github/security/codeql_gate.py). This repository also has GitHub's
+# default CodeQL setup on (Settings > Code security), which owns the Security tab and refuses a
+# second upload, so the job keeps its results in the run (job summary, annotations, SARIF
+# artifact). After switching default setup off, set the repository variable CODEQL_UPLOAD to
+# "true" to publish these results to the Security tab instead.
 
 name: Security
 
@@ -47,7 +48,6 @@ env:
 jobs:
   codeql:
     name: CodeQL (${{ matrix.language }})
-    if: ${{ vars.ENABLE_CODEQL == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -80,6 +80,21 @@ jobs:
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           category: /language:${{ matrix.language }}
+          output: codeql-results
+          # "never" while GitHub's default setup owns the Security tab (it rejects a second upload).
+          upload: ${{ vars.CODEQL_UPLOAD == 'true' && 'always' || 'never' }}
+
+      - name: Keep the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codeql-${{ matrix.language }}
+          path: codeql-results
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Report findings (fails on high or critical)
+        run: python3 .github/security/codeql_gate.py codeql-results "${{ matrix.language }}"
 
   secrets:
     name: Secrets (gitleaks)

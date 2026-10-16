@@ -80,11 +80,12 @@ HyFib office (or on the HyFib VPN) whose egress address is on that list; set
 `manage bastion-session` in the compartment. The workflow makes a new key for each Bastion
 session, deletes the session at the end, and never prints a secret.
 
-Code scanning uses GitHub's default CodeQL setup (Settings > Code security), which covers Python
-and JavaScript/TypeScript on every pull request. GitHub rejects a second, workflow-based CodeQL
-analysis while default setup is on, so the CodeQL job in `security.yml` runs only when the
-repository variable `ENABLE_CODEQL` is `true` (switch default setup off first). The other
-security jobs do not depend on it.
+The CodeQL job in `security.yml` runs the security-extended queries for Python and
+JavaScript/TypeScript on every pull request and fails on high or critical findings
+(`.github/security/codeql_gate.py`); findings appear in the job summary, as annotations and as a
+SARIF artifact. GitHub's default CodeQL setup is also on for this repository and owns the
+Security tab, which refuses a second upload, so the job does not upload; after switching default
+setup off, set the repository variable `CODEQL_UPLOAD` to `true` to publish its results there.
 
 ## 4. Go-live
 
