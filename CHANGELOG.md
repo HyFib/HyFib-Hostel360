@@ -55,6 +55,9 @@ All notable changes to HyFib Hostel360. The format follows
   snapshot that fails or is killed leaves the previous one whole, and a damaged one is refused
   before the site is touched. A restore into code whose workspaces, dock or modules changed now
   migrates (only DocType changes did before, so the desk changes above did not reach the demo).
+- `deploy/demo/up.sh` no longer fails, leaving the tunnel closed, when web workers still answer
+  from the maintenance mode `h360-demo-site` has just ended: the readiness check waits out their
+  one-minute configuration cache.
 
 ## [1.0.0] — 2026-10-16
 

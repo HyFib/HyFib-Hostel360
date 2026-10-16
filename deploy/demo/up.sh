@@ -344,7 +344,14 @@ wait_for healthy 300 backend websocket frontend queue-short queue-long scheduler
 	die "the stack did not become healthy; see: deploy/demo/compose.sh ps"
 
 readiness_url="http://${bind_address}:${http_port}/api/method/hostel360.api.health.readiness"
-readiness="$(curl -sS --max-time 15 -H "Host: ${site}" "${readiness_url}" 2>&1 || true)"
+# h360-demo-site ends maintenance mode as its last step, and web workers read site_config.json
+# at most a minute late: for that minute they still answer SessionStopped. Anything else fails
+# at once.
+for _ in $(seq 1 18); do
+	readiness="$(curl -sS --max-time 15 -H "Host: ${site}" "${readiness_url}" 2>&1 || true)"
+	[[ "${readiness}" == *SessionStopped* ]] || break
+	sleep 5
+done
 [[ "${readiness}" == *'"status":"ok"'* || "${readiness}" == *'"status": "ok"'* ]] ||
 	die "readiness through the WAF failed: ${readiness}"
 note "readiness through the WAF: ${readiness}"
