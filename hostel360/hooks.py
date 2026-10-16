@@ -14,7 +14,8 @@ add_to_apps_screen = [
 		"name": "hostel360",
 		"logo": "/assets/hostel360/images/hostel360-logo.svg",
 		"title": "Hostel360",
-		"route": "/desk/hostel-admin",
+		# each desk role has its own home; /staff (www/staff.py) sends people on to theirs
+		"route": "/staff",
 		"has_permission": "hostel360.setup.permissions.has_app_permission",
 	}
 ]
@@ -125,6 +126,15 @@ override_doctype_class = {
 	"File": "hostel360.security.files.HostelFile",
 }
 
+# Demonstration sites: Frappe's own password change and API key generation refuse the
+# published demo accounts; everywhere else they pass straight through to Frappe.
+override_whitelisted_methods = {
+	"frappe.core.doctype.user.user.update_password": "hostel360.demo.accounts.update_password",
+	"frappe.core.doctype.user.user.generate_keys": "hostel360.demo.accounts.generate_keys",
+	# resizing a list column saves the shared list settings, which only System Managers may change
+	"frappe.desk.doctype.list_view_settings.list_view_settings.save_listview_settings": "hostel360.setup.desk.save_listview_settings",
+}
+
 # Request Events
 # --------------
 # Portal users may only upload through hostel360.api.portal.upload_attachment
@@ -140,6 +150,8 @@ doc_events = {
 	},
 	"User": {
 		"validate": "hostel360.auth.events.validate_user",
+		"on_trash": "hostel360.demo.accounts.protect_user_on_trash",
+		"before_rename": "hostel360.demo.accounts.protect_user_rename",
 	},
 	# A HyFib reply on a Support Ticket counts as the first response straight away
 	"Comment": {

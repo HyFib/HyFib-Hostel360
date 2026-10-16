@@ -1,0 +1,40 @@
+#!/bin/bash
+# Exit 0 when the site SITE_NAME exists and is in demo mode, otherwise say why and exit 1.
+#
+# Demo mode is "hostel360_demo_mode": 1 in the site's site_config.json. Only
+# "bench h360-demo-site" sets it, and nothing in the application can, so this file is the
+# one place that decides whether a site may be published as the open demo. Used by the
+# demo-guard service (before the tunnel starts) and by the nightly reset loop.
+set -Eeuo pipefail
+
+: "${SITE_NAME:?SITE_NAME must be set}"
+
+exec /home/frappe/frappe-bench/env/bin/python - "${SITE_NAME}" <<'PY'
+import json
+import sys
+
+site = sys.argv[1]
+path = f"/home/frappe/frappe-bench/sites/{site}/site_config.json"
+try:
+	with open(path) as handle:
+		config = json.load(handle)
+except FileNotFoundError:
+	print(f"demo-mode-check: {site} does not exist yet (no {path})", file=sys.stderr)
+	sys.exit(1)
+except (OSError, ValueError) as error:
+	print(f"demo-mode-check: cannot read {path}: {error}", file=sys.stderr)
+	sys.exit(1)
+
+value = config.get("hostel360_demo_mode") if isinstance(config, dict) else None
+# 1 as a number (bench set-config -p), or "1" as text (bench set-config without -p)
+if value == 1 or (isinstance(value, str) and value.strip() == "1"):
+	print(f"demo-mode-check: {site} is in demo mode")
+	sys.exit(0)
+
+print(
+	f"demo-mode-check: {site} is not in demo mode (hostel360_demo_mode is {value!r}); "
+	"prepare it with 'bench --site <site> h360-demo-site'",
+	file=sys.stderr,
+)
+sys.exit(1)
+PY

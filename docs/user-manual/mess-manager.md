@@ -5,9 +5,9 @@ prepare menus; the mess manager also approves indents and reductions (as configu
 runs the monthly billing. Read the [staff introduction](README.md#before-you-start-staff)
 first.
 
-Your workspace is **Mess**: shortcuts to Stock Entry, Menu and Reductions; number cards for
-pending reductions, indents pending approval and unbilled extras; the daily-rate chart; and
-the mess reports.
+Your workspace is **Mess**, where Hostel360 opens: shortcuts to Stock Entry, Menu,
+Reductions and *Get Support*; number cards for pending reductions, indents pending approval
+and unbilled extras; the daily-rate chart; and the mess reports.
 
 ## 1. Set up
 

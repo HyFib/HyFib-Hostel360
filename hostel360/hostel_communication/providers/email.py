@@ -13,6 +13,7 @@ from frappe.utils import cint, validate_email_address
 from hostel360.hostel_communication.providers.base import (
 	DEFAULT_TIMEOUT,
 	DeliveryResult,
+	demo_mode_result,
 	get_settings,
 	is_test_mode,
 	request_failure,
@@ -36,6 +37,8 @@ def send_email(
 	settings=None,
 ) -> DeliveryResult:
 	settings = settings or get_settings()
+	if muted := demo_mode_result(PROVIDER):
+		return muted
 	if not cint(settings.get("email_enabled")):
 		return DeliveryResult.skip(PROVIDER, "E-mail is not enabled in Messaging Settings.")
 	if not to:
@@ -87,6 +90,8 @@ def send_email_now(
 	SMTP.
 	"""
 	settings = settings or get_settings()
+	if muted := demo_mode_result(DIRECT_PROVIDER):
+		return muted
 	if not cint(settings.get("email_enabled")):
 		return DeliveryResult.skip(DIRECT_PROVIDER, "E-mail is not enabled in Messaging Settings.")
 	if not to:

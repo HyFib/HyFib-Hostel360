@@ -25,6 +25,7 @@ from frappe.utils import (
 	time_diff_in_seconds,
 )
 
+from hostel360.demo import DEMO_REASON, is_demo_site
 from hostel360.hostel_operations import channels
 from hostel360.hostel_operations.constants import (
 	ALERT_DOCTYPE,
@@ -224,6 +225,9 @@ def deliver(alert_name: str, event: str, levels: list[int] | None = None) -> dic
 	settings = get_settings()
 	alert = frappe.get_doc(ALERT_DOCTYPE, alert_name)
 	levels = levels or []
+	if is_demo_site():
+		_record_demo_delivery(alert, event, levels)
+		return {"event": event, "levels": levels, "results": []}
 	message = build_message(alert, settings, event, levels)
 	targets = resolve_targets(settings, alert, event, levels)
 	results = send_to_targets(targets, message, settings)
@@ -245,6 +249,12 @@ def unreachable_levels(settings, alert, event: str, levels: list[int]) -> list:
 
 
 def send_to_targets(targets: list[dict], message: dict, settings) -> list[dict]:
+	if is_demo_site():
+		# Nothing leaves a demonstration site, whatever channels the settings list.
+		return [
+			{"channel_type": t["channel_type"], "label": t["label"], "ok": False, "info": DEMO_REASON}
+			for t in targets
+		]
 	results = []
 	allow_http = settings.get("environment") == "Development"
 
@@ -312,6 +322,26 @@ def _record_delivery(alert, event: str, levels: list[int], results: list[dict], 
 			reference_doctype=ALERT_DOCTYPE,
 			reference_name=alert.name,
 		)
+
+
+def _record_demo_delivery(alert, event: str, levels: list[int]) -> None:
+	"""The alert's timeline still shows when it would have been sent, and why it was not."""
+	level_text = ", ".join(f"L{level}" for level in levels) if levels else "channels"
+	try:
+		frappe.get_doc(
+			{
+				"doctype": "Comment",
+				"comment_type": "Info",
+				"reference_doctype": ALERT_DOCTYPE,
+				"reference_name": alert.name,
+				"content": frappe.utils.escape_html(
+					f"{EVENT_LABELS.get(event, event)} notification ({level_text}) not sent: "
+					f"{DEMO_REASON.lower()}."
+				),
+			}
+		).insert(ignore_permissions=True)
+	except Exception:
+		frappe.log_error(title="Hostel360: could not record alert delivery", message=frappe.get_traceback())
 
 
 # Messages and targets ----------------------------------------------------

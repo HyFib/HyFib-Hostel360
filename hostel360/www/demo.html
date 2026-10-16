@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="robots" content="noindex, nofollow">
+	<meta name="referrer" content="no-referrer">
+	<title>{{ _("Hostel360 demonstration") }}{% if institution.institution_short_name %} · {{ institution.institution_short_name | e }}{% endif %}</title>
+	<style>
+		:root {
+			--bg: #f4f6fa;
+			--card: #ffffff;
+			--text: #1b2430;
+			--muted: #5d6b7c;
+			--border: #dde3eb;
+			--brand: #0b4f9c;
+			--brand-bg: #e8f0fa;
+			--warn: #9a5b00;
+			--warn-bg: #fff4dc;
+			--ok: #157347;
+			--ok-bg: #e7f6ee;
+			--code-bg: #eef2f7;
+			--focus: #3d7bd9;
+		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #0f141b;
+				--card: #18202b;
+				--text: #e6ebf1;
+				--muted: #9aa8b8;
+				--border: #2a3644;
+				--brand: #8fb4e8;
+				--brand-bg: #172a42;
+				--warn: #f2c063;
+				--warn-bg: #33270d;
+				--ok: #5fd39a;
+				--ok-bg: #12301f;
+				--code-bg: #222c39;
+			}
+		}
+		* { box-sizing: border-box; }
+		html, body { margin: 0; padding: 0; }
+		body {
+			background: var(--bg);
+			color: var(--text);
+			font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Tamil", sans-serif;
+			padding: 0 16px 40px;
+		}
+		a { color: var(--brand); }
+		a:focus, .button:focus { outline: 3px solid var(--focus); outline-offset: 2px; }
+		.wrap { max-width: 880px; margin: 0 auto; }
+		.strip {
+			margin: 0 -16px 24px;
+			padding: 10px 16px;
+			background: var(--warn-bg);
+			border-bottom: 1px solid var(--warn);
+			text-align: center;
+			font-size: 0.95rem;
+		}
+		.strip strong { margin-right: 6px; }
+		header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+		header img { width: 56px; height: 56px; object-fit: contain; }
+		header .name { font-weight: 650; font-size: 1.05rem; color: var(--brand); }
+		header .sub { color: var(--muted); font-size: 0.9rem; }
+		h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 8px; }
+		h2 { font-size: 1.2rem; margin: 0 0 6px; }
+		p { margin: 0 0 12px; }
+		.lead { color: var(--muted); font-size: 1.02rem; }
+		.card {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 22px;
+			margin-bottom: 18px;
+		}
+		.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+		.grid > div { background: var(--brand-bg); border-radius: 12px; padding: 14px; }
+		.grid h3 { font-size: 1rem; margin: 0 0 6px; }
+		.grid ul { margin: 0; padding-left: 18px; color: var(--text); font-size: 0.93rem; }
+		.secret {
+			display: inline-block;
+			font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+			font-size: 1.15rem;
+			font-weight: 700;
+			letter-spacing: 0.06em;
+			background: var(--code-bg);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 4px 10px;
+			word-break: break-all;
+		}
+		.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.92rem; word-break: break-all; }
+		.table-wrap { overflow-x: auto; margin: 12px 0 4px; }
+		table { width: 100%; border-collapse: collapse; font-size: 0.94rem; }
+		th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+		th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+		td.note { color: var(--muted); }
+		.button {
+			display: inline-block;
+			font-weight: 600;
+			padding: 10px 18px;
+			border-radius: 10px;
+			background: var(--brand);
+			color: var(--card);
+			text-decoration: none;
+			margin-top: 6px;
+		}
+		.safe { background: var(--ok-bg); border-color: var(--ok); }
+		.safe ul { margin: 0; padding-left: 20px; }
+		.safe li { margin-bottom: 4px; }
+		footer { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 8px; }
+		@media (max-width: 720px) {
+			.grid { grid-template-columns: 1fr; }
+			.card { padding: 18px; }
+			h1 { font-size: 1.35rem; }
+			table.stack thead { display: none; }
+			table.stack tr { display: block; border-bottom: 1px solid var(--border); padding: 8px 0; }
+			table.stack td { display: block; border: 0; padding: 2px 0; }
+		}
+	</style>
+</head>
+<body>
+	<div class="strip" role="note">
+		<strong>{{ banner.en | e }}</strong>
+		<span lang="ta">{{ banner.ta | e }}</span>
+	</div>
+	<div class="wrap">
+		<header>
+			{% if institution.logo and not institution.logo.startswith("/private/") %}<img src="{{ institution.logo | e }}" alt="">{% endif %}
+			<div>
+				<div class="name">{{ (institution.institution_name or "Hostel360") | e }}</div>
+				<div class="sub">{{ _("HyFib Hostel360 · demonstration site") }}</div>
+			</div>
+		</header>
+
+		<main>
+			<section class="card">
+				<h1>{{ _("Try Hostel360 the way the hostel will use it") }}</h1>
+				<p class="lead">{{ _("This site runs the complete Hostel360 system with {0} hostels and {1} students, their parents and every staff role. All of it is invented: no real student, parent or employee appears here. Change anything you like; the whole site is put back as it was every night.").format(hostel_count, student_count) }}</p>
+				<p lang="ta">இது HyFib Hostel360 மென்பொருளின் செயல்விளக்கத் தளம். இங்குள்ள மாணவர், பெற்றோர், பணியாளர், கட்டண விவரங்கள் அனைத்தும் கற்பனையானவை. எந்த SMS, WhatsApp, மின்னஞ்சலும் அனுப்பப்படாது; இணைய வழிக் கட்டணமும் இயங்காது. ஒவ்வொரு இரவும் தரவுகள் மீண்டும் முதல் நிலைக்கு அமைக்கப்படும்.</p>
+				<div class="grid">
+					<div>
+						<h3>{{ _("Students") }}</h3>
+						<ul>
+							<li>{{ _("Dues, receipts and the fee structure") }}</li>
+							<li>{{ _("Today's mess menu and mess bills") }}</li>
+							<li>{{ _("Home visit leave and mess reduction") }}</li>
+							<li>{{ _("Grievances, feedback, bonafide certificates") }}</li>
+						</ul>
+					</div>
+					<div>
+						<h3>{{ _("Parents") }}</h3>
+						<ul>
+							<li>{{ _("Approve or reject a ward's leave") }}</li>
+							<li>{{ _("Dues and receipts of each ward") }}</li>
+							<li>{{ _("Switch between two wards") }}</li>
+						</ul>
+					</div>
+					<div>
+						<h3>{{ _("Staff desk") }}</h3>
+						<ul>
+							<li>{{ _("Approvals inbox, gate pass, room board") }}</li>
+							<li>{{ _("Fee collection, mess stock and monthly billing") }}</li>
+							<li>{{ _("Reports, dashboards and operations monitoring") }}</li>
+						</ul>
+					</div>
+				</div>
+			</section>
+
+			<section class="card" aria-labelledby="portal-heading">
+				<h2 id="portal-heading">{{ _("Student and parent portal") }}</h2>
+				<p>{{ _("Students and parents sign in with their mobile number and a one-time code. On this site no code is sent: enter the demonstration code below for any of these numbers.") }}</p>
+				<p>{{ _("Demonstration code") }}: <span class="secret">{{ otp | e }}</span></p>
+				{% if students or parents %}
+				<div class="table-wrap">
+					<table class="stack">
+						<thead><tr><th>{{ _("Name") }}</th><th>{{ _("Signs in as") }}</th><th>{{ _("Mobile number") }}</th></tr></thead>
+						<tbody>
+							{% for row in students + parents %}
+							<tr>
+								<td>{{ row.name | e }}</td>
+								<td class="note">{{ row.role | e }}</td>
+								<td class="mono">{{ row.mobile | e }}</td>
+							</tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+				{% endif %}
+				<a class="button" href="{{ portal_sign_in }}">{{ _("Open the portal") }}</a>
+			</section>
+
+			<section class="card" aria-labelledby="desk-heading">
+				<h2 id="desk-heading">{{ _("Staff desk") }}</h2>
+				<p>{{ _("Each hostel role has its own account and sees only what that role may see. Two-factor sign-in, which the live system requires for every staff account, is switched off here so that anyone can try it.") }}</p>
+				{% if password %}
+				<p>{{ _("Password for every staff account") }}: <span class="secret">{{ password | e }}</span></p>
+				{% endif %}
+				{% if staff %}
+				<div class="table-wrap">
+					<table class="stack">
+						<thead><tr><th>{{ _("Role") }}</th><th>{{ _("Name") }}</th><th>{{ _("Login") }}</th><th>{{ _("Looks after") }}</th></tr></thead>
+						<tbody>
+							{% for row in staff %}
+							<tr>
+								<td>{{ row.role | e }}</td>
+								<td>{{ row.name | e }}</td>
+								<td class="mono">{{ row.user | e }}</td>
+								<td class="note">{{ (row.note or "") | e }}</td>
+							</tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+				{% endif %}
+				<a class="button" href="{{ desk_sign_in }}">{{ _("Sign in to the desk") }}</a>
+			</section>
+
+			<section class="card safe" aria-labelledby="safe-heading">
+				<h2 id="safe-heading">{{ _("Nothing leaves this site") }}</h2>
+				<ul>
+					<li>{{ _("No SMS, WhatsApp message or e-mail is ever sent. Messages are still logged, marked as not sent.") }}</li>
+					<li>{{ _("Payment gateways are never contacted. Online payment is switched off; the office records payments at the counter.") }}</li>
+					<li>{{ _("The demonstration accounts cannot be changed: their passwords, e-mail addresses and roles stay as published.") }}</li>
+					<li>{{ _("Everything is restored every night, so changes made today are gone tomorrow.") }}</li>
+					<li>{{ _("Please do not enter real personal details: anyone with the link can see this site.") }}</li>
+				</ul>
+			</section>
+		</main>
+
+		<footer>{{ _("HyFib Hostel360 by HyFib Solutions Private Limited") }}</footer>
+	</div>
+</body>
+</html>

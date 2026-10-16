@@ -1,6 +1,6 @@
 # HyFib Hostel360 — Solution Design
 
-Document: HYFIB/H360/SDS/1.2 · Tender ref. ACGCET/4903/B1/2026 · Owner: HyFib Solutions Private Limited
+Document: HYFIB/H360/SDS/1.3 · Tender ref. ACGCET/4903/B1/2026 · Owner: HyFib Solutions Private Limited
 
 This is the authoritative design for HyFib Hostel360 as delivered to ACGCET Hostels. It
 fixes the data model, roles, workflows, service interfaces and portal API that every
@@ -8,7 +8,8 @@ module is built against. Field names, DocType names, status values and function
 signatures written here are contracts: change them only by changing this document.
 
 Revision 1.1 brought the document in line with the delivered implementation; revision 1.2
-adds sign-in codes by e-mail (see §11 for the change lists). Companion documents:
+adds sign-in codes by e-mail; revision 1.3 gives every desk role its own home and dock (see
+§11 for the change lists). Companion documents:
 [ARCHITECTURE.md](ARCHITECTURE.md), [API.md](API.md), [SECURITY.md](SECURITY.md),
 [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md) and [COMPLIANCE-MATRIX.md](COMPLIANCE-MATRIX.md).
 
@@ -55,8 +56,10 @@ hostel360/                           Python package
   hostel_communication/              module "Hostel Communication" (providers/ holds SMS, WhatsApp, e-mail)
   hostel_operations/                 module "Hostel Operations"
   hostel_migration/                  module "Hostel Migration": legacy data migration + exit export (TR 5, TR 22)
+  hostel_gate/                       module "Hostel Gate": the Gate workspace of security staff
   commands/                          bench commands (see below)
   www/hostel.html                    SPA entry (written by the frontend build)
+  www/staff.py                       /staff: sends each desk user on to their home workspace
   www/verify-certificate.html        public bonafide certificate verification
   locale/                            translation catalogue (main.pot, ta.po)
 frontend/                            Vue 3 SPA source
@@ -102,6 +105,27 @@ reports), `GRIEVANCE_HANDLER_ROLES = STAFF_ROLES − {Institution Auditor}` (aud
 they are never assigned grievances), `APPROVER_ROLES`, `ADMIN_ROLES`, `PORTAL_ROLES`.
 Two-factor authentication is also forced on for Frappe's own System Manager and
 Administrator roles (`TWO_FACTOR_CORE_ROLES`).
+
+### Desk homes and areas
+
+Each desk role sees the workspaces of the work it does, and nothing else is offered on its
+desk. A workspace's roles decide who may open it; the Hostel360 dock shows an area only to
+the people who may open its workspace (`setup.landing.filter_dock`), so read access granted
+for one job (a mess manager reading fee invoices for mess billing) does not put another
+area's menu in front of them. Records stay reachable through links and search as the
+permission matrix below allows. Hostel360 opens at `/staff`, which sends each person to their
+home: the first workspace of `LANDING_WORKSPACES` they may open (`setup.landing`).
+
+| Role | Home | Other areas on the dock |
+|---|---|---|
+| Hostel Administrator | Hostel Admin | People and Rooms, Fees, Mess, Student Services, Gate, HyFib Operations, Messaging, Data Migration |
+| Hostel Warden, Deputy Warden | Hostel Admin | People and Rooms, Fees, Mess, Student Services |
+| Hostel Office Staff | Hostel Admin | People and Rooms, Fees, Student Services, Messaging |
+| Mess Manager | Mess | Student Services |
+| Mess Staff | Mess | – |
+| Hostel Security | Gate (gate pass, leave out now) | – |
+| Institution Auditor | Hostel Admin | People and Rooms, Fees, Mess, Student Services, HyFib Operations, Messaging, Data Migration |
+| HyFib Operations | HyFib Operations | Messaging, Data Migration |
 
 ### Hostel and block scoping
 
@@ -913,4 +937,5 @@ with the regression checks in `deploy/tests/`; application behaviour with the se
 |---|---|---|
 | 1.0 | 2026-10-15 | First issue. |
 | 1.1 | 2026-10-15 | Aligned with the delivered implementation: Hostel Security role and gate-pass page; block scoping, guardian scoping and the row-level permission hooks; `last_hostel`; validation-before-sign-in rule; PayU gateway, test payers and the extended gateway contract; new fee, mess, student-services and operations fields; Security Incident, Ops Ingest Receipt, Exit Export Log, Migration Run/Entity/Record Map (with `source_system`); Message Log permlevels; Tamil templates and new events (`leave_checked_out`, `leave_returned`, `bonafide_requested`); new portal endpoints and response fields; `ops.ingest` status codes and `message_id`; the `alerts` queue; upload limits 5 MB portal / 10 MB staff; bench commands; revised hooks table. |
+| 1.3 | 2026-10-16 | Desk homes and areas per role (§3): `/staff` landing, Hostel Admin workspace limited to the roles that run the hostel, Gate workspace and module "Hostel Gate" for Hostel Security, dock narrowed to each role's areas, Hostel Security on the apps screen. |
 | 1.2 | 2026-10-16 | Sign-in codes by e-mail (clause 3.2): Messaging Settings `otp_email_enabled`; `send_otp` channel "email" with the e-mail rules in §6; Message Templates `otp_login-Email` and `otp_login-Email-ta`; `dispatch.send_otp_email`; boot `otp_email`. |

@@ -58,6 +58,8 @@ export interface PortalSettings {
 	/** The site's time zone; leave and mess dates are wall-clock times in it. */
 	time_zone?: string;
 	upload?: UploadRules;
+	/** A demonstration site: every record is fictitious and nothing is sent or charged. */
+	demo?: boolean;
 }
 
 export interface PortalSession {
@@ -231,6 +233,8 @@ export interface FeesSummary {
 	payment_enabled?: boolean;
 	/** Online payment uses the gateway's test credentials: no real money is taken. */
 	payment_test_mode?: boolean;
+	/** Why online payment is off, when the server says so (a demonstration site). */
+	payment_note?: string;
 }
 
 export interface CheckoutOptions {

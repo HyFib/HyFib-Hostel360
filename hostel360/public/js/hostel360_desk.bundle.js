@@ -132,5 +132,55 @@ frappe.provide("hostel360");
 			if (digits.length < 4) return "x".repeat(digits.length);
 			return digits.slice(0, 2) + "x".repeat(digits.length - 4) + digits.slice(-2);
 		},
+
+		/** True on a demonstration site (`frappe.boot.hostel360.demo`, set from site_config only). */
+		is_demo_site() {
+			return Boolean(frappe.boot?.hostel360?.demo);
+		},
 	});
+
+	// Demonstration site ------------------------------------------------------------------
+	// A strip on every desk page, in English and Tamil, that cannot be dismissed: anyone looking
+	// at the screen must be able to tell that the records are fictitious.
+	const DEMO_TEXT = {
+		en: "Demonstration site — all data is fictitious",
+		ta: "இது செயல்விளக்கத் தளம் — இங்குள்ள தகவல்கள் அனைத்தும் கற்பனையானவை",
+		link: "About this demo · விவரம்",
+	};
+
+	function show_demo_banner() {
+		if (!hostel360.is_demo_site() || document.querySelector(".h360-demo-banner")) return;
+		const strip = document.createElement("div");
+		strip.className = "h360-demo-banner";
+		strip.setAttribute("role", "note");
+		for (const [text, lang] of [
+			[DEMO_TEXT.en, "en"],
+			[DEMO_TEXT.ta, "ta"],
+		]) {
+			const part = document.createElement("span");
+			part.lang = lang;
+			part.textContent = text;
+			strip.append(part);
+		}
+		const link = document.createElement("a");
+		link.href = frappe.boot.hostel360.demo.info_url || "/demo";
+		link.textContent = DEMO_TEXT.link;
+		strip.append(link);
+		document.body.append(strip);
+		document.body.classList.add("h360-demo");
+	}
+
+	$(show_demo_banner);
+
+	// Online payment is never offered on a demonstration site; say so where it is configured
+	// and checked, so nobody mistakes it for a fault.
+	const DEMO_PAYMENT_NOTE = () =>
+		__("Online payment is switched off on this demonstration site; the office records payments.");
+	for (const doctype of ["Hostel Payment Settings", "Hostel Payment Transaction", "Hostel Fee Invoice"]) {
+		frappe.ui.form.on(doctype, {
+			refresh(frm) {
+				if (hostel360.is_demo_site()) frm.set_intro(DEMO_PAYMENT_NOTE(), "orange");
+			},
+		});
+	}
 })();

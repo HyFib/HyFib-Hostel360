@@ -45,6 +45,13 @@ Development shortcut: with ``developer_mode`` on, ``"hostel360_fixed_otp": "1234
 site_config.json makes every code that value, so testers can sign in without an SMS
 gateway. The setting is ignored whenever developer mode is off, so a key left behind in
 a production site_config cannot weaken it.
+
+Demonstration sites (``hostel360.demo``) work the same way with the published demo code,
+and only while ``hostel360_demo_mode`` is on. The code still signs in only numbers that
+belong to records on the site, every limit above still applies, and the providers send
+nothing. Because the code is the same for every visitor, a visitor may enter it without
+asking for a code first: several people trying the same demo account at once would
+otherwise wait on each other's resend cooldown.
 """
 
 import hashlib
@@ -199,11 +206,29 @@ def code_digest(mobile: str, code: str) -> str:
 
 
 def fixed_code() -> str | None:
-	"""The development sign-in code; None unless developer mode is on (see module docstring)."""
+	"""The published demo code on a demonstration site, the development code with developer
+	mode on, otherwise None (see module docstring)."""
+	from hostel360.demo import demo_otp, is_demo_site
+
+	if is_demo_site():
+		return demo_otp()
 	if not cint(frappe.conf.get("developer_mode")):
 		return None
 	value = cstr(frappe.conf.get("hostel360_fixed_otp")).strip()
 	return value if value.isdigit() and 4 <= len(value) <= 8 else None
+
+
+def _demo_code_state(mobile: str, expiry: int) -> dict | None:
+	"""On a demonstration site, the demo code is live for every number on record.
+
+	Only numbers that belong to a portal record get it; any other number has nothing to
+	guess against, exactly as on a production site.
+	"""
+	from hostel360.demo import is_demo_site
+
+	if not is_demo_site() or not resolve_identities(mobile):
+		return None
+	return {"d": code_digest(mobile, fixed_code()), "e": _now() + expiry, "c": ""}
 
 
 def generate_code(length: int) -> str:
@@ -630,7 +655,7 @@ def verify_code(mobile: str, code: str, kind: str | None = None, ip: str | None 
 	if limit_ip and _count(f"ipfail:{ip_ref(ip)}") >= FAILED_VERIFICATIONS_PER_IP_PER_HOUR:
 		_refuse_network(mobile, ip)
 
-	state = _load_code(ref)
+	state = _load_code(ref) or _demo_code_state(mobile, policy.expiry)
 	if not state:
 		# Nothing to guess against: count it for the network, not against the number, or
 		# anyone could keep a resident locked out without a single code being sent.

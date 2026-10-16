@@ -5,7 +5,10 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 
+from hostel360.hostel_setup.workspace.test_hostel360_desk import make_user
+from hostel360.setup.roles import MESS_MANAGER_ROLE, SECURITY_ROLE
 from hostel360.student_services.number_card.students_on_leave_now.students_on_leave_now import (
+	card_route,
 	get_students_on_leave,
 	is_away,
 )
@@ -65,6 +68,13 @@ class TestStudentsOnLeaveNow(IntegrationTestCase):
 		card = get_students_on_leave()
 		self.assertEqual(card["value"], len({row["student"] for row in rows}))
 		self.assertEqual(card["route"], ["query-report", "Students On Leave"])
+
+	def test_card_opens_what_the_reader_may_open(self):
+		# Gate security and the mess manager read leave records but have no leave reports.
+		frappe.set_user(make_user([SECURITY_ROLE]))
+		self.assertEqual(card_route(), ["gate-pass"])
+		frappe.set_user(make_user([MESS_MANAGER_ROLE]))
+		self.assertEqual(card_route(), ["List", "Home Visit Leave"])
 
 	def test_guest_is_refused(self):
 		frappe.set_user("Guest")

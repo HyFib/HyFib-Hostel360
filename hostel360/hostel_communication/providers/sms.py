@@ -25,6 +25,7 @@ from frappe.utils import cint, cstr
 
 from hostel360.hostel_communication.providers.base import (
 	DeliveryResult,
+	demo_mode_result,
 	get_secret,
 	get_settings,
 	get_timeout,
@@ -64,6 +65,8 @@ def send_sms(
 	provider = settings.get("sms_provider") or MSG91
 	timeout = timeout or get_timeout(settings)
 
+	if muted := demo_mode_result(provider):
+		return muted
 	if not cint(settings.get("sms_enabled")):
 		return DeliveryResult.skip(provider, "SMS is not enabled in Messaging Settings.")
 	if not mobile:

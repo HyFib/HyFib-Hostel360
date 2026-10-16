@@ -5,7 +5,7 @@
    "label": "Mess Daily Rate per Month"
   }
  ],
- "content": "[{\"id\":\"636fd3b3d1\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Pending Reductions\",\"col\":4}},{\"id\":\"a6c11236eb\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Indents Pending Approval\",\"col\":4}},{\"id\":\"19aaf3dbff\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Unbilled Mess Extras\",\"col\":4}},{\"id\":\"37d4d85e09\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Mess Daily Rate per Month\",\"col\":12}},{\"id\":\"595f7e41cc\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick access</b></span>\",\"col\":12}},{\"id\":\"b6e33bf1a7\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Entry\",\"col\":4}},{\"id\":\"1498a544ed\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Menu\",\"col\":4}},{\"id\":\"9dd75727d1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Reductions\",\"col\":4}},{\"id\":\"bf9896b7c4\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Records and reports</b></span>\",\"col\":12}},{\"id\":\"c31b178c68\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"cbc858198b\",\"type\":\"card\",\"data\":{\"card_name\":\"Menu and Students\",\"col\":4}},{\"id\":\"2765e10317\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing\",\"col\":4}},{\"id\":\"dfd169a177\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}},{\"id\":\"84fb629012\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "content": "[{\"id\":\"636fd3b3d1\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Pending Reductions\",\"col\":4}},{\"id\":\"a6c11236eb\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Indents Pending Approval\",\"col\":4}},{\"id\":\"19aaf3dbff\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Unbilled Mess Extras\",\"col\":4}},{\"id\":\"37d4d85e09\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Mess Daily Rate per Month\",\"col\":12}},{\"id\":\"595f7e41cc\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick access</b></span>\",\"col\":12}},{\"id\":\"b6e33bf1a7\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Entry\",\"col\":3}},{\"id\":\"1498a544ed\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Menu\",\"col\":3}},{\"id\":\"9dd75727d1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Reductions\",\"col\":3}},{\"id\":\"f6a0c3d9b2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Get Support\",\"col\":3}},{\"id\":\"bf9896b7c4\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Records and reports</b></span>\",\"col\":12}},{\"id\":\"c31b178c68\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"cbc858198b\",\"type\":\"card\",\"data\":{\"card_name\":\"Menu and Students\",\"col\":4}},{\"id\":\"2765e10317\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing\",\"col\":4}},{\"id\":\"dfd169a177\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}},{\"id\":\"84fb629012\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
  "creation": "2026-10-15 18:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -259,7 +259,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-10-15 19:00:00.000000",
+ "modified": "2026-10-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hostel Mess",
  "name": "Mess",
@@ -332,6 +332,15 @@
    "label": "Reductions",
    "link_to": "Mess Reduction Application",
    "stats_filter": "[[\"Mess Reduction Application\", \"status\", \"=\", \"Pending\"]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "New",
+   "format": "",
+   "label": "Get Support",
+   "link_to": "Support Ticket",
+   "stats_filter": "[]",
    "type": "DocType"
   }
  ],

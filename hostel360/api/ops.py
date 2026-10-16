@@ -392,6 +392,11 @@ def oci_notification() -> dict:
 def confirm_oci_subscription(url: str) -> bool:
 	import requests
 
+	from hostel360.demo import is_demo_site
+
+	if is_demo_site():
+		# Nothing leaves a demonstration site.
+		return False
 	parsed = urlparse(str(url))
 	host = (parsed.hostname or "").lower()
 	# Only ever call back to Oracle: the URL arrives in an unauthenticated-looking request

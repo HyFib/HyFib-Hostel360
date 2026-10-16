@@ -3,8 +3,12 @@
 ``generate`` builds a realistic, self-consistent data set: two boys' hostels and one
 girls' hostel with blocks, floors, rooms and beds; students with guardians and Tamil
 names from the southern districts; allotments; this year's fee structure with invoices
-and a mix of paid, part-paid and unpaid dues; mess items, stock, a published weekly menu;
-and a few leaves, grievances and bonafide requests.
+and a mix of paid, part-paid and unpaid dues; mess items, last month's and this month's
+stock and expenses, menus for last, this and next week, approved and pending mess
+reductions and last month's published mess bills; leaves in every state (some of them
+today), grievances (one escalated), bonafide requests pending and issued, monthly
+feedback; and for the operations side support tickets, an alert history, monitoring
+samples, backup records and last month's performance report.
 
 The output depends only on ``seed`` and ``students``. Running it again adds nothing that
 already exists (records are recognised by their natural keys or through Migration Record
@@ -21,7 +25,7 @@ import random
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, cint, flt, get_datetime, getdate, now_datetime, nowdate
+from frappe.utils import add_days, add_months, cint, flt, get_datetime, getdate, now_datetime, nowdate
 
 from hostel360.hostel_migration.doctype.migration_record_map.migration_record_map import make_map_key
 from hostel360.hostel_migration.engine import MAP_DOCTYPE
@@ -344,6 +348,30 @@ GRIEVANCES = (
 		"Closed",
 		"Housekeeping roster revised.",
 	),
+	(
+		"Security",
+		"Gate left open after 10 pm",
+		"The side gate near the cycle stand was found open after 10 pm on two nights this week.",
+		"High",
+		"Escalated",
+		None,
+	),
+	(
+		"Room and Furniture",
+		"Cupboard lock broken again",
+		"The cupboard lock that was replaced last week is broken again.",
+		"Medium",
+		"Reopened",
+		None,
+	),
+	(
+		"Mess and Food",
+		"Breakfast served late on Monday",
+		"Breakfast was served only at 8:20 on Monday, so students with 8:30 classes missed it.",
+		"Medium",
+		"In Progress",
+		None,
+	),
 )
 LEAVE_REASONS = (
 	("Pongal holidays with family", "Home"),
@@ -352,6 +380,146 @@ LEAVE_REASONS = (
 	("Medical check-up", "Madurai"),
 	("Inter-college sports meet", "Tiruchirappalli"),
 )
+MESSES = (("Boys Mess", ("BH1", "BH2"), 0.65), ("Girls Mess", ("GH1",), 0.35))
+REDUCTION_REASONS = (
+	("Home Visit", "Going home for the temple festival."),
+	("Medical", "Advised rest at home after fever."),
+	("Internship", "Industrial visit and in-plant training at Tiruchirappalli."),
+	("Sports or Cultural Event", "Representing the college at the zonal sports meet."),
+)
+FEEDBACK_COMMENTS = (
+	"Breakfast is good. Please serve the sambar hot at dinner.",
+	"Rooms are cleaned regularly. Wi-Fi is slow after 9 pm.",
+	"Sunday special lunch was very good.",
+	"Please add one more fruit day in the week.",
+	"Water cooler on the second floor needs servicing.",
+	"Staff are polite and quick to help.",
+	"",
+)
+# key, title, severity, category, source, days ago, minutes open, occurrences, outage, description
+ALERT_HISTORY = (
+	(
+		"uptime.portal.unreachable",
+		"Portal did not answer the uptime probe",
+		"Critical",
+		"Availability",
+		"Uptime Probe",
+		23,
+		7,
+		3,
+		1,
+		"The probe could not reach https://hostel360 for 7 minutes while the application was restarted after an update.",
+	),
+	(
+		"messaging-msg91-failing",
+		"MSG91 messages are failing",
+		"Warning",
+		"Messaging",
+		"App",
+		17,
+		42,
+		6,
+		0,
+		"The SMS gateway answered with HTTP 503 for six messages in a row; it recovered on its own.",
+	),
+	(
+		"payments.reconciliation.unreachable",
+		"Payment gateway could not be reached for reconciliation",
+		"Warning",
+		"Payments",
+		"App",
+		12,
+		25,
+		2,
+		0,
+		"Two reconciliation runs could not reach the gateway; the next run settled every open payment.",
+	),
+	(
+		"waf.blocks.spike",
+		"Spike in requests blocked at the firewall",
+		"Info",
+		"Security",
+		"Host Agent",
+		9,
+		18,
+		1,
+		0,
+		"An automated scanner was blocked 320 times in 15 minutes and then banned for an hour.",
+	),
+	(
+		"backup.daily.failed",
+		"Daily backup failed on hostel360-app",
+		"Critical",
+		"Backup",
+		"Host Agent",
+		6,
+		95,
+		1,
+		0,
+		"Object storage did not answer within 90 seconds. The backup was run again and succeeded.",
+	),
+	(
+		"health.queue.backlog",
+		"Background job backlog above 500",
+		"Warning",
+		"Jobs",
+		"Health Check",
+		3,
+		12,
+		4,
+		0,
+		"Fee reminders for all students were queued at once; the workers cleared them in 12 minutes.",
+	),
+)
+# subject, category, priority, status, hours ago, description, resolution
+TICKETS = (
+	(
+		"Parent cannot sign in to the portal",
+		"Access or Login",
+		"High",
+		"Resolved",
+		26 * 24,
+		"A parent says the sign-in code does not arrive on her phone.",
+		"The number on the guardian record had a typing mistake. Corrected; the parent signed in.",
+	),
+	(
+		"Receipt shows the wrong academic year",
+		"Bug",
+		"Medium",
+		"Closed",
+		15 * 24,
+		"Receipts printed this morning show last year's academic year in the header.",
+		"Hostel Settings pointed at last year's academic year. Changed and the receipts reprinted.",
+	),
+	(
+		"Correct a student's room after transfer",
+		"Data Correction",
+		"Medium",
+		"In Progress",
+		30,
+		"A student was moved from room A102 to A205 but the old room still shows on the portal.",
+		None,
+	),
+	(
+		"Add a new fee head for the hostel day celebration",
+		"Change Request",
+		"Low",
+		"Waiting on Institution",
+		50,
+		"The office wants a separate fee head for the hostel day contribution.",
+		None,
+	),
+	(
+		"How do we publish the mess bill for a partial month?",
+		"How To",
+		"Low",
+		"Open",
+		2,
+		"The girls' mess was closed for five days. How should the bill run be done?",
+		None,
+	),
+)
+DEMO_HOST = "hostel360-app"
 
 
 class DemoDataError(frappe.ValidationError):
@@ -371,6 +539,8 @@ class DemoDataBuilder:
 		self.academic_year = None
 		self.year_start = None
 		self.used_mobiles: set[str] = set()
+		# Monthly provisions in STOCK_RECEIPT feed about sixty residents.
+		self.scale = max(1.0, students / 60)
 
 	# ---------------------------------------------------------------- utilities
 
@@ -430,7 +600,10 @@ class DemoDataBuilder:
 	# ---------------------------------------------------------------- run
 
 	def check_messaging(self) -> None:
-		if not frappe.db.exists("DocType", "Messaging Settings"):
+		from hostel360.demo import is_demo_site
+
+		if is_demo_site() or not frappe.db.exists("DocType", "Messaging Settings"):
+			# A demonstration site sends nothing at all, whatever Messaging Settings say.
 			return
 		settings = frappe.get_cached_doc("Messaging Settings")
 		live = (cint(settings.get("sms_enabled")) or cint(settings.get("whatsapp_enabled"))) and not cint(
@@ -443,21 +616,27 @@ class DemoDataBuilder:
 				)
 			)
 
-	def run(self) -> dict:
+	def run(self, steps=None) -> dict:
 		self.check_messaging()
 		previous = (frappe.flags.hostel360_migration, frappe.flags.mute_emails, frappe.session.user)
 		frappe.flags.hostel360_migration = True
 		frappe.flags.mute_emails = True
 		frappe.set_user("Administrator")
 		try:
-			for step in (
+			for step in steps or (
 				self.setup_masters,
 				self.setup_hostels,
 				self.create_students,
 				self.allot_rooms,
 				self.create_fees,
 				self.setup_mess,
+				self.create_menus,
 				self.create_services,
+				self.create_reductions,
+				self.create_bill_runs,
+				self.create_feedback,
+				self.create_indents,
+				self.create_operations,
 			):
 				step()
 				frappe.db.commit()  # nosemgrep
@@ -694,8 +873,14 @@ class DemoDataBuilder:
 				continue
 			hostels = [code for code, gender in gender_of_hostel.items() if gender == student.gender]
 			vacant = {"status": "Vacant", "is_active": 1, "current_allotment": ["is", "not set"]}
-			# Fill the emptiest hostel first so both boys' hostels are in use.
-			hostel = max(hostels, key=lambda h: (frappe.db.count("Hostel Bed", {**vacant, "hostel": h}), h))
+
+			def free_share(hostel: str, vacant=vacant) -> tuple:
+				beds = frappe.db.count("Hostel Bed", {"is_active": 1, "hostel": hostel}) or 1
+				return (frappe.db.count("Hostel Bed", {**vacant, "hostel": hostel}) / beds, hostel)
+
+			# Fill the hostel with the largest share of free beds first, so both boys' hostels fill
+			# up alike however many blocks each has.
+			hostel = max(hostels, key=free_share)
 			bed = frappe.db.get_value("Hostel Bed", {**vacant, "hostel": hostel}, "name", order_by="name asc")
 			if not bed:
 				self.errors.append(f"No vacant bed for {student.name}")
@@ -820,12 +1005,50 @@ class DemoDataBuilder:
 		)
 		self.bump("Hostel Payment")
 
+	# ---------------------------------------------------------------- calendar helpers
+
+	@property
+	def today(self) -> datetime.date:
+		return getdate(nowdate())
+
+	def month_start(self, months_back: int = 0) -> datetime.date:
+		return getdate(add_months(self.today.replace(day=1), -months_back))
+
+	def monday(self, weeks_ahead: int = 0) -> datetime.date:
+		return (
+			self.today - datetime.timedelta(days=self.today.weekday()) + datetime.timedelta(weeks=weeks_ahead)
+		)
+
+	def draw(self, *key) -> random.Random:
+		"""A generator of its own for one record, so the main sequence (students, fees) stays
+		the same however many of the later records already exist."""
+		return random.Random(":".join(str(part) for part in (self.seed, *key)))
+
+	def residents(self) -> list:
+		return frappe.get_all(
+			"Hostel Student",
+			filters={"register_number": ["like", "UAT%"], "current_allotment": ["is", "set"]},
+			fields=["name", "current_hostel", "current_room", "mobile_number", "gender"],
+			order_by="name asc",
+		)
+
+	def isolated(self, label: str, fn, *args, **kwargs):
+		"""Run a step that may commit on its own (billing, reports) outside any savepoint."""
+		try:
+			result = fn(*args, **kwargs)
+		except Exception as e:
+			frappe.db.rollback()
+			frappe.clear_messages()
+			self.errors.append(f"{label}: {frappe.utils.strip_html(str(e)) or e.__class__.__name__}")
+			return None
+		frappe.db.commit()  # nosemgrep
+		return result
+
 	# ---------------------------------------------------------------- mess
 
 	def setup_mess(self) -> None:
-		self.say(_("Mess, suppliers, stock and menu"))
-		messes = (("Boys Mess", ("BH1", "BH2"), 0.65), ("Girls Mess", ("GH1",), 0.35))
-		for name, hostels, _share in messes:
+		self.say(_("Mess, suppliers, stock and expenses"))
+		for name, hostels, _share in MESSES:
 			if not frappe.db.exists("Hostel Mess", name):
 				frappe.get_doc(
 					{
@@ -851,27 +1074,48 @@ class DemoDataBuilder:
 				).insert(ignore_permissions=True)
 				self.bump("Mess Supplier")
 
-		month_start = getdate(nowdate()).replace(day=1)
-		for name, _hostels, share in messes:
-			self.safely(f"Stock receipt {name}", self.stock_receipt, name, share, month_start)
-			for offset in range(1, 6):
-				day = add_days(nowdate(), -offset)
-				if getdate(day) < month_start:
-					break
-				self.safely(f"Stock issue {name} {day}", self.stock_issue, name, share, day)
-			self.safely(f"Menu {name}", self.weekly_menu, name)
+		this_month, last_month = self.month_start(0), self.month_start(1)
+		yesterday = getdate(add_days(self.today, -1))
+		periods = (
+			(last_month, getdate(add_days(this_month, -1)), True),
+			(this_month, yesterday, False),
+		)
+		for name, _hostels, share in MESSES:
+			for start, end, closed in periods:
+				if end < start:
+					# The 1st of the month: nothing has been received for it yet.
+					continue
+				self.safely(f"Stock receipt {name} {start}", self.stock_receipt, name, share, start)
+				day = getdate(add_days(start, 1))
+				while day <= end:
+					self.safely(f"Stock issue {name} {day}", self.stock_issue, name, share, day)
+					day = getdate(add_days(day, 1))
+				self.safely(
+					f"Mess expenses {name} {start}", self.mess_expenses, name, share, start, end, closed
+				)
+
+	def books_closed(self, mess: str, posting_date) -> bool:
+		billed_upto = frappe.db.get_value("Hostel Mess", mess, "billed_upto")
+		return bool(billed_upto) and getdate(posting_date) <= getdate(billed_upto)
+
+	def stock_exists(self, mess: str, entry_type: str, posting_date) -> bool:
+		return bool(
+			frappe.db.exists(
+				"Mess Stock Entry",
+				{"mess": mess, "entry_type": entry_type, "posting_date": posting_date, "docstatus": 1},
+			)
+		)
 
 	def stock_receipt(self, mess: str, share: float, posting_date) -> None:
-		key = f"{mess}:receipt:{posting_date}"
-		if self.demo_record("demo_stock", key):
+		# Looked up by date, not by a key: after a nightly reset the dates have moved.
+		if self.stock_exists(mess, "Receipt", posting_date) or self.books_closed(mess, posting_date):
 			return
 		by_supplier: dict[int, list] = {}
 		for item, qty, rate, supplier in STOCK_RECEIPT:
 			if frappe.db.exists("Mess Item", item):
 				by_supplier.setdefault(supplier, []).append(
-					{"item": item, "qty": max(round(qty * share), 1), "rate": rate}
+					{"item": item, "qty": max(round(qty * share * self.scale), 1), "rate": rate}
 				)
-		names = []
 		for supplier, items in sorted(by_supplier.items()):
 			doc = frappe.get_doc(
 				{
@@ -889,21 +1133,19 @@ class DemoDataBuilder:
 			)
 			doc.insert(ignore_permissions=True)
 			doc.submit()
-			names.append(doc.name)
 			self.bump("Mess Stock Entry")
-		if names:
-			self.remember("demo_stock", key, "Mess Stock Entry", names[0])
 
 	def stock_issue(self, mess: str, share: float, posting_date) -> None:
-		key = f"{mess}:issue:{posting_date}"
-		if self.demo_record("demo_stock", key):
+		if self.stock_exists(mess, "Issue", posting_date) or self.books_closed(mess, posting_date):
 			return
+		rng = self.draw("issue", mess, posting_date)
 		items = []
 		for item, qty, _rate, _supplier in STOCK_RECEIPT:
 			uom = frappe.db.get_value("Mess Item", item, "uom")
 			if not uom or item.startswith("LPG"):
 				continue
-			issue = qty * share * DAILY_ISSUE_SHARE
+			# Kitchens do not use exactly the same every day; a few per cent either way.
+			issue = qty * share * self.scale * DAILY_ISSUE_SHARE * rng.uniform(0.92, 1.05)
 			# Eggs and cylinders are issued in whole numbers; weights and volumes to 100 g / ml.
 			issue = round(issue) if uom in COUNTED_UOMS else round(issue, 1)
 			if issue > 0:
@@ -923,14 +1165,56 @@ class DemoDataBuilder:
 		)
 		doc.insert(ignore_permissions=True)
 		doc.submit()
-		self.remember("demo_stock", key, "Mess Stock Entry", doc.name)
 		self.bump("Mess Stock Entry")
 
-	def weekly_menu(self, mess: str) -> None:
-		today = getdate(nowdate())
-		monday = today - datetime.timedelta(days=today.weekday())
+	def mess_expenses(self, mess: str, share: float, start, end, closed: bool) -> None:
+		diners = max(round(self.count * share * 0.9), 1)
+		cooks = max(2, round(diners / 30))
+		rows = [
+			("Electricity", 9, round(1800 + diners * 35, -2), _("Kitchen and dining hall electricity")),
+			("Water", 14, round(800 + diners * 12, -2), _("Drinking water tanker and RO service")),
+			("Maintenance", 19, 2500, _("Grinder and boiler servicing")),
+		]
+		if closed:
+			# Wages are paid at the end of the month.
+			rows.append(("Wages", (getdate(end) - getdate(start)).days, cooks * 9500, _("Cooks and helpers")))
+		for expense_type, offset, amount, remarks in rows:
+			posting_date = getdate(add_days(start, offset))
+			if posting_date > getdate(end) or self.books_closed(mess, posting_date):
+				continue
+			if frappe.db.exists(
+				"Mess Expense",
+				{"mess": mess, "expense_type": expense_type, "posting_date": posting_date, "docstatus": 1},
+			):
+				continue
+			doc = frappe.get_doc(
+				{
+					"doctype": "Mess Expense",
+					"mess": mess,
+					"posting_date": posting_date,
+					"expense_type": expense_type,
+					"amount": amount,
+					"bill_no": f"{expense_type[:3].upper()}-{posting_date.strftime('%y%m')}",
+					"remarks": remarks,
+				}
+			)
+			doc.insert(ignore_permissions=True)
+			doc.submit()
+			self.bump("Mess Expense")
+
+	def create_menus(self) -> None:
+		"""Menus for last week, this week and next week, all published."""
+		self.say(_("Weekly menus"))
+		for name, _hostels, _share in MESSES:
+			for weeks in (-1, 0, 1):
+				self.safely(f"Menu {name} {weeks}", self.weekly_menu, name, self.monday(weeks))
+
+	def weekly_menu(self, mess: str, monday=None) -> None:
+		monday = getdate(monday) if monday else self.monday()
 		if frappe.db.exists("Mess Menu", {"mess": mess, "week_start_date": monday}):
 			return
+		# Weeks take turns in where the menu starts, so consecutive weeks do not look identical.
+		turn = monday.isocalendar()[1] % 7
 		rows = []
 		for day in range(7):
 			date = monday + datetime.timedelta(days=day)
@@ -939,7 +1223,7 @@ class DemoDataBuilder:
 					{
 						"menu_date": date,
 						"meal": meal,
-						"dishes": dishes[day],
+						"dishes": dishes[(day + turn) % 7] if day < 6 else dishes[6],
 						"is_special": int(day == 6 and meal in ("Lunch", "Dinner")),
 					}
 				)
@@ -956,17 +1240,135 @@ class DemoDataBuilder:
 		menu.publish()
 		self.bump("Mess Menu")
 
+	def create_reductions(self) -> None:
+		"""Approved reductions in last month (they lower those students' mess bills) and a few
+		waiting for approval next week."""
+		self.say(_("Mess reductions"))
+		residents = self.residents()
+		last_month = self.month_start(1)
+		for idx, student in enumerate(residents[3::9]):
+			rng = self.draw("reduction", student.name, last_month)
+			start = getdate(add_days(last_month, rng.randint(2, 20)))
+			end = getdate(add_days(start, rng.randint(3, 6)))
+			self.safely(
+				f"Reduction {student.name}",
+				self.reduction,
+				student.name,
+				start,
+				end,
+				"Approved",
+				REDUCTION_REASONS[idx % len(REDUCTION_REASONS)],
+			)
+		for idx, student in enumerate(residents[5::23][:3]):
+			start = getdate(add_days(self.today, 7 + idx))
+			self.safely(
+				f"Reduction {student.name} (pending)",
+				self.reduction,
+				student.name,
+				start,
+				getdate(add_days(start, 3)),
+				"Pending",
+				REDUCTION_REASONS[idx % len(REDUCTION_REASONS)],
+			)
+
+	def reduction(self, student: str, start, end, status: str, reason: tuple) -> None:
+		overlapping = frappe.db.exists(
+			"Mess Reduction Application",
+			{
+				"student": student,
+				"status": ["in", ["Pending", "Approved"]],
+				"from_date": ["<=", end],
+				"to_date": [">=", start],
+			},
+		)
+		if overlapping:
+			return
+		values = {
+			"doctype": "Mess Reduction Application",
+			"student": student,
+			"from_date": start,
+			"to_date": end,
+			"reason": reason[0],
+			"description": reason[1],
+			"status": status,
+			"applied_by": "Administrator",
+		}
+		if status == "Approved":
+			values.update(
+				approver="Administrator",
+				decided_on=get_datetime(add_days(start, -2)).replace(hour=11),
+				approval_remarks=_("Approved"),
+			)
+		frappe.get_doc(values).insert(ignore_permissions=True)
+		self.bump("Mess Reduction Application")
+
+	def create_bill_runs(self) -> None:
+		"""Last month's mess bills, computed and published like the mess office does."""
+		self.say(_("Mess bills for last month"))
+		start = self.month_start(1)
+		end = getdate(add_days(self.month_start(0), -1))
+		for name, _hostels, _share in MESSES:
+			self.isolated(f"Mess bill run {name} {start}", self.bill_run, name, start, end)
+
+	def bill_run(self, mess: str, start, end) -> None:
+		if frappe.db.exists("Mess Bill Run", {"mess": mess, "from_date": start, "docstatus": ["<", 2]}):
+			return
+		run = frappe.get_doc(
+			{"doctype": "Mess Bill Run", "mess": mess, "from_date": start, "to_date": end}
+		).insert(ignore_permissions=True)
+		# Computed and published here and now, never handed to a background worker.
+		run.flags.in_background_job = True
+		run.compute_bills()
+		run.reload()
+		if not cint(run.bills_count):
+			# Nobody ate at this mess last month (a very small data set): nothing to bill.
+			frappe.delete_doc("Mess Bill Run", run.name, ignore_permissions=True, force=True)
+			return
+		run.flags.in_background_job = True
+		run.flags.ignore_permissions = True
+		run.submit()
+		self.bump("Mess Bill Run")
+		self.bump("Mess Bill", cint(run.bills_count))
+
+	def create_indents(self) -> None:
+		self.say(_("Mess indents"))
+		for name, _hostels, share in MESSES:
+			self.safely(f"Indent {name}", self.indent, name, share)
+
+	def indent(self, mess: str, share: float) -> None:
+		if frappe.db.exists("Mess Indent", {"mess": mess, "status": "Pending Approval"}):
+			return
+		items = []
+		for item, qty, rate, _supplier in STOCK_RECEIPT[:6]:
+			if frappe.db.exists("Mess Item", item):
+				items.append(
+					{
+						"item": item,
+						"required_qty": max(round(qty * share * self.scale / 2), 1),
+						"estimated_rate": rate,
+					}
+				)
+		if not items:
+			return
+		doc = frappe.get_doc(
+			{
+				"doctype": "Mess Indent",
+				"mess": mess,
+				"posting_date": self.today,
+				"required_by": getdate(add_days(self.today, 3)),
+				"items": items,
+				"remarks": _("Provisions for the second half of the month"),
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		doc.submit()
+		self.bump("Mess Indent")
+
 	# ---------------------------------------------------------------- services
 
 	def create_services(self) -> None:
 		self.say(_("Leaves, grievances and bonafide requests"))
-		residents = frappe.get_all(
-			"Hostel Student",
-			filters={"register_number": ["like", "UAT%"], "current_allotment": ["is", "set"]},
-			fields=["name", "current_hostel", "current_room", "mobile_number"],
-			order_by="name asc",
-			limit_page_length=0,
-		)
+		residents = self.residents()
 		if not residents:
 			return
 		now = now_datetime()
@@ -985,39 +1387,119 @@ class DemoDataBuilder:
 				start = now + datetime.timedelta(days=3 + idx)
 			start = start.replace(hour=16, minute=0, second=0, microsecond=0)
 			end = start + datetime.timedelta(days=2, hours=2)
-			guardian = frappe.db.get_value(
-				"Hostel Student Guardian", {"parent": student.name, "is_primary": 1}, "guardian"
+			self.safely(
+				f"Leave {source_id}",
+				self.leave,
+				source_id,
+				student,
+				kind,
+				start,
+				end,
+				reason,
+				destination,
 			)
-			values = {
-				"doctype": "Home Visit Leave",
-				"student": student.name,
-				"hostel": student.current_hostel,
-				"room": student.current_room,
-				"from_datetime": start,
-				"to_datetime": end,
-				"destination": destination,
-				"reason": reason,
-				"contact_during_leave": student.mobile_number,
-				"applied_by": "Student",
-				"parent_guardian": guardian,
-				"status": kind,
-				"parent_approval_status": "Pending" if kind == "Pending Parent Approval" else "Approved",
-				"warden_approval_status": "Approved" if kind in ("Returned", "Approved") else "Pending",
-			}
-			if kind == "Returned":
-				values.update(checked_out_on=start, returned_on=end - datetime.timedelta(hours=1))
-			if kind in ("Returned", "Approved"):
-				values.update(
-					warden_user="Administrator", warden_action_on=start - datetime.timedelta(days=1)
-				)
 
-			def leave(values=values, source_id=source_id):
-				doc = frappe.get_doc(values).insert(ignore_permissions=True)
-				self.remember("demo_leaves", source_id, "Home Visit Leave", doc.name)
-				self.bump("Home Visit Leave")
+		self.todays_leaves(residents, now)
+		self.create_grievances(residents, now)
+		self.create_bonafide(residents)
 
-			self.safely(f"Leave {source_id}", leave)
+	def leave(self, source_id, student, kind, start, end, reason, destination, **extra) -> str:
+		guardian = frappe.db.get_value(
+			"Hostel Student Guardian", {"parent": student.name, "is_primary": 1}, "guardian"
+		)
+		values = {
+			"doctype": "Home Visit Leave",
+			"student": student.name,
+			"hostel": student.current_hostel,
+			"room": student.current_room,
+			"from_datetime": start,
+			"to_datetime": end,
+			"destination": destination,
+			"reason": reason,
+			"contact_during_leave": student.mobile_number,
+			"applied_by": "Student",
+			"parent_guardian": guardian,
+			"status": kind,
+			"parent_approval_status": "Pending" if kind == "Pending Parent Approval" else "Approved",
+			"warden_approval_status": {
+				"Pending Parent Approval": "Pending",
+				"Pending Warden Approval": "Pending",
+				"Rejected": "Rejected",
+			}.get(kind, "Approved"),
+		}
+		if values["parent_approval_status"] == "Approved":
+			values["parent_action_on"] = start - datetime.timedelta(days=1, hours=3)
+		if kind in ("Returned", "Checked Out", "Overdue"):
+			values["checked_out_on"] = start + datetime.timedelta(minutes=20)
+		if kind == "Returned":
+			values["returned_on"] = end - datetime.timedelta(hours=1)
+		if kind == "Overdue":
+			values["overdue_since"] = end + datetime.timedelta(hours=2)
+		if kind not in ("Pending Parent Approval", "Pending Warden Approval"):
+			values.update(warden_user="Administrator", warden_action_on=start - datetime.timedelta(hours=20))
+		if kind == "Rejected":
+			values["warden_remarks"] = _("Internal assessment on that day; please apply for the weekend.")
+		if kind == "Cancelled":
+			values["cancelled_by"] = "Administrator"
+		values.update(extra)
+		doc = frappe.get_doc(values).insert(ignore_permissions=True)
+		self.remember("demo_leaves", source_id, "Home Visit Leave", doc.name)
+		self.bump("Home Visit Leave")
+		return doc.name
 
+	def todays_leaves(self, residents: list, now) -> None:
+		"""Leaves in every state, dated around today: two waiting for approval, one due to leave
+		at the gate, students away now (one of them late back), one rejected and one cancelled."""
+		# kind, starts (hours from now), lasts (hours), reason
+		plan = (
+			("Pending Parent Approval", 3, 50, LEAVE_REASONS[2]),
+			("Pending Warden Approval", 4, 52, LEAVE_REASONS[0]),
+			("Approved", 1, 30, LEAVE_REASONS[1]),
+			("Checked Out", -26, 72, LEAVE_REASONS[2]),
+			("Overdue", -98, 72, LEAVE_REASONS[1]),
+			("Rejected", -140, 48, LEAVE_REASONS[4]),
+			("Cancelled", 120, 48, LEAVE_REASONS[3]),
+		)
+		busy = set(
+			frappe.get_all(
+				"Home Visit Leave",
+				filters={"status": ["not in", ["Cancelled", "Rejected", "Returned"]]},
+				pluck="student",
+			)
+		)
+		for idx, (kind, starts_in, lasts, (reason, destination)) in enumerate(plan):
+			source_id = f"today:{kind}"
+			if self.demo_record("demo_leaves", source_id):
+				continue
+			student = next(
+				(
+					residents[(idx * 13 + 5 + step) % len(residents)]
+					for step in range(len(residents))
+					if residents[(idx * 13 + 5 + step) % len(residents)].name not in busy
+				),
+				None,
+			)
+			if not student:
+				return
+			start = now + datetime.timedelta(hours=starts_in)
+			if starts_in > 0 and start.date() != now.date() and kind != "Cancelled":
+				# Late in the evening: still today, so it shows among today's departures.
+				start = now + datetime.timedelta(minutes=30)
+			start = start.replace(second=0, microsecond=0)
+			busy.add(student.name)
+			self.safely(
+				f"Leave {source_id}",
+				self.leave,
+				source_id,
+				student,
+				kind,
+				start,
+				start + datetime.timedelta(hours=lasts),
+				reason,
+				destination,
+			)
+
+	def create_grievances(self, residents: list, now) -> None:
 		for idx, (category, subject, description, priority, status, resolution) in enumerate(GRIEVANCES):
 			student = residents[(idx * 5 + 2) % len(residents)]
 			source_id = f"{idx}"
@@ -1040,6 +1522,15 @@ class DemoDataBuilder:
 					resolved_by="Administrator",
 					resolved_on=now - datetime.timedelta(days=idx + 1),
 				)
+			if status == "Escalated":
+				values.update(
+					escalation_level=1,
+					escalated_on=now - datetime.timedelta(hours=20),
+					sla_due_by=now - datetime.timedelta(hours=22),
+					sla_breached=1,
+				)
+			if status == "Reopened":
+				values["reopen_count"] = 1
 
 			def grievance(values=values, source_id=source_id):
 				doc = frappe.get_doc(values).insert(ignore_permissions=True)
@@ -1048,13 +1539,22 @@ class DemoDataBuilder:
 
 			self.safely(f"Grievance {source_id}", grievance)
 
-		for idx, purpose in enumerate(("Bank Loan", "Scholarship", "Passport")):
+	def create_bonafide(self, residents: list) -> None:
+		# purpose, approve, hand over
+		plan = (
+			("Bank Loan", True, False),
+			("Scholarship", False, False),
+			("Passport", False, False),
+			("Internship", True, True),
+			("Address Proof", True, True),
+		)
+		for idx, (purpose, approve, issue) in enumerate(plan):
 			student = residents[(idx * 11 + 4) % len(residents)]
 			source_id = f"{idx}"
 			if self.demo_record("demo_bonafide", source_id):
 				continue
 
-			def bonafide(student=student, purpose=purpose, source_id=source_id, approve=idx == 0):
+			def bonafide(student=student, purpose=purpose, source_id=source_id, approve=approve, issue=issue):
 				doc = frappe.get_doc(
 					{
 						"doctype": "Bonafide Certificate Request",
@@ -1062,18 +1562,381 @@ class DemoDataBuilder:
 						"purpose": purpose,
 						"purpose_details": _("Education loan application")
 						if purpose == "Bank Loan"
+						else _("Summer internship at a Chennai firm")
+						if purpose == "Internship"
 						else None,
 						"status": "Pending",
 					}
 				).insert(ignore_permissions=True)
 				if approve:
 					doc.approve_by("Administrator")
+				if issue:
+					doc.mark_issued_by("Administrator")
 				self.remember("demo_bonafide", source_id, "Bonafide Certificate Request", doc.name)
 				self.bump("Bonafide Certificate Request")
 
 			self.safely(f"Bonafide {source_id}", bonafide)
 
+	def create_feedback(self) -> None:
+		"""Monthly feedback from about a third of the residents, last month and this month."""
+		self.say(_("Feedback"))
+		from hostel360.student_services.doctype.hostel_feedback.hostel_feedback import has_submitted
+		from hostel360.student_services.services import submit_feedback
+
+		residents = self.residents()
+		for months_back in (1, 0):
+			period = self.month_start(months_back).strftime("%Y-%m")
+			for idx, student in enumerate(residents[1::3]):
+				rng = self.draw("feedback", student.name, period)
+				feedback_type = "Mess" if idx % 3 else "Hostel"
+				if has_submitted(student.name, feedback_type, period):
+					continue
+				ratings = {
+					field: max(1, min(5, round(rng.gauss(mean, 0.9))))
+					for field, mean in (
+						("overall", 3.9),
+						("food_quality", 3.5),
+						("cleanliness", 3.8),
+						("staff_behaviour", 4.2),
+						("facilities", 3.6),
+					)
+				}
+				data = {
+					"feedback_type": feedback_type,
+					"period": period,
+					"comments": rng.choice(FEEDBACK_COMMENTS),
+					"is_anonymous": int(rng.random() < 0.2),
+					**ratings,
+				}
+				if self.safely(f"Feedback {student.name} {period}", submit_feedback, student.name, data):
+					self.bump("Hostel Feedback")
+
+	# ---------------------------------------------------------------- operations
+
+	def create_operations(self) -> None:
+		"""What HyFib operations and the institution's auditors look at: tickets, alert
+		history, monitoring samples, backups and last month's performance report."""
+		self.say(_("Support tickets, alerts, monitoring history and backups"))
+		self.alert_history()
+		self.support_tickets()
+		self.isolated("Monitoring samples", self.metric_samples)
+		self.isolated("Backup history", self.backup_history)
+		self.isolated("Monthly performance report", self.monthly_report)
+
+	def alert_history(self) -> None:
+		now = now_datetime()
+		for idx, (
+			key,
+			title,
+			severity,
+			category,
+			source,
+			days_ago,
+			minutes,
+			count,
+			outage,
+			text,
+		) in enumerate(ALERT_HISTORY):
+			source_id = f"{idx}"
+			if self.demo_record("demo_alerts", source_id):
+				continue
+			first_seen = self.alert_start(now, days_ago, idx)
+
+			def alert(
+				key=key,
+				title=title,
+				severity=severity,
+				category=category,
+				source=source,
+				minutes=minutes,
+				count=count,
+				outage=outage,
+				text=text,
+				first_seen=first_seen,
+				source_id=source_id,
+			):
+				resolved_on = first_seen + datetime.timedelta(minutes=minutes)
+				doc = frappe.get_doc(
+					{
+						"doctype": "Ops Alert",
+						"alert_key": key,
+						"title": title,
+						"severity": severity,
+						"category": category,
+						"source": source,
+						"status": "Resolved",
+						"description": text,
+						"first_seen": first_seen,
+						"last_seen": resolved_on - datetime.timedelta(minutes=1),
+						"occurrence_count": count,
+						"is_outage": outage,
+						"acknowledged_by": "Administrator" if severity == "Critical" else None,
+						"acknowledged_on": first_seen + datetime.timedelta(minutes=4)
+						if severity == "Critical"
+						else None,
+						"resolved_on": resolved_on,
+						"resolved_by": "Administrator",
+						"resolved_via": source if source in ("Health Check", "Host Agent") else "App",
+						"resolution_notes": _("Recovered."),
+						"escalation_level": 1,
+						"notified_levels": "1",
+					}
+				)
+				# History: nobody is paged for alerts that were resolved long ago.
+				doc.flags.raised_by_service = True
+				doc.insert(ignore_permissions=True)
+				self.remember("demo_alerts", source_id, "Ops Alert", doc.name)
+				self.bump("Ops Alert")
+
+			self.safely(f"Alert {key}", alert)
+
+	@staticmethod
+	def alert_start(now, days_ago: int, idx: int):
+		return (now - datetime.timedelta(days=days_ago)).replace(
+			hour=(9 + idx * 3) % 24, minute=(idx * 17) % 60, second=0, microsecond=0
+		)
+
+	def support_tickets(self) -> None:
+		from hostel360.hostel_operations import alerts
+
+		now = now_datetime()
+		for idx, (subject, category, priority, status, hours_ago, description, resolution) in enumerate(
+			TICKETS
+		):
+			source_id = f"{idx}"
+			if self.demo_record("demo_tickets", source_id):
+				continue
+
+			def ticket(
+				subject=subject,
+				category=category,
+				priority=priority,
+				status=status,
+				hours_ago=hours_ago,
+				description=description,
+				resolution=resolution,
+				source_id=source_id,
+			):
+				raised = (now - datetime.timedelta(hours=hours_ago)).replace(second=0, microsecond=0)
+				doc = frappe.get_doc(
+					{
+						"doctype": "Support Ticket",
+						"subject": subject,
+						"category": category,
+						"priority": priority,
+						"status": status,
+						"raised_by_name": _("Hostel Office"),
+						"contact_phone": "9000000801",
+						"description": description,
+						"resolution_details": resolution,
+					}
+				)
+				doc.insert(ignore_permissions=True)
+				# Back-date the ticket and its SLA clock to when it was raised.
+				closed = status in ("Resolved", "Closed")
+				values = {
+					"creation": raised,
+					"response_due_by": raised + datetime.timedelta(hours=1),
+					"resolution_due_by": raised + datetime.timedelta(hours=4),
+				}
+				if status != "Open":
+					values["first_response_on"] = raised + datetime.timedelta(minutes=18 + 9 * int(source_id))
+				if closed:
+					values["resolved_on"] = raised + datetime.timedelta(
+						hours=2, minutes=10 + 7 * int(source_id)
+					)
+				if status == "Waiting on Institution":
+					values["waiting_since"] = raised + datetime.timedelta(hours=1)
+				frappe.db.set_value("Support Ticket", doc.name, values, update_modified=False)
+				if doc.ops_alert:
+					alert_values = {"first_seen": raised, "last_seen": raised}
+					frappe.db.set_value("Ops Alert", doc.ops_alert, alert_values, update_modified=False)
+					if closed:
+						alerts.resolve_alert(
+							f"support.ticket.{doc.name}",
+							notes=_("Ticket {0}.").format(_(status)),
+							source="Support",
+						)
+				self.remember("demo_tickets", source_id, "Support Ticket", doc.name)
+				self.bump("Support Ticket")
+
+			self.safely(f"Ticket {source_id}", ticket)
+
+	def metric_samples(self) -> None:
+		"""Monitoring history since the start of last month: the uptime probe every minute
+		(with the outage in the alert history), server load every quarter of an hour."""
+		now = now_datetime().replace(second=0, microsecond=0)
+		start = get_datetime(self.month_start(1))
+		outage = ALERT_HISTORY[0]
+		outage_start = self.alert_start(now_datetime(), outage[5], 0)
+		outage_end = outage_start + datetime.timedelta(minutes=outage[6])
+		day = start
+		while day < now:
+			day_end = min(day + datetime.timedelta(days=1), now)
+			if not frappe.db.exists(
+				"Ops Metric Sample", {"metric": "uptime_probe", "recorded_at": ["between", [day, day_end]]}
+			):
+				self.metric_day(day, day_end, outage_start, outage_end)
+			day += datetime.timedelta(days=1)
+
+	def metric_day(self, day, day_end, outage_start, outage_end) -> None:
+		from uuid import uuid7
+
+		rng = self.draw("metrics", day.date())
+		stamp = now_datetime()
+		rows = []
+
+		def add(metric, value, unit, at, source="Host Agent"):
+			rows.append(
+				(
+					str(uuid7()),
+					metric,
+					value,
+					unit,
+					source,
+					DEMO_HOST,
+					at,
+					stamp,
+					stamp,
+					"Administrator",
+					"Administrator",
+				)
+			)
+
+		minute = day
+		while minute < day_end:
+			up = not (outage_start <= minute < outage_end)
+			add("uptime_probe", 1 if up else 0, "", minute, source="Uptime Probe")
+			if minute.minute % 15 == 0:
+				hour = minute.hour + minute.minute / 60
+				# Busy in the morning (fees, leave at 08:00) and in the evening (menu, grievances).
+				load = 18 + 22 * max(0.0, 1 - abs(hour - 9) / 3) + 26 * max(0.0, 1 - abs(hour - 20) / 3)
+				add("cpu_percent", round(load + rng.uniform(-4, 6), 1), "%", minute)
+				add("memory_percent", round(58 + load / 4 + rng.uniform(-2, 2), 1), "%", minute)
+				add("disk_percent", round(41 + (minute - day).total_seconds() / 86400 * 0.05, 2), "%", minute)
+				add("db_latency_ms", round(4 + load / 9 + rng.uniform(0, 3), 1), "ms", minute, "Health Check")
+			if minute.minute == 0:
+				add(
+					"waf_blocks", rng.randint(0, 6) + (14 if minute.hour in (2, 3) else 0), "requests", minute
+				)
+			minute += datetime.timedelta(minutes=1)
+		for chunk in range(0, len(rows), 5000):
+			frappe.db.bulk_insert(
+				"Ops Metric Sample",
+				fields=[
+					"name",
+					"metric",
+					"value",
+					"unit",
+					"source",
+					"host",
+					"recorded_at",
+					"creation",
+					"modified",
+					"owner",
+					"modified_by",
+				],
+				values=rows[chunk : chunk + 5000],
+			)
+		self.bump("Ops Metric Sample", len(rows))
+
+	def backup_history(self) -> None:
+		"""Nightly backups for the last month, weekly ones on Sundays and a restore test on the
+		first of each month; one nightly backup failed (see the alert history)."""
+		from hostel360.hostel_operations.doctype.ops_backup_record.ops_backup_record import human_size
+
+		failed_day = getdate(add_days(self.today, -ALERT_HISTORY[4][5]))
+		for days_ago in range(30, 0, -1):
+			date = getdate(add_days(self.today, -days_ago))
+			rng = self.draw("backup", date)
+			plan = [("Daily", 2, 0.92)]
+			if date.weekday() == 6:
+				plan.append(("Weekly", 3, 0.95))
+			if date.day == 1:
+				plan.append(("Restore Test", 4, 0.0))
+			for backup_type, hour, ratio in plan:
+				started = get_datetime(date).replace(hour=hour, minute=15)
+				if frappe.db.exists(
+					"Ops Backup Record",
+					{
+						"backup_type": backup_type,
+						"started_at": ["between", [get_datetime(date), get_datetime(add_days(date, 1))]],
+					},
+				):
+					continue
+				failed = backup_type == "Daily" and date == failed_day
+				size = (
+					0
+					if backup_type == "Restore Test"
+					else int((1.15 + 0.004 * (30 - days_ago)) * 1024**3 * ratio)
+				)
+				finished = started + datetime.timedelta(seconds=rng.randint(240, 420) if not failed else 95)
+				doc = frappe.get_doc(
+					{
+						"doctype": "Ops Backup Record",
+						"backup_type": backup_type,
+						"status": "Failed" if failed else "Success",
+						"host": DEMO_HOST,
+						"started_at": started,
+						"finished_at": finished,
+						"duration_seconds": int((finished - started).total_seconds()),
+						"size_bytes": size,
+						"size_display": human_size(size) if size else "",
+						"snapshot_id": "" if failed else f"{rng.getrandbits(32):08x}",
+						"repository": "restic: oci-mumbai/hostel360",
+						"source": "h360-backup",
+						"message": _(
+							"Object storage did not answer within 90 seconds; the next run succeeded."
+						)
+						if failed
+						else (
+							_("Restored to a scratch database and checked.")
+							if backup_type == "Restore Test"
+							else ""
+						),
+					}
+				)
+				# Written as history: the alert a failure raises is already in the alert history.
+				doc.set_new_name()
+				doc.creation = doc.modified = finished
+				doc.owner = doc.modified_by = "Administrator"
+				doc.db_insert()
+				self.bump("Ops Backup Record")
+
+	def refresh_report(self) -> None:
+		self.isolated("Monthly performance report", self.monthly_report)
+
+	def monthly_report(self) -> None:
+		from hostel360.hostel_operations.reports import generate_monthly_performance_report, previous_month
+
+		month = previous_month()
+		if frappe.db.exists("Monthly Performance Report", {"month": month, "docstatus": 1}):
+			return
+		generate_monthly_performance_report(month, send=False)
+		self.bump("Monthly Performance Report")
+
 
 def generate(students: int = 60, seed: int = 2026, progress=None) -> dict:
 	"""Create (or top up) the demo data set. Returns counts of what was created."""
 	return DemoDataBuilder(cint(students), cint(seed), progress=progress).run()
+
+
+def refresh_calendar(seed: int = 2026, progress=None) -> dict:
+	"""Records tied to the calendar rather than to "now": this week's and next week's menus,
+	last month's mess bills and performance report, this month's feedback.
+
+	Used after a demonstration site is restored and its dates moved to today (see
+	``hostel360.demo.redate``): everything else keeps its place relative to now, but a menu
+	is for a particular week and a bill for a particular month.
+	"""
+	builder = DemoDataBuilder(1, cint(seed), progress=progress)
+	builder.count = max(frappe.db.count("Hostel Student", {"register_number": ["like", "UAT%"]}), 1)
+	builder.scale = max(1.0, builder.count / 60)
+	return builder.run(
+		steps=(
+			builder.create_menus,
+			builder.create_bill_runs,
+			builder.create_feedback,
+			builder.refresh_report,
+		)
+	)

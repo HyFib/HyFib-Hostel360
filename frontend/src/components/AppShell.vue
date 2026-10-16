@@ -8,6 +8,7 @@ import { useRoute } from "vue-router";
 import { t } from "@/i18n";
 import { refreshUnread, unreadCount } from "@/stores/inbox";
 import { useSession } from "@/stores/session";
+import DemoBanner from "./DemoBanner.vue";
 import InstitutionMark from "./InstitutionMark.vue";
 import OfflineBanner from "./OfflineBanner.vue";
 import WardSwitcher from "./WardSwitcher.vue";
@@ -47,6 +48,7 @@ watch(routeName, () => {
 		<header
 			class="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85"
 		>
+			<DemoBanner />
 			<div class="mx-auto flex h-16 max-w-3xl items-center gap-3 px-4">
 				<RouterLink
 					:to="{ name: 'home' }"

@@ -16,6 +16,16 @@ portal screens for students and parents.
 | [HyFib operations](hyfib-operations.md) | HyFib helpdesk and engineers | Desk: *HyFib Operations*, *Operations Status* |
 | [மாணவர் / பெற்றோர் விரைவு வழிகாட்டி](student-parent-quick-guide-ta.md) | Students and parents, in Tamil | Portal |
 
+## Trying it first: the demonstration site
+
+Before go-live, staff, students and parents can try everything in these manuals on the
+demonstration site, <https://hostel360.hyfib.com>. Its home page (`/demo`) lists a sign-in for
+every staff role and for a few students and parents. On that site every record is invented, the
+strip at the edge of every page says so, no SMS, WhatsApp message or e-mail is sent, online
+payment is switched off, staff sign in without the authenticator code, and everything is put
+back as it was every night. Do not enter real details there. How it works:
+[DEMO.md](../DEMO.md).
+
 ## Before you start (staff)
 
 - **Address**: `https://<portal address>/login` (for ACGCET, the address in Hostel Settings,
@@ -32,8 +42,11 @@ portal screens for students and parents.
   something you need is missing, ask the Hostel Administrator.
 - **Language**: your user settings (top-right avatar > *My Settings* > Language) offer English
   and தமிழ்.
-- **Help**: *Hostel Admin > Get Support* raises a ticket with the HyFib helpdesk; or call
-  **+91 96060 60596** / e-mail **support@hyfib.com**, 24×7.
+- **Your home**: Hostel360 opens on your own workspace (*Hostel Admin*, *Mess*, *Gate* or
+  *HyFib Operations*, by role) and the bar on the left offers only the areas of your work;
+  the address `/staff` always brings you back home.
+- **Help**: *Get Support* on the *Hostel Admin* and *Mess* workspaces raises a ticket with the
+  HyFib helpdesk; or call **+91 96060 60596** / e-mail **support@hyfib.com**, 24×7.
 
 ## Common desk actions
 

@@ -15,14 +15,14 @@ from frappe import _
 from hostel360.setup.roles import PARENT_ROLE, PORTAL_ROLES, STUDENT_ROLE
 
 PORTAL_HOME = "hostel"
-DESK_HOME = "desk"
+DESK_HOME = "staff"
 CLOSED_STUDENT_STATUSES = ("Vacated", "Alumni")
 # Roles every user carries implicitly; they say nothing about desk access.
 AUTOMATIC_ROLES = frozenset({"All", "Guest", "Desk User", "Administrator"})
 
 
 def get_website_user_home_page(user: str) -> str | None:
-	"""Portal users land on the portal; staff land on the desk."""
+	"""Portal users land on the portal; staff land on their desk home (``/staff``)."""
 	if not user or user == "Guest":
 		return None
 	user_type = frappe.get_cached_value("User", user, "user_type")
@@ -134,9 +134,16 @@ def on_session_creation(login_manager) -> None:
 
 
 def validate_user(doc, method=None) -> None:
-	"""A portal user may not hold desk roles and must stay a Website User."""
+	"""A portal user may not hold desk roles and must stay a Website User.
+
+	On a demonstration site the published demo accounts are also kept as the demo command
+	set them (``hostel360.demo.accounts``).
+	"""
 	if doc.name in ("Administrator", "Guest"):
 		return
+	from hostel360.demo.accounts import validate_demo_user
+
+	validate_demo_user(doc)
 	roles = {row.role for row in doc.get("roles") or [] if row.role}
 	portal_roles = roles & PORTAL_ROLES
 	if not portal_roles:

@@ -16,6 +16,7 @@ def get_context(context):
 	context.code = normalise_code(frappe.form_dict.get("code"))[:64]
 	context.result = None
 	context.rate_limited = False
+	context.demo = demo_banner()
 
 	if context.code:
 		if is_rate_limited():
@@ -33,3 +34,12 @@ def get_institution() -> dict:
 		return get_institution_details()
 	except frappe.DoesNotExistError:
 		return {}
+
+
+def demo_banner() -> dict | None:
+	"""The demonstration banner's wording, only on a demonstration site."""
+	from hostel360.demo import INFO_ROUTE, banner_text, is_demo_site
+
+	if not is_demo_site():
+		return None
+	return {**banner_text(), "url": INFO_ROUTE}

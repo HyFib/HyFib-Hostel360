@@ -13,15 +13,26 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from hostel360.setup.roles import (
+	ADMIN_ROLE,
 	AUDITOR_ROLE,
+	DEPUTY_WARDEN_ROLE,
 	MESS_MANAGER_ROLE,
 	MESS_STAFF_ROLE,
 	OFFICE_ROLE,
 	OPERATIONS_ROLE,
 	SECURITY_ROLE,
+	WARDEN_ROLE,
 )
 
-WORKSPACES = ("Hostel Admin", "People and Rooms", "Fees", "Mess", "Student Services", "HyFib Operations")
+WORKSPACES = (
+	"Hostel Admin",
+	"People and Rooms",
+	"Fees",
+	"Mess",
+	"Student Services",
+	"Gate",
+	"HyFib Operations",
+)
 SHELLS = (*WORKSPACES, "Messaging", "Data Migration")
 MODULES = (
 	"Hostel Setup",
@@ -32,6 +43,7 @@ MODULES = (
 	"Hostel Communication",
 	"Hostel Operations",
 	"Hostel Migration",
+	"Hostel Gate",
 )
 ONBOARDING = "Get started with Hostel360"
 
@@ -170,12 +182,16 @@ class TestHostel360Desk(IntegrationTestCase):
 	def test_workspace_visibility_follows_roles(self):
 		from frappe.desk.desktop import get_workspaces
 
+		# Each role sees the areas it works in: the administration overview (fees, beds,
+		# grievances, alerts) belongs to the people who run the hostel, not to mess, gate or
+		# HyFib operations staff, who have their own workspaces.
 		expected = {
-			MESS_STAFF_ROLE: {"Hostel Admin", "Mess"},
-			MESS_MANAGER_ROLE: {"Hostel Admin", "Mess", "Student Services"},
+			MESS_STAFF_ROLE: {"Mess"},
+			MESS_MANAGER_ROLE: {"Mess", "Student Services"},
 			OFFICE_ROLE: {"Hostel Admin", "People and Rooms", "Fees", "Student Services"},
-			OPERATIONS_ROLE: {"Hostel Admin", "HyFib Operations"},
-			AUDITOR_ROLE: set(WORKSPACES),
+			OPERATIONS_ROLE: {"HyFib Operations"},
+			SECURITY_ROLE: {"Gate"},
+			AUDITOR_ROLE: set(WORKSPACES) - {"Gate"},
 		}
 		for role, workspaces in expected.items():
 			frappe.set_user(make_user([role]))
@@ -195,3 +211,73 @@ class TestHostel360Desk(IntegrationTestCase):
 		self.assertFalse(
 			visible & {"Hostel Admin", "People and Rooms", "Fees", "Mess", "HyFib Operations"}, visible
 		)
+
+	def test_each_role_starts_on_its_own_workspace(self):
+		from hostel360.setup.landing import landing_route
+
+		expected = {
+			ADMIN_ROLE: "/desk/hostel-admin",
+			WARDEN_ROLE: "/desk/hostel-admin",
+			DEPUTY_WARDEN_ROLE: "/desk/hostel-admin",
+			OFFICE_ROLE: "/desk/hostel-admin",
+			AUDITOR_ROLE: "/desk/hostel-admin",
+			MESS_MANAGER_ROLE: "/desk/mess",
+			MESS_STAFF_ROLE: "/desk/mess",
+			SECURITY_ROLE: "/desk/gate",
+			OPERATIONS_ROLE: "/desk/hyfib-operations",
+		}
+		for role, route in expected.items():
+			self.assertEqual(landing_route(make_user([role])), route, role)
+		self.assertEqual(landing_route(make_user([])), "/desk")
+
+	def test_staff_page_sends_people_home(self):
+		from hostel360.www import staff
+
+		cases = [
+			(make_user([SECURITY_ROLE]), "/desk/gate"),
+			(make_user([MESS_STAFF_ROLE]), "/desk/mess"),
+			("Guest", "/login?redirect-to=/staff"),
+		]
+		for user, location in cases:
+			frappe.set_user(user)
+			with self.assertRaises(frappe.Redirect) as raised:
+				staff.get_context(frappe._dict())
+			self.assertEqual(raised.exception.http_status_code, 302, user)
+			self.assertEqual(frappe.local.flags.redirect_location, location, user)
+			frappe.set_user("Administrator")
+		frappe.local.flags.redirect_location = None
+
+	def test_app_opens_at_the_staff_page_for_every_desk_role(self):
+		from frappe.apps import get_default_path
+
+		from hostel360.setup.permissions import has_app_permission
+
+		for role in (SECURITY_ROLE, MESS_STAFF_ROLE, OPERATIONS_ROLE, OFFICE_ROLE):
+			frappe.set_user(make_user([role]))
+			self.assertTrue(has_app_permission(), role)
+			self.assertEqual(get_default_path(), "/staff", role)
+			frappe.set_user("Administrator")
+
+	def test_dock_offers_only_the_roles_areas(self):
+		from frappe.boot import get_module_sidebars
+		from frappe.desk.doctype.dock.dock import resolve_dock
+
+		from hostel360.setup.landing import filter_dock
+
+		expected = {
+			MESS_STAFF_ROLE: {"Mess"},
+			MESS_MANAGER_ROLE: {"Mess", "Student Services"},
+			SECURITY_ROLE: {"Gate"},
+			OPERATIONS_ROLE: {"HyFib Operations", "Messaging", "Data Migration"},
+			OFFICE_ROLE: {"Hostel Admin", "People and Rooms", "Fees", "Student Services", "Messaging"},
+		}
+		for role, shells in expected.items():
+			frappe.set_user(make_user([role]))
+			frappe.local.request_cache.clear()
+			bootinfo = frappe._dict(dock=resolve_dock(), module_sidebars=get_module_sidebars())
+			filter_dock(bootinfo)
+			docked = {
+				row.get("link_to") for row in bootinfo.dock.get("hostel360", []) if not row.get("hidden")
+			}
+			self.assertEqual(docked, shells, role)
+			frappe.set_user("Administrator")

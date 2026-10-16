@@ -1,0 +1,26 @@
+# HyFib Hostel360 public demo: cloudflared configuration for the "tunnel" service.
+# deploy/demo/up.sh renders this into ~/hostel360-demo/config/cloudflared/config.yml with the
+# tunnel id and site name from demo.env; edit the template, not the rendered copy.
+#
+# The tunnel carries one host name, the demo site, to the WAF on the edge network: plain
+# HTTP to :8080, as the load balancer does in production. Cloudflare terminates TLS for the
+# visitor and passes their address in X-Forwarded-For, which the WAF trusts from this
+# container's fixed address only. Every other host name gets a 404 from cloudflared itself.
+
+tunnel: @TUNNEL_ID@
+credentials-file: /etc/cloudflared/credentials.json
+no-autoupdate: true
+# Local only: the health check calls /ready here.
+metrics: 127.0.0.1:20241
+loglevel: info
+
+ingress:
+  - hostname: @SITE_NAME@
+    service: http://waf:8080
+    originRequest:
+      connectTimeout: 10s
+      # Below the WAF's keepalive_timeout (75 s), so cloudflared never reuses a connection
+      # the WAF is about to close.
+      keepAliveTimeout: 60s
+      keepAliveConnections: 64
+  - service: http_status:404

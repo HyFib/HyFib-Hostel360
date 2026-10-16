@@ -9,11 +9,14 @@
 # 403 seen here comes from the WAF. Checks:
 #
 #   - the portal's Content Security Policy lets the fees page post to PayU's checkout
+#   - visitors the edge received over plain HTTP are redirected to HTTPS
 #   - PayU's return post (the payer's browser) and webhook pass ModSecurity, including bank
 #     text the CRS would otherwise take for an attack (payu-return-failure.txt carries an
 #     issuer message as an HTML fragment, which the CRS blocks without the exclusion)
 #   - scanners and injection attempts are still blocked, on other endpoints and in the
 #     headers of the PayU endpoints
+#   - desk requests the CRS used to take for attacks pass (number cards, user settings,
+#     realtime long polling), while the same rules still apply to other arguments and paths
 #   - containers of the stack reach the portal host name (print PDFs load the logo and
 #     other files through it) at the WAF, over https on 443 and http on 80
 #
@@ -234,6 +237,62 @@ else
 	fail "the PayU exemption is limited to its two exact paths" "status ${code}"
 fi
 
+# Desk requests the CRS used to take for attacks; each one showed staff a "Not permitted"
+# message (number cards on every workspace, user settings on every page) or cut realtime off.
+form_post=("${lb[@]}" -H "Content-Type: application/x-www-form-urlencoded")
+card='{"name":"Open Grievances","doctype":"Number Card","type":"Document Type","document_type":"Hostel Grievance","function":"Count","filters_json":"[[\"Hostel Grievance\",\"status\",\"=\",\"Open\"]]","dynamic_filters_json":"[]"}'
+response="$(client "${edge}" "${form_post[@]}" --data-urlencode "doc=${card}" --data-urlencode "filters=[]" \
+	"http://waf:8080/api/method/frappe.desk.doctype.number_card.number_card.get_result")"
+code="$(status_of "${response}")"
+if [[ "${code}" == 200 ]]; then
+	pass "desk number cards pass the WAF"
+else
+	fail "desk number cards pass the WAF" "status ${code}"
+fi
+response="$(client "${edge}" "${form_post[@]}" --data-urlencode "doc=${card}" \
+	--data-urlencode "to_date=2026-10-16' UNION SELECT name, password FROM \`__Auth\`-- -" \
+	"http://waf:8080/api/method/frappe.desk.doctype.number_card.number_card.get_result")"
+code="$(status_of "${response}")"
+if [[ "${code}" == 403 ]]; then
+	pass "SQL injection in other number card arguments is still blocked"
+else
+	fail "SQL injection in other number card arguments is still blocked" "status ${code}"
+fi
+
+settings='{"updated_on":"Fri Oct 16 2026 09:17:08 GMT+0530","last_view":"List","List":{"filters":[],"sort_by":"modified","sort_order":"desc"}}'
+response="$(client "${edge}" "${form_post[@]}" --data-urlencode "doctype=Hostel Student" \
+	--data-urlencode "user_settings=${settings}" "http://waf:8080/api/method/frappe.model.utils.user_settings.save")"
+code="$(status_of "${response}")"
+if [[ "${code}" == 200 ]]; then
+	pass "desk user settings (a method name ending in .save) pass the WAF"
+else
+	fail "desk user settings (a method name ending in .save) pass the WAF" "status ${code}"
+fi
+response="$(client "${edge}" "${lb[@]}" "http://waf:8080/files/site-backup.sql")"
+code="$(status_of "${response}")"
+if [[ "${code}" == 403 ]]; then
+	pass "restricted file extensions are still blocked outside method names"
+else
+	fail "restricted file extensions are still blocked outside method names" "status ${code}"
+fi
+
+response="$(client "${edge}" "${lb[@]}" -H "Content-Type: text/plain;charset=UTF-8" --data '40{"sid":"x"}' \
+	"http://waf:8080/socket.io/?EIO=4&transport=polling&t=Q52u18f&sid=abc")"
+code="$(status_of "${response}")"
+if [[ "${code}" == 200 ]]; then
+	pass "realtime long polling (text/plain) passes the WAF"
+else
+	fail "realtime long polling (text/plain) passes the WAF" "status ${code}"
+fi
+response="$(client "${edge}" "${lb[@]}" -H "Content-Type: text/plain" --data "x=1" \
+	"http://waf:8080/api/method/hostel360.api.portal.get_dashboard")"
+code="$(status_of "${response}")"
+if [[ "${code}" == 403 ]]; then
+	pass "text/plain bodies are still refused outside realtime"
+else
+	fail "text/plain bodies are still refused outside realtime" "status ${code}"
+fi
+
 # In-stack clients: the portal host name resolves to the WAF on the internal network.
 pdf_agent="Mozilla/5.0 (Unknown; Linux aarch64) AppleWebKit/602.1 (KHTML, like Gecko) wkhtmltopdf Version/10.0 Safari/602.1"
 response="$(client "${internal}" -A "${pdf_agent}" "https://${site}/files/institution-logo.png")"
@@ -257,6 +316,19 @@ if [[ "${published}" == "8080/tcp 8443/tcp " ]]; then
 	pass "only 8080 and 8443 are published on the host"
 else
 	fail "only 8080 and 8443 are published on the host" "published: ${published}"
+fi
+
+response="$(client "${edge}" "${lb[@]}" -H "X-Forwarded-Proto: http" "http://waf:8080/hostel/fees?x=1")"
+if [[ "$(status_of "${response}")" == 301 && "$(header_of "${response}" Location)" == "https://${site}/hostel/fees?x=1" ]]; then
+	pass "visitors who came over plain HTTP are redirected to HTTPS"
+else
+	fail "visitors who came over plain HTTP are redirected to HTTPS" "status $(status_of "${response}"), Location: $(header_of "${response}" Location)"
+fi
+response="$(client "${edge}" "${lb[@]}" -H "X-Forwarded-Proto: https" "http://waf:8080/api/method/hostel360.api.health.liveness")"
+if [[ "$(status_of "${response}")" == 200 ]]; then
+	pass "HTTPS visitors and internal requests are served without a redirect"
+else
+	fail "HTTPS visitors and internal requests are served without a redirect" "status $(status_of "${response}")"
 fi
 
 response="$(client "${edge}" -H "Host: 203.0.113.10" "http://waf:8080/hostel")"

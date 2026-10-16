@@ -691,9 +691,13 @@ def photo_url(student: str, photo: str | None) -> str | None:
 
 
 def _session_settings(payment_enabled: bool = False) -> dict:
+	from hostel360.demo import is_demo_site
+
 	settings = get_branding()
 	settings.update(
 		payment_enabled=bool(payment_enabled),
+		# A demonstration site: the portal shows its banner and says why payment is off.
+		demo=is_demo_site(),
 		mess_reduction_min_days=_optional("mess settings", _mess_reduction_min_days),
 		mess_day_cutoff_hour=_mess_day_cutoff_hour(),
 		leave_requires_parent_approval=bool(_optional("leave settings", _leave_requires_parent_approval)),
@@ -1014,11 +1018,15 @@ def get_fees(student: str | None = None) -> dict:
 	``payment_test_mode`` is set while online payment is offered with test credentials, so the
 	app can say that no real money will be taken.
 	"""
+	from hostel360.demo import is_demo_site, payment_off_message
 	from hostel360.hostel_fees.services import get_fee_summary
 
 	ctx = _portal(student, dues=True)
 	summary = get_fee_summary(ctx.student)
 	summary["payment_test_mode"] = bool(summary.get("payment_enabled")) and _payment_test_mode()
+	if is_demo_site():
+		# Said in so many words, so a visitor does not take it for a fault.
+		summary["payment_note"] = payment_off_message()
 	return summary
 
 

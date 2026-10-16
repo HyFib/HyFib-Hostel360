@@ -88,6 +88,10 @@ onBeforeUnmount(() => {
 
 const summary = computed(() => fees.data.value);
 const canPayOnline = computed(() => paymentEnabled.value && summary.value?.payment_enabled !== false);
+/** Why online payment is off; a demonstration site says so plainly (in the visitor's language). */
+const paymentOffText = computed(() =>
+	session.settings.demo ? t("demo.paymentOff") : summary.value?.payment_note || t("fees.paymentDisabled"),
+);
 const openInvoices = computed(() =>
 	(summary.value?.invoices ?? []).filter((invoice) => toNumber(invoice.outstanding_amount) > 0),
 );
@@ -150,7 +154,7 @@ function pay(invoices: string[]) {
 			</section>
 
 			<p v-if="openInvoices.length && !canPayOnline" class="card mb-4 bg-info-soft text-sm text-info" role="status">
-				{{ t("fees.paymentDisabled") }}
+				{{ paymentOffText }}
 			</p>
 
 			<section v-if="openInvoices.length" aria-labelledby="fees-open" class="mb-6">

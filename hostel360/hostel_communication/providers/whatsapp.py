@@ -11,6 +11,7 @@ from frappe.utils import cint, cstr
 
 from hostel360.hostel_communication.providers.base import (
 	DeliveryResult,
+	demo_mode_result,
 	get_secret,
 	get_settings,
 	get_timeout,
@@ -87,6 +88,8 @@ def send_template(
 	settings=None,
 ) -> DeliveryResult:
 	settings = settings or get_settings()
+	if muted := demo_mode_result(PROVIDER):
+		return muted
 	if not cint(settings.get("whatsapp_enabled")):
 		return DeliveryResult.skip(PROVIDER, "WhatsApp is not enabled in Messaging Settings.")
 	if not mobile:
@@ -110,6 +113,8 @@ def send_authentication_code(
 	timeout: tuple[float, float] | None = None,
 ) -> DeliveryResult:
 	settings = settings or get_settings()
+	if muted := demo_mode_result(PROVIDER):
+		return muted
 	if not cint(settings.get("whatsapp_enabled")):
 		return DeliveryResult.skip(PROVIDER, "WhatsApp is not enabled in Messaging Settings.")
 	if not mobile:

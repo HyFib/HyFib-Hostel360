@@ -55,6 +55,10 @@ const payable = computed(() => {
 });
 const total = computed(() => totalOutstanding(payable.value));
 const onlineEnabled = computed(() => paymentEnabled.value && fees.data.value?.payment_enabled !== false);
+/** Why online payment is off; a demonstration site says so plainly (in the visitor's language). */
+const paymentOffText = computed(() =>
+	session.settings.demo ? t("demo.paymentOff") : fees.data.value?.payment_note || t("fees.paymentDisabled"),
+);
 /** A checkout for these invoices was opened and not finished; paying again resumes it. */
 const resuming = computed(() => payable.value.some((invoice) => invoice.payment_in_progress));
 
@@ -200,7 +204,7 @@ onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 			</p>
 
 			<p v-if="!onlineEnabled" class="card mt-4 bg-info-soft text-sm text-info" role="status">
-				{{ t("fees.paymentDisabled") }}
+				{{ paymentOffText }}
 			</p>
 
 			<template v-else>

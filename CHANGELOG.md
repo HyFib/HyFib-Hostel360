@@ -18,6 +18,31 @@ All notable changes to HyFib Hostel360. The format follows
   sign-in page offers **E-mail** as a third choice while it is on. Answers, timing and limits
   are the same as for SMS and WhatsApp, including for numbers with no address on record.
   English and Tamil templates `otp_login-Email` and `otp_login-Email-ta`.
+- **Gate** workspace (module *Hostel Gate*) for security staff: students on leave now, the
+  Gate Pass page and the leave checked out at the moment.
+
+### Changed
+
+- Every desk role opens on its own workspace and the dock offers only the areas of its work:
+  *Hostel Admin* for administrators, wardens, office staff and auditors, *Mess* for mess
+  staff, *Gate* for security and *HyFib Operations* for HyFib. Hostel360 opens at `/staff`,
+  which sends each person home. Mess, gate and HyFib operations staff no longer see the
+  administration overview (fees, beds, grievances); records stay reachable as their
+  permissions allow. *Get Support* is also on the *Mess* workspace.
+- The *Students on Leave Now* card opens the Gate Pass page or the leave list for people who
+  have no access to the Students On Leave report.
+
+### Fixed
+
+- Staff saw "Not permitted ... contact your manager" on every desk page behind the WAF: the
+  CRS took three ordinary desk requests for attacks (dashboard number cards, the user settings
+  saved on every page, and realtime long polling, which also cut live updates off). Each is
+  now exempted on its exact path only (rules 10108, 10112, 10121), with regression checks.
+- Amounts in the desk showed "$": the regional settings (INR, Indian digit grouping,
+  dd-mm-yyyy, Asia/Kolkata) are now also written to the global defaults the desk formats
+  with, at set-up and on every migrate.
+- Security staff signed in to an empty desk: Hostel360 is now on their apps screen and opens
+  on the *Gate* workspace.
 
 ## [1.0.0] — 2026-10-16
 

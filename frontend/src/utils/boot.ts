@@ -6,6 +6,26 @@
  * empty object, in which case everything comes from get_session instead.
  */
 
+/** One published demonstration sign-in (every record on a demonstration site is fictitious). */
+export interface DemoAccount {
+	kind: "student" | "parent";
+	name: string;
+	/** The role in English, as the server words it; the portal words its own from the fields below. */
+	role?: string | null;
+	mobile: string;
+	hostel?: string | null;
+	/** What the account is there to show: "dues", "leave", "approve_leave", "two_wards". */
+	story?: string | null;
+	wards?: string[];
+}
+
+/** Present only on a demonstration site (see hostel360.demo on the server). */
+export interface DemoBoot {
+	info_url?: string;
+	otp?: string;
+	accounts?: DemoAccount[];
+}
+
 export interface BootData {
 	site_name?: string;
 	institution_name?: string;
@@ -20,6 +40,8 @@ export interface BootData {
 	lang?: string;
 	/** The sign-in page may offer codes by e-mail (a site-wide setting). */
 	otp_email?: boolean;
+	/** Only on a demonstration site: the banner and the published demo sign-ins. */
+	demo?: DemoBoot | null;
 }
 
 let cached: BootData | null = null;

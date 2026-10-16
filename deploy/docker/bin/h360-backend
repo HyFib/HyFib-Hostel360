@@ -17,6 +17,11 @@ set -Eeuo pipefail
 : "${GUNICORN_MAX_REQUESTS:=5000}"
 : "${GUNICORN_MAX_REQUESTS_JITTER:=500}"
 : "${GUNICORN_BIND:=0.0.0.0:8000}"
+# Gunicorn only believes X-Forwarded-Proto from these peers, and Frappe marks the session
+# cookie Secure only when it sees https. The backend is reachable solely on the stack's
+# internal network (no published port), where the frontend nginx sets the header from the
+# WAF's, so every peer is trusted; gunicorn 23 accepts exact addresses only, not subnets.
+: "${GUNICORN_FORWARDED_ALLOW_IPS:=*}"
 
 echo "h360-backend: gunicorn ${GUNICORN_WORKERS} workers x ${GUNICORN_THREADS} threads on ${GUNICORN_BIND}" >&2
 
@@ -32,6 +37,7 @@ exec /home/frappe/frappe-bench/env/bin/gunicorn \
 	--max-requests="${GUNICORN_MAX_REQUESTS}" \
 	--max-requests-jitter="${GUNICORN_MAX_REQUESTS_JITTER}" \
 	--keep-alive=5 \
+	--forwarded-allow-ips="${GUNICORN_FORWARDED_ALLOW_IPS}" \
 	--limit-request-line=8190 \
 	--preload \
 	frappe.app:application

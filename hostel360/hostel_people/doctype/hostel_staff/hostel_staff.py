@@ -6,6 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import validate_email_address
 
+from hostel360.demo.accounts import protect_demo_staff_delete, validate_demo_staff
 from hostel360.hostel_people.protection import keep_system_fields
 from hostel360.setup.roles import DESIGNATION_ROLES, HOSTEL_SCOPED_DESIGNATIONS, PORTAL_ROLES
 from hostel360.utils.validation import normalize_mobile
@@ -23,6 +24,8 @@ class HostelStaff(Document):
 		# The linked user is only ever set by get_or_create_user; taking it from a request
 		# would let a staff record take over (and disable) somebody else's account.
 		keep_system_fields(self, ("user",))
+		# On a demonstration site the published staff accounts keep their role and hostels.
+		validate_demo_staff(self)
 		self.staff_name = " ".join((self.staff_name or "").split())
 		self.mobile_number = normalize_mobile(self.mobile_number)
 		if self.employee_id:
@@ -76,6 +79,7 @@ class HostelStaff(Document):
 			self.sync_user_permissions()
 
 	def on_trash(self):
+		protect_demo_staff_delete(self)
 		if self.user:
 			revoke_staff_access(self.user)
 

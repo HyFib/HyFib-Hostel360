@@ -173,6 +173,32 @@ describe("FeesView after a PayU checkout", () => {
 		wrapper.unmount();
 	});
 
+	it("says plainly that online payment is off on a demonstration site", async () => {
+		applySession(studentSession({ settings: { payment_enabled: false, demo: true } }));
+		vi.mocked(portal.getFees).mockResolvedValue({
+			outstanding: 1500,
+			overdue: 0,
+			payments: [],
+			payment_enabled: false,
+			invoices: [
+				{
+					name: "INV-1",
+					invoice_type: "Hostel Fee",
+					posting_date: "2026-10-01",
+					total_amount: 1500,
+					paid_amount: 0,
+					outstanding_amount: 1500,
+					status: "Unpaid",
+					items: [],
+				},
+			],
+		});
+		const wrapper = await mountAt("/fees", await FeesView());
+		expect(wrapper.text()).toContain("Online payment is switched off on this demonstration site");
+		expect(wrapper.text()).not.toContain("Online payment isn't available right now");
+		wrapper.unmount();
+	});
+
 	it("offers the receipt when the payment succeeded", async () => {
 		applySession(studentSession());
 		vi.mocked(portal.getFees).mockResolvedValue(emptyFees);

@@ -1,0 +1,65 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"b1c7a2e4d0\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Students on Leave Now\",\"col\":4}},{\"id\":\"c4e19f7a32\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Gate</b></span>\",\"col\":12}},{\"id\":\"d82b5c0e61\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Gate Pass\",\"col\":4}},{\"id\":\"e5f3a91c07\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Leave\",\"col\":4}}]",
+ "creation": "2026-10-16 12:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "door-open",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Gate",
+ "links": [],
+ "modified": "2026-10-16 12:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Gate",
+ "name": "Gate",
+ "number_cards": [
+  {
+   "label": "Students on Leave Now",
+   "number_card_name": "Students on Leave Now"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "Hostel Security"
+  },
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 6.0,
+ "shortcuts": [
+  {
+   "color": "Green",
+   "doc_view": "",
+   "format": "",
+   "label": "Gate Pass",
+   "link_to": "gate-pass",
+   "stats_filter": "",
+   "type": "Page"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "format": "{} checked out",
+   "label": "Leave",
+   "link_to": "Home Visit Leave",
+   "stats_filter": "[[\"Home Visit Leave\", \"status\", \"in\", [\"Checked Out\", \"Overdue\"]]]",
+   "type": "DocType"
+  }
+ ],
+ "standard": 1,
+ "title": "Gate",
+ "type": "Workspace"
+}

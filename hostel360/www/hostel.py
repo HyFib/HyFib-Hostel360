@@ -5,8 +5,9 @@ and the boot data in a ``<script type="application/json">`` block, so the page n
 inline script (the portal runs under a strict Content Security Policy). Everything else
 the app loads through ``hostel360.api.portal.get_session``.
 
-Desk users are sent to the desk: the portal only works for students and parents, and a
-staff member landing here by habit should not see a sign-in screen meant for residents.
+Desk users are sent to their desk home (``/staff``): the portal only works for students and
+parents, and a staff member landing here by habit should not see a sign-in screen meant for
+residents.
 """
 
 import json
@@ -18,7 +19,7 @@ from markupsafe import Markup
 no_cache = 1
 sitemap = 0
 
-DESK_HOME = "/desk"
+DESK_HOME = "/staff"
 
 # Characters that could end the <script> block or open markup inside it. JSON allows these
 # \u escapes, so JSON.parse returns the original text.
@@ -84,7 +85,16 @@ def get_boot(user: str | None) -> dict:
 		"lang": getattr(frappe.local, "lang", None) or "en",
 		# Whether the sign-in page offers e-mail codes: a site-wide setting, nothing about anyone.
 		"otp_email": email_codes_offered(),
+		# Only on a demonstration site: the banner, and the published demo sign-ins (all
+		# fictitious) for the sign-in page's helper. None everywhere else.
+		"demo": portal_demo(),
 	}
+
+
+def portal_demo() -> dict | None:
+	from hostel360.demo import portal_boot
+
+	return portal_boot()
 
 
 def email_codes_offered() -> bool:
