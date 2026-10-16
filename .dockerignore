@@ -1,0 +1,44 @@
+# Build context for deploy/docker/Containerfile is the repository root.
+# Only the app source and the image's own runtime scripts are sent to the builder.
+
+# VCS and tooling caches
+.git
+.github
+.ruff_cache
+.pytest_cache
+.mypy_cache
+.coverage
+coverage.xml
+htmlcov
+.vscode
+.idea
+.DS_Store
+**/__pycache__
+**/*.py[cod]
+
+# Dependencies and build output are produced inside the image
+**/node_modules
+frontend/dist
+hostel360/public/frontend
+hostel360/public/dist
+hostel360/www/hostel.html
+
+# Not needed at runtime
+docs
+tests
+
+# Infrastructure code stays out of the image, except the image's own scripts
+deploy/*
+!deploy/docker
+
+# Secrets must never reach a build context
+.env
+.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/.terraform
+secrets

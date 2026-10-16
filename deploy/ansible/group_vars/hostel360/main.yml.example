@@ -1,0 +1,47 @@
+# Copy to group_vars/hostel360/main.yml. Secrets go in vault.yml (ansible-vault encrypted).
+# Every variable here has a default in roles/*/defaults/main.yml; these are the ones that
+# must match the environment.
+
+# Site and image
+h360_site_name: hostel.accet.ac.in
+h360_host_label: hostel360-prod-hyd
+h360_image: ap-hyderabad-1.ocir.io/axabcdefghij/hostel360
+h360_image_tag: 1.0.0-94a56ce3e54a
+
+# From terraform output
+h360_lb_subnet_cidr: 10.20.1.0/24
+h360_bastion_subnet_cidr: 10.20.2.0/24
+h360_block_volume_id: ocid1.volume.oc1.ap-hyderabad-1.example
+h360_compartment_id: ocid1.compartment.oc1..aaaaexample
+h360_ons_topic_id: ocid1.onstopic.oc1.ap-hyderabad-1.example
+h360_backup_namespace: axabcdefghij
+h360_backup_bucket: hostel360-backups-mumbai
+
+# Administrators (SSH through OCI Bastion only)
+h360_admin_users:
+  - name: hyfibadmin
+    comment: HyFib Solutions operations
+    ssh_keys:
+      - ssh-ed25519 AAAAexample admin@hyfib
+
+# Hostel website integration pages
+h360_institution_name: Alagappa Chettiar Government College of Engineering and Technology Hostels
+h360_institution_short_name: ACGCET
+h360_hostel_website_origins:
+  - https://www.accet.ac.in
+
+# "production" enforces the go-live checks (roles/preflight); "staging" for test servers.
+h360_environment: production
+
+# Public egress address(es) of the ACGCET campus network (the NAT/firewall in front of the
+# hostel and college Wi-Fi). Required in production. They are exempt from the WAF's sign-in
+# rate limits, from fail2ban bans and (through h360-site-init) from the OTP per-address limit,
+# because hundreds of residents share them. Ask the institution's network administrator, or
+# run "curl -s https://ifconfig.me" on a campus PC. The value below is a documentation
+# placeholder; in production the playbook stops until it is replaced.
+h360_campus_egress_cidrs:
+  - 203.0.113.16/29
+
+# Further ranges exempt from the WAF's per-address sign-in rate limits only (for example a
+# staging load generator); the campus addresses above are always included.
+h360_waf_rate_exempt_cidrs: []

@@ -1,0 +1,400 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "A request for help from institution staff to the HyFib helpdesk. First response within 1 hour, resolution within 4 hours.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "subject",
+  "category",
+  "priority",
+  "column_break_main",
+  "status",
+  "raised_by",
+  "raised_by_name",
+  "contact_phone",
+  "description_section",
+  "description",
+  "response_section",
+  "assigned_to",
+  "escalation_level",
+  "first_response_on",
+  "resolved_on",
+  "column_break_sla",
+  "response_due_by",
+  "resolution_due_by",
+  "response_sla_breached",
+  "resolution_sla_breached",
+  "waiting_since",
+  "resolution_section",
+  "resolution_details",
+  "ops_alert"
+ ],
+ "fields": [
+  {
+   "default": "TKT-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "no_copy": 1,
+   "options": "TKT-.YYYY.-.#####",
+   "print_hide": 1,
+   "reqd": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Subject",
+   "length": 200,
+   "reqd": 1
+  },
+  {
+   "description": "Choose Outage only when Hostel360 is unavailable; it pages the HyFib Director immediately.",
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Category",
+   "options": "\nOutage\nBug\nData Correction\nAccess or Login\nHow To\nChange Request\nOther",
+   "reqd": 1
+  },
+  {
+   "default": "Medium",
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Priority",
+   "options": "Low\nMedium\nHigh\nCritical",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Open",
+   "depends_on": "eval:!doc.__islocal",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Open\nAcknowledged\nIn Progress\nWaiting on Institution\nResolved\nClosed",
+   "permlevel": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "default": "__user",
+   "fieldname": "raised_by",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Raised By",
+   "options": "User",
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "depends_on": "eval:!doc.__islocal",
+   "fetch_from": "raised_by.full_name",
+   "fieldname": "raised_by_name",
+   "fieldtype": "Data",
+   "label": "Raised By Name",
+   "read_only": 1
+  },
+  {
+   "description": "Mobile number the helpdesk can call back on.",
+   "fieldname": "contact_phone",
+   "fieldtype": "Data",
+   "label": "Contact Phone",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "description_section",
+   "fieldtype": "Section Break",
+   "label": "What happened?"
+  },
+  {
+   "description": "What were you doing, what did you expect, and what happened instead? Include record numbers and screenshots where possible.",
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:!doc.__islocal",
+   "fieldname": "response_section",
+   "fieldtype": "Section Break",
+   "label": "HyFib Response"
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Assigned To",
+   "no_copy": 1,
+   "options": "User",
+   "permlevel": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "escalation_level",
+   "fieldtype": "Int",
+   "label": "Escalation Level",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "first_response_on",
+   "fieldtype": "Datetime",
+   "label": "First Response On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "resolved_on",
+   "fieldtype": "Datetime",
+   "label": "Resolved On",
+   "no_copy": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_sla",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "response_due_by",
+   "fieldtype": "Datetime",
+   "label": "First Response Due By",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "resolution_due_by",
+   "fieldtype": "Datetime",
+   "label": "Resolution Due By",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "response_sla_breached",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Response SLA Breached",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "resolution_sla_breached",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Resolution SLA Breached",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "waiting_since",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "Waiting Since",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:!doc.__islocal",
+   "fieldname": "resolution_section",
+   "fieldtype": "Section Break",
+   "label": "Resolution"
+  },
+  {
+   "fieldname": "resolution_details",
+   "fieldtype": "Text Editor",
+   "label": "Resolution Details",
+   "mandatory_depends_on": "eval:[\"Resolved\",\"Closed\"].includes(doc.status)",
+   "no_copy": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "ops_alert",
+   "fieldtype": "Link",
+   "label": "Ops Alert",
+   "no_copy": 1,
+   "options": "Ops Alert",
+   "permlevel": 2,
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-15 16:50:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Operations",
+ "name": "Support Ticket",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "Hostel Administrator"
+  },
+  {
+   "read": 1,
+   "role": "Hostel Warden"
+  },
+  {
+   "read": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "read": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "read": 1,
+   "role": "Mess Manager"
+  },
+  {
+   "read": 1,
+   "role": "Mess Staff"
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "role": "Hostel Administrator",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "role": "Hostel Warden",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "role": "Deputy Warden",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "role": "Hostel Office Staff",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "role": "Mess Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "role": "Mess Staff",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HyFib Operations",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Hostel Administrator"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Hostel Warden"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Mess Manager"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Mess Staff"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "HyFib Operations",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 2,
+   "read": 1,
+   "role": "HyFib Operations",
+   "write": 1
+  },
+  {
+   "permlevel": 2,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "subject,status,priority",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "subject",
+ "track_changes": 1
+}

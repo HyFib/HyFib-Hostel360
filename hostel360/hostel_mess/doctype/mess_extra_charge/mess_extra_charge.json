@@ -1,0 +1,216 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "student",
+  "student_name",
+  "hostel",
+  "mess",
+  "column_break_main",
+  "charge_date",
+  "charge_type",
+  "amount",
+  "status",
+  "mess_bill",
+  "description_section",
+  "description"
+ ],
+ "fields": [
+  {
+   "default": "MXC-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "no_copy": 1,
+   "options": "MXC-.YYYY.-.#####",
+   "print_hide": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Student",
+   "options": "Hostel Student",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "student.full_name",
+   "fieldname": "student_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Student Name",
+   "read_only": 1
+  },
+  {
+   "description": "The student's hostel when the record was made; kept after the student moves out.",
+   "fieldname": "hostel",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Hostel",
+   "options": "Hostel",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Defaults to the mess serving the student's hostel.",
+   "fieldname": "mess",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Mess",
+   "options": "Hostel Mess",
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Today",
+   "fieldname": "charge_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Charge Date",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "default": "Guest Meal",
+   "fieldname": "charge_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Charge Type",
+   "options": "Guest Meal\nSpecial Food\nExtra Item\nBreakage\nOther"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "non_negative": 1,
+   "options": "",
+   "reqd": 1
+  },
+  {
+   "default": "Unbilled",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Unbilled\nBilled",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "mess_bill",
+   "fieldtype": "Link",
+   "label": "Mess Bill",
+   "no_copy": 1,
+   "options": "Mess Bill",
+   "read_only": 1
+  },
+  {
+   "fieldname": "description_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "reqd": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Mess",
+ "name": "Mess Extra Charge",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Mess Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Mess Staff"
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Warden",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "read": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "student_name",
+ "track_changes": 1
+}

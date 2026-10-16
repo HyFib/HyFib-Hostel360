@@ -1,0 +1,85 @@
+# HTTP-level settings for the Hostel360 edge (rendered by the image's envsubst step).
+# The name sorts first in conf.d so the maps, log format and zones exist before the
+# server block in default.conf refers to them.
+
+server_tokens off;
+more_clear_headers Server;
+
+# Client address: the OCI load balancer appends the client to X-Forwarded-For. Only the LB
+# subnet (and local checks) are trusted to supply it; real_ip_recursive skips trusted hops.
+set_real_ip_from ${H360_LB_SUBNET};
+set_real_ip_from 127.0.0.1;
+real_ip_header X-Forwarded-For;
+real_ip_recursive on;
+
+# Access log in a fixed format that fail2ban and the host agent parse. The files live on
+# the block volume and are rotated by logrotate on the host (180 days, CERT-In).
+log_format h360 '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent '
+	'"$http_referer" "$http_user_agent" rt=$request_time urt="$upstream_response_time" '
+	'host="$host" rid=$request_id';
+access_log /var/log/nginx/access.log h360;
+error_log /var/log/nginx/error.log warn;
+
+# WebSocket upgrades pass through; other requests reuse keepalive connections upstream.
+map $http_upgrade $connection_upgrade {
+	default upgrade;
+	"" "";
+}
+
+# Only the portal host name is served. Anything else (scanners using the IP address, Host
+# header tricks) is refused, except the load balancer health check which uses its own Host.
+map $host $h360_host_ok {
+	hostnames;
+	default 0;
+	${SERVER_NAME} 1;
+	localhost 1;
+}
+
+# Addresses banned by fail2ban on the host (see deploy/host/bin/h360-waf-ban).
+geo $h360_denied {
+	default 0;
+	include /etc/nginx/h360/denylist.conf;
+}
+
+# Trusted egress addresses (for example the campus NAT) that are exempt from the per-address
+# rate limits below; many students share one address there.
+geo $h360_rate_exempt {
+	default 0;
+	include /etc/nginx/h360/rate-exempt.conf;
+}
+
+map $h360_rate_exempt $h360_rate_key {
+	0 $binary_remote_addr;
+	1 "";
+}
+
+limit_req_zone $h360_rate_key zone=h360_auth:10m rate=${H360_AUTH_RATE};
+limit_req_zone $h360_rate_key zone=h360_login:10m rate=${H360_LOGIN_RATE};
+limit_req_status 429;
+limit_req_log_level warn;
+
+# Content Security Policy. The portal SPA (/hostel) is built without inline scripts and
+# gets a strict policy; Frappe Desk and the website pages rely on inline and evaluated
+# scripts, so they need 'unsafe-inline' and 'unsafe-eval' for scripts.
+#
+# Payment gateways on the portal: Razorpay Checkout runs in an overlay (script + frames);
+# PayU is a top-level form post from the fees page to PayU's hosted checkout (secure.payu.in,
+# or test.payu.in in test mode), so only form-action needs it. PayU sends the payer back with
+# a form post to /api/method/hostel360.api.payments.payu_return on this host ('self').
+map $uri $h360_csp {
+	default "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' wss://${SERVER_NAME} https://api.razorpay.com https://lumberjack.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; worker-src 'self' blob:; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com; frame-ancestors 'self'; upgrade-insecure-requests";
+	"~^/hostel(/|$)" "default-src 'self'; script-src 'self' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.razorpay.com; font-src 'self' data:; connect-src 'self' wss://${SERVER_NAME} https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; worker-src 'self'; manifest-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com https://secure.payu.in https://test.payu.in; frame-ancestors 'self'; upgrade-insecure-requests";
+}
+
+upstream h360_frontend {
+	server ${H360_FRONTEND_UPSTREAM} max_fails=0;
+	keepalive 64;
+}
+
+upstream h360_php {
+	server ${H360_PHP_UPSTREAM} max_fails=0;
+}
+
+proxy_buffer_size 128k;
+proxy_buffers 8 256k;
+proxy_busy_buffers_size 256k;

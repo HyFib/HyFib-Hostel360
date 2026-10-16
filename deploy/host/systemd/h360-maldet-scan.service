@@ -1,0 +1,13 @@
+[Unit]
+Description=Linux Malware Detect daily scan of recently changed files
+Documentation=file:///opt/hostel360/deploy/README.md
+
+[Service]
+Type=oneshot
+# Files changed in the last 2 days under the sites volume, temporary directories and home
+# directories; hits are reported to Hostel360 by the post-scan hook (h360-maldet-hook).
+ExecStart=/usr/local/sbin/maldet --scan-recent /srv/hostel360/sites,/tmp,/var/tmp,/dev/shm,/home,/root 2
+SyslogIdentifier=h360-maldet-scan
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=4h

@@ -1,0 +1,150 @@
+#!/bin/bash
+# One-shot configurator: writes the bench-wide settings (common_site_config.json) from the
+# environment, so every container of the stack agrees on database, Redis and scanner
+# addresses. Safe to run on every start; values are only rewritten when they differ.
+#
+# It also defines the job queue for operations alert deliveries (ALERT_QUEUE, "alerts"):
+# workers.<queue> in common_site_config.json, which bench needs before a worker may listen
+# on it, and hostel360_alert_queue in the site's config, which sends the deliveries there.
+# The compose file starts the workers only after this has finished.
+set -Eeuo pipefail
+
+cd /home/frappe/frappe-bench
+
+: "${DB_HOST:=mariadb}"
+: "${DB_PORT:=3306}"
+: "${REDIS_CACHE:=redis://redis-cache:6379}"
+: "${REDIS_QUEUE:=redis://redis-queue:6379}"
+: "${SOCKETIO_PORT:=9000}"
+: "${CLAMD_HOST:=clamav}"
+: "${CLAMD_PORT:=3310}"
+: "${MAX_FILE_SIZE:=10485760}"
+: "${CHROMIUM_PATH:=/usr/lib/chromium/chromium-headless-shell}"
+: "${FRAPPE_MONITOR:=1}"
+: "${ALERT_QUEUE:=alerts}"
+: "${ALERT_QUEUE_TIMEOUT:=300}"
+
+log() {
+	printf '%s h360-configure: %s\n' "$(date -Iseconds)" "$*" >&2
+}
+
+current() {
+	# current <key>: value from common_site_config.json ("" when absent)
+	env/bin/python - "$1" <<'PY'
+import json
+import sys
+
+try:
+	with open("sites/common_site_config.json") as handle:
+		value = json.load(handle).get(sys.argv[1])
+except (OSError, ValueError):
+	value = None
+if value is None:
+	print("")
+elif isinstance(value, bool):
+	print("true" if value else "false")
+else:
+	print(value)
+PY
+}
+
+set_global() {
+	# set_global <key> <value> [parse]: parse=1 stores numbers/booleans as JSON
+	local key="$1" value="$2" parse="${3:-0}"
+	if [[ "$(current "${key}")" == "${value}" ]]; then
+		return 0
+	fi
+	if [[ "${parse}" == 1 ]]; then
+		bench set-config -g -p "${key}" "${value}" >/dev/null
+	else
+		bench set-config -g "${key}" "${value}" >/dev/null
+	fi
+	log "set ${key}"
+}
+
+ensure_worker_queue() {
+	# ensure_worker_queue <queue> <timeout>: the queue under "workers" in
+	# common_site_config.json, next to any queue an operator defined there by hand.
+	local wanted
+	wanted="$(env/bin/python - "$1" "$2" <<'PY'
+import json
+import sys
+
+name, timeout = sys.argv[1], int(sys.argv[2])
+try:
+	with open("sites/common_site_config.json") as handle:
+		workers = json.load(handle).get("workers")
+except (OSError, ValueError):
+	workers = None
+current = workers if isinstance(workers, dict) else {}
+wanted = {key: dict(value) if isinstance(value, dict) else {} for key, value in current.items()}
+wanted.setdefault(name, {})["timeout"] = timeout
+# bench set-config -p reads a Python literal
+print("" if wanted == current else repr(wanted))
+PY
+)"
+	if [[ -n "${wanted}" ]]; then
+		bench set-config -g -p workers "${wanted}" >/dev/null
+		log "set workers.$1"
+	fi
+}
+
+site_value() {
+	# site_value <site> <key>: value from the site's site_config.json ("" when absent)
+	env/bin/python -c 'import json, sys; print(json.load(open(sys.argv[1])).get(sys.argv[2], ""))' \
+		"sites/$1/site_config.json" "$2" 2>/dev/null || true
+}
+
+if [[ -n "${ALERT_QUEUE}" ]]; then
+	[[ "${ALERT_QUEUE}" =~ ^[a-z][a-z0-9_]{0,39}$ ]] || {
+		log "ALERT_QUEUE must be a lowercase queue name (got '${ALERT_QUEUE}')"
+		exit 64
+	}
+	[[ "${ALERT_QUEUE_TIMEOUT}" =~ ^[1-9][0-9]{1,4}$ ]] || {
+		log "ALERT_QUEUE_TIMEOUT must be a number of seconds, 10 or more (got '${ALERT_QUEUE_TIMEOUT}')"
+		exit 64
+	}
+fi
+
+set_global db_host "${DB_HOST}"
+set_global db_port "${DB_PORT}" 1
+set_global redis_cache "${REDIS_CACHE}"
+set_global redis_queue "${REDIS_QUEUE}"
+# Older code paths still read redis_socketio; it points at the queue instance.
+set_global redis_socketio "${REDIS_QUEUE}"
+set_global socketio_port "${SOCKETIO_PORT}" 1
+set_global clamd_host "${CLAMD_HOST}"
+set_global clamd_port "${CLAMD_PORT}" 1
+set_global max_file_size "${MAX_FILE_SIZE}" 1
+set_global monitor "${FRAPPE_MONITOR}" 1
+if [[ -x "${CHROMIUM_PATH}" ]]; then
+	set_global chromium_path "${CHROMIUM_PATH}"
+fi
+case "${ALERT_QUEUE}" in
+	"" | short | default | long) ;; # built-in queues need no definition
+	*) ensure_worker_queue "${ALERT_QUEUE}" "${ALERT_QUEUE_TIMEOUT}" ;;
+esac
+
+if [[ -n "${SITE_NAME:-}" ]]; then
+	# Default site for bench commands run inside the containers (what "bench use" sets).
+	set_global default_site "${SITE_NAME}"
+	rm -f sites/currentsite.txt
+
+	if [[ -f "sites/${SITE_NAME}/site_config.json" ]]; then
+		public_url="${PUBLIC_URL:-https://${SITE_NAME}}"
+		if [[ "$(site_value "${SITE_NAME}" host_name)" != "${public_url}" ]]; then
+			bench --site "${SITE_NAME}" set-config host_name "${public_url}" >/dev/null
+			log "set host_name for ${SITE_NAME}"
+		fi
+		# Only once the queue is defined above: a site pointing at an undefined queue would
+		# fall back to delivering alerts inside the request that raised them.
+		if [[ -n "${ALERT_QUEUE}" && "$(site_value "${SITE_NAME}" hostel360_alert_queue)" != "${ALERT_QUEUE}" ]]; then
+			bench --site "${SITE_NAME}" set-config hostel360_alert_queue "${ALERT_QUEUE}" >/dev/null
+			log "set hostel360_alert_queue for ${SITE_NAME}"
+		fi
+	else
+		log "site ${SITE_NAME} does not exist yet; create it with 'bench new-site' (see deploy/README.md)"
+	fi
+fi
+
+log "configuration complete"

@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+[Journal]
+Storage=persistent
+Compress=yes
+SystemMaxUse={{ h360_journal_max_use }}
+MaxRetentionSec={{ h360_log_retention_days }}day
+ForwardToSyslog=yes

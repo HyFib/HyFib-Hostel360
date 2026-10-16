@@ -1,0 +1,11 @@
+# Response security headers for every reply, including errors and WAF denials.
+# more_set_headers replaces any copy the application sent, so each header appears once.
+more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+more_set_headers "X-Content-Type-Options: nosniff";
+more_set_headers "X-Frame-Options: SAMEORIGIN";
+more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+more_set_headers "Permissions-Policy: accelerometer=(), autoplay=(), camera=(self), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(self \"https://api.razorpay.com\" \"https://checkout.razorpay.com\"), usb=(), serial=(), bluetooth=(), browsing-topics=()";
+more_set_headers "Cross-Origin-Opener-Policy: same-origin-allow-popups";
+more_set_headers "X-Permitted-Cross-Domain-Policies: none";
+more_set_headers "Content-Security-Policy: $h360_csp";
+more_clear_headers X-Powered-By X-XSS-Protection;

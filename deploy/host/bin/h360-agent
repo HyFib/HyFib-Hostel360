@@ -1,0 +1,396 @@
+#!/usr/bin/env bash
+# Hostel360 host agent (h360-agent.timer, every 5 minutes).
+#
+# Measures the host and the container stack and reports to Hostel360 Operations:
+#   metrics    cpu_percent, memory_percent, swap_percent, load_per_cpu, disk_percent (data
+#              volume), root_disk_percent, inode percentages, containers_unhealthy, fail2ban_banned,
+#              security_bans, waf_blocks, waf_rate_limited, clamav_signature_age_hours,
+#              tls_internal_days_left, ntp_offset_ms
+#   heartbeat  every run; a silent agent raises its own alert in the application
+#   alert /    host.<check>.<host> keys: raised while a check fails, resolved once it
+#   resolve    passes again (open alerts are remembered under /var/lib/hostel360/agent)
+#
+# Thresholds come from /etc/hostel360/agent.env (see deploy/host/config/agent.env.example).
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-agent
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_require_cmd docker jq curl openssl awk
+h360_lock agent
+
+state="${H360_STATE_DIR}/agent"
+mkdir -p "${state}/open"
+host="$(h360_host)"
+data_dir="${H360_DATA_DIR:-/srv/hostel360}"
+project="${H360_COMPOSE_PROJECT:-hostel360}"
+samples=()
+
+: "${H360_DISK_WARN:=80}"
+: "${H360_DISK_CRIT:=90}"
+: "${H360_INODE_WARN:=80}"
+: "${H360_MEM_WARN:=90}"
+: "${H360_MEM_CRIT:=97}"
+: "${H360_SWAP_WARN:=50}"
+: "${H360_LOAD_WARN_PER_CPU:=2}"
+: "${H360_CPU_WARN:=90}"
+: "${H360_TLS_WARN_DAYS:=21}"
+: "${H360_TLS_CRIT_DAYS:=7}"
+: "${H360_CLAMAV_SIG_WARN_HOURS:=48}"
+: "${H360_CLAMAV_SIG_CRIT_HOURS:=96}"
+: "${H360_WAF_BLOCK_ALERT:=300}"
+: "${H360_BAN_ALERT:=25}"
+: "${H360_RESTART_ALERT:=3}"
+
+# --------------------------------------------------------------------------- helpers
+
+sample() {
+	# sample <metric> <numeric value> [unit]
+	samples+=("$(jq -cn --arg metric "$1" --argjson value "$2" --arg unit "${3:-}" \
+		'{metric: $metric, value: $value, unit: $unit}')")
+}
+
+key_file() {
+	printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'
+}
+
+raise() {
+	# raise <check> <severity> <category> <title> <description> [is_outage]
+	local key="host.$1.${host}"
+	h360_alert "${key}" "$2" "$3" "$4" "$5" "${6:-false}"
+	touch "${state}/open/$(key_file "${key}")"
+}
+
+clear_alert() {
+	# clear_alert <check> <notes>: resolve only what this agent opened
+	local key="host.$1.${host}"
+	local marker
+	marker="${state}/open/$(key_file "${key}")"
+	if [[ -f "${marker}" ]]; then
+		h360_resolve "${key}" "$2"
+		rm -f -- "${marker}"
+	fi
+}
+
+percent_of() {
+	awk -v used="$1" -v total="$2" 'BEGIN { printf "%.2f", (total > 0 ? used * 100 / total : 0) }'
+}
+
+ge() {
+	awk -v a="$1" -v b="$2" 'BEGIN { exit !(a >= b) }'
+}
+
+# --------------------------------------------------------------------------- cpu, memory, load
+
+cpu_snapshot() {
+	awk '/^cpu / { total = 0; for (i = 2; i <= NF; i++) total += $i; print total, $5 + $6 }' /proc/stat
+}
+
+check_cpu() {
+	local now prev total idle ptotal pidle pct
+	now="$(cpu_snapshot)"
+	if [[ -f "${state}/cpu" ]]; then
+		prev="$(cat "${state}/cpu")"
+	else
+		prev="${now}"
+		sleep 1
+		now="$(cpu_snapshot)"
+	fi
+	printf '%s\n' "${now}" >"${state}/cpu"
+	read -r total idle <<<"${now}"
+	read -r ptotal pidle <<<"${prev}"
+	pct="$(awk -v t=$((total - ptotal)) -v i=$((idle - pidle)) 'BEGIN { printf "%.2f", (t > 0 ? (1 - i / t) * 100 : 0) }')"
+	sample cpu_percent "${pct}" "%"
+	if ge "${pct}" "${H360_CPU_WARN}"; then
+		raise cpu Warning Performance "High CPU on ${host}" "CPU averaged ${pct}% over the last interval."
+	else
+		clear_alert cpu "CPU back to ${pct}%."
+	fi
+}
+
+check_memory() {
+	local total available swap_total swap_free mem_pct swap_pct
+	read -r total available swap_total swap_free < <(awk '
+		/^MemTotal:/ { t = $2 } /^MemAvailable:/ { a = $2 }
+		/^SwapTotal:/ { st = $2 } /^SwapFree:/ { sf = $2 }
+		END { print t, a, st, sf }' /proc/meminfo)
+	mem_pct="$(percent_of $((total - available)) "${total}")"
+	swap_pct="$(percent_of $((swap_total - swap_free)) "${swap_total}")"
+	sample memory_percent "${mem_pct}" "%"
+	sample swap_percent "${swap_pct}" "%"
+	if ge "${mem_pct}" "${H360_MEM_CRIT}"; then
+		raise memory Critical Capacity "Memory nearly exhausted on ${host}" "Memory in use: ${mem_pct}%, swap ${swap_pct}%."
+	elif ge "${mem_pct}" "${H360_MEM_WARN}" || ge "${swap_pct}" "${H360_SWAP_WARN}"; then
+		raise memory Warning Capacity "High memory use on ${host}" "Memory in use: ${mem_pct}%, swap ${swap_pct}%."
+	else
+		clear_alert memory "Memory back to ${mem_pct}%."
+	fi
+}
+
+check_load() {
+	local load1 load5 load15 cpus per_cpu
+	read -r load1 load5 load15 _ </proc/loadavg
+	cpus="$(nproc)"
+	per_cpu="$(awk -v l="${load5}" -v c="${cpus}" 'BEGIN { printf "%.2f", l / c }')"
+	sample load_1 "${load1}"
+	sample load_5 "${load5}"
+	sample load_15 "${load15}"
+	sample load_per_cpu "${per_cpu}"
+	if ge "${per_cpu}" "${H360_LOAD_WARN_PER_CPU}"; then
+		raise load Warning Performance "High load on ${host}" "5-minute load ${load5} on ${cpus} CPUs."
+	else
+		clear_alert load "Load back to ${load5}."
+	fi
+}
+
+# --------------------------------------------------------------------------- disks
+
+check_disk() {
+	# check_disk <check> <path> <metric prefix>
+	local check="$1" path="$2" prefix="$3" pcent ipcent
+	if ! mountpoint -q "${path}" && [[ "${path}" != "/" ]]; then
+		raise "${check}" Critical Capacity "Data volume not mounted on ${host}" \
+			"${path} is not a mount point; the stack must not run on the boot volume." true
+		return
+	fi
+	read -r pcent ipcent < <(df --output=pcent,ipcent "${path}" | awk 'NR == 2 { gsub("%", ""); print $1, $2 }')
+	sample "${prefix}_percent" "${pcent}" "%"
+	sample "${prefix}_inode_percent" "${ipcent:-0}" "%"
+	if ge "${pcent}" "${H360_DISK_CRIT}"; then
+		raise "${check}" Critical Capacity "Disk almost full on ${host} (${path})" "${path} is ${pcent}% full (inodes ${ipcent}%)."
+	elif ge "${pcent}" "${H360_DISK_WARN}" || ge "${ipcent:-0}" "${H360_INODE_WARN}"; then
+		raise "${check}" Warning Capacity "Disk filling up on ${host} (${path})" "${path} is ${pcent}% full (inodes ${ipcent}%)."
+	else
+		clear_alert "${check}" "${path} at ${pcent}%."
+	fi
+}
+
+# --------------------------------------------------------------------------- containers
+
+service_severity() {
+	case "$1" in
+		waf | frontend | backend | mariadb | redis-cache | redis-queue) echo "Critical true" ;;
+		websocket | queue-short | queue-long | scheduler | clamav) echo "Critical false" ;;
+		*) echo "Warning false" ;;
+	esac
+}
+
+check_containers() {
+	if ! docker info >/dev/null 2>&1; then
+		raise docker Critical Availability "Docker engine not responding on ${host}" \
+			"docker info failed; the Hostel360 stack is probably down." true
+		return
+	fi
+	clear_alert docker "Docker engine responding."
+
+	local services service ids line name status health restarts unhealthy=0 severity outage
+	services="$(h360_compose config --services 2>/dev/null || true)"
+	ids="$(docker ps -aq --filter "label=com.docker.compose.project=${project}")"
+	declare -A seen=()
+	if [[ -n "${ids}" ]]; then
+		while read -r name status health restarts container; do
+			[[ -n "${name}" ]] || continue
+			container="${container#/}"
+			# A service with replicas reports its worst container.
+			if [[ "${status}" != running ]]; then
+				[[ "${name}" == configurator ]] && continue
+				seen["${name}"]="down ${status}"
+			elif [[ "${health}" == unhealthy ]]; then
+				[[ "${seen[${name}]:-}" == down* ]] || seen["${name}"]="unhealthy ${restarts}"
+			else
+				[[ -n "${seen[${name}]:-}" ]] || seen["${name}"]="ok ${restarts}"
+			fi
+			# Restart counts are per container (a service can have replicas).
+			local previous_restarts=0
+			[[ -f "${state}/restarts.${container}" ]] && previous_restarts="$(cat "${state}/restarts.${container}")"
+			if [[ "${restarts}" =~ ^[0-9]+$ ]]; then
+				if ((restarts - previous_restarts >= H360_RESTART_ALERT)); then
+					raise "restart.${container}" Warning Availability "Container ${container} keeps restarting on ${host}" \
+						"Restarted $((restarts - previous_restarts)) times in the last interval."
+				else
+					clear_alert "restart.${container}" "Container ${container} stable."
+				fi
+				printf '%s\n' "${restarts}" >"${state}/restarts.${container}"
+			fi
+		done < <(xargs -r docker inspect --format \
+			'{{index .Config.Labels "com.docker.compose.service"}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} {{.RestartCount}} {{.Name}}' \
+			<<<"${ids}")
+	fi
+
+	for service in ${services}; do
+		[[ "${service}" == configurator ]] && continue
+		line="${seen[${service}]:-missing}"
+		read -r severity outage < <(service_severity "${service}")
+		case "${line}" in
+			ok*)
+				clear_alert "container.${service}" "${service} is running and healthy."
+				;;
+			unhealthy*)
+				unhealthy=$((unhealthy + 1))
+				raise "container.${service}" "${severity}" Availability "Container ${service} unhealthy on ${host}" \
+					"The ${service} health check is failing." "${outage}"
+				;;
+			*)
+				unhealthy=$((unhealthy + 1))
+				raise "container.${service}" "${severity}" Availability "Container ${service} down on ${host}" \
+					"State: ${line}." "${outage}"
+				;;
+		esac
+	done
+	sample containers_unhealthy "${unhealthy}"
+}
+
+# --------------------------------------------------------------------------- security
+
+check_fail2ban() {
+	command -v fail2ban-client >/dev/null 2>&1 || return 0
+	if ! fail2ban-client ping >/dev/null 2>&1; then
+		raise fail2ban Warning Security "fail2ban not running on ${host}" "fail2ban-client could not reach the server."
+		return
+	fi
+	clear_alert fail2ban "fail2ban running."
+	local jails jail current=0 total=0 c t previous new
+	jails="$(fail2ban-client status | sed -n 's/.*Jail list:[[:space:]]*//p' | tr ',' ' ')"
+	for jail in ${jails}; do
+		c="$(fail2ban-client status "${jail}" | awk -F: '/Currently banned/ { gsub(/ /, "", $2); print $2 }')"
+		t="$(fail2ban-client status "${jail}" | awk -F: '/Total banned/ { gsub(/ /, "", $2); print $2 }')"
+		current=$((current + ${c:-0}))
+		total=$((total + ${t:-0}))
+	done
+	previous="$(cat "${state}/f2b_total" 2>/dev/null || echo "${total}")"
+	new=$((total >= previous ? total - previous : total))
+	printf '%s\n' "${total}" >"${state}/f2b_total"
+	sample fail2ban_banned "${current}"
+	sample security_bans "${new}"
+	if ((new >= H360_BAN_ALERT)); then
+		raise bans Warning Security "Many addresses banned on ${host}" \
+			"${new} new bans in the last interval (${current} active). Possible brute force or scanning."
+	else
+		clear_alert bans "Ban rate back to normal."
+	fi
+}
+
+check_waf_log() {
+	local log="${data_dir}/logs/waf/error.log" inode size offset previous_inode blocks limited
+	[[ -f "${log}" ]] || return 0
+	inode="$(stat -c '%i' "${log}")"
+	size="$(stat -c '%s' "${log}")"
+	read -r previous_inode offset < <(cat "${state}/waf_offset" 2>/dev/null || echo "0 0")
+	if [[ "${inode}" != "${previous_inode}" || "${size}" -lt "${offset}" ]]; then
+		offset=0
+	fi
+	read -r blocks limited < <(tail -c "+$((offset + 1))" "${log}" | head -c "$((size - offset))" |
+		awk '/ModSecurity: Access denied/ { b++ } /limiting requests/ { l++ } END { print b + 0, l + 0 }')
+	printf '%s %s\n' "${inode}" "${size}" >"${state}/waf_offset"
+	sample waf_blocks "${blocks}"
+	sample waf_rate_limited "${limited}"
+	if ((blocks >= H360_WAF_BLOCK_ALERT)); then
+		raise waf Warning Security "Unusual WAF blocking on ${host}" \
+			"${blocks} requests blocked by ModSecurity in the last interval; review ${log}."
+	else
+		clear_alert waf "WAF block rate back to normal."
+	fi
+}
+
+check_clamav() {
+	local newest age
+	newest="$(find "${data_dir}/clamav" -maxdepth 1 -type f \( -name 'daily.cvd' -o -name 'daily.cld' \) -printf '%T@\n' 2>/dev/null | sort -n | tail -n 1)"
+	if [[ -z "${newest}" ]]; then
+		raise clamav Critical Security "ClamAV signatures missing on ${host}" "No daily signature file in ${data_dir}/clamav."
+		return
+	fi
+	age="$(awk -v t="${newest%.*}" -v now="$(date +%s)" 'BEGIN { printf "%.1f", (now - t) / 3600 }')"
+	sample clamav_signature_age_hours "${age}" "h"
+	if ge "${age}" "${H360_CLAMAV_SIG_CRIT_HOURS}"; then
+		raise clamav Critical Security "ClamAV signatures outdated on ${host}" "Last update ${age} hours ago; check freshclam in the clamav container."
+	elif ge "${age}" "${H360_CLAMAV_SIG_WARN_HOURS}"; then
+		raise clamav Warning Security "ClamAV signatures getting old on ${host}" "Last update ${age} hours ago."
+	else
+		clear_alert clamav "Signatures updated ${age} hours ago."
+	fi
+}
+
+check_maldet() {
+	[[ -x /usr/local/sbin/maldet ]] || return 0
+	if [[ -f /etc/default/maldet ]] && grep -q '^MONITOR_MODE=..*' /etc/default/maldet; then
+		if systemctl is-active --quiet maldet.service; then
+			clear_alert maldet "maldet monitor running."
+		else
+			raise maldet Warning Security "Malware monitor not running on ${host}" \
+				"maldet.service (inotify monitor of the sites volume) is not active."
+		fi
+	fi
+}
+
+check_tls() {
+	local cert="${H360_CONFIG_DIR}/waf/tls/server.crt" end days
+	[[ -f "${cert}" ]] || return 0
+	end="$(openssl x509 -enddate -noout -in "${cert}" | cut -d= -f2)"
+	days=$((($(date -d "${end}" +%s) - $(date +%s)) / 86400))
+	sample tls_internal_days_left "${days}" "d"
+	if ((days <= H360_TLS_CRIT_DAYS)); then
+		raise tls.internal Critical Security "Internal WAF certificate expires in ${days} days on ${host}" \
+			"Renew ${cert} (re-run the Ansible app role); the load balancer re-encrypts to it."
+	elif ((days <= H360_TLS_WARN_DAYS)); then
+		raise tls.internal Warning Security "Internal WAF certificate expires in ${days} days on ${host}" \
+			"Renew ${cert} (re-run the Ansible app role)."
+	else
+		clear_alert tls.internal "Certificate valid for ${days} days."
+	fi
+}
+
+check_time() {
+	local synced offset
+	synced="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo unknown)"
+	if command -v chronyc >/dev/null 2>&1; then
+		offset="$(chronyc -c tracking 2>/dev/null | awk -F, '{ printf "%.3f", $5 * 1000 }')"
+		[[ -n "${offset}" ]] && sample ntp_offset_ms "${offset}" "ms"
+	fi
+	if [[ "${synced}" == yes ]]; then
+		clear_alert time "Clock synchronised."
+	else
+		raise time Warning Security "Clock not synchronised on ${host}" \
+			"NTP synchronisation is '${synced}'. CERT-In requires logs time-stamped against NIC/NPL time."
+	fi
+}
+
+check_reboot() {
+	if [[ -f /var/run/reboot-required ]]; then
+		raise reboot Info Other "Reboot pending on ${host}" \
+			"Security updates installed packages that need a reboot. Schedule one in the next maintenance window."
+	else
+		clear_alert reboot "No reboot pending."
+	fi
+}
+
+# --------------------------------------------------------------------------- run
+
+run_check() {
+	# A failing check must not stop the others.
+	"$@" || log_warn "check $1 failed"
+}
+
+run_check check_cpu
+run_check check_memory
+run_check check_load
+# The data volume is "disk" for the monthly performance report; the boot volume is tracked too.
+run_check check_disk disk.data "${data_dir}" disk
+run_check check_disk disk.root / root_disk
+run_check check_containers
+run_check check_fail2ban
+run_check check_waf_log
+run_check check_clamav
+run_check check_maldet
+run_check check_tls
+run_check check_time
+run_check check_reboot
+
+h360_report "$(jq -cn --arg host "${host}" '{type: "heartbeat", source: "Host Agent", host: $host}')"
+if [[ "${#samples[@]}" -gt 0 ]]; then
+	h360_report "$(printf '%s\n' "${samples[@]}" | jq -cs --arg host "${host}" \
+		'{type: "metrics", source: "Host Agent", host: $host, samples: .}')"
+fi
+/usr/local/sbin/h360-ingest --flush || true
+log_info "reported ${#samples[@]} samples"

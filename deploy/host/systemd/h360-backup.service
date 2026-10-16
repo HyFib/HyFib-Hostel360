@@ -1,0 +1,14 @@
+[Unit]
+Description=Hostel360 backup to OCI Object Storage (Mumbai)
+Documentation=file:///opt/hostel360/deploy/README.md
+After=hostel360-stack.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/h360-backup
+SyslogIdentifier=h360-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=6h

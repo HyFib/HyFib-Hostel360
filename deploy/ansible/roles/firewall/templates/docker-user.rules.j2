@@ -1,0 +1,10 @@
+*filter
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -p tcp -d 169.254.169.254/32 --dport 80 -j DROP
+{% for port in h360_waf_ports %}
+-A DOCKER-USER -i {{ h360_external_interface }} -p tcp -s {{ h360_lb_subnet_cidr }} -m conntrack --ctstate NEW --ctorigdstport {{ port }} -j RETURN
+{% endfor %}
+-A DOCKER-USER -i {{ h360_external_interface }} -m conntrack --ctstate NEW -j DROP
+-A DOCKER-USER -j RETURN
+COMMIT

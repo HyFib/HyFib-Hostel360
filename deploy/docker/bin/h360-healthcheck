@@ -1,0 +1,47 @@
+#!/bin/bash
+# Container health check for every role of the Hostel360 image. The entrypoint records the
+# role in /tmp/h360-role; one-off commands (bench, shells) report healthy.
+set -Euo pipefail
+
+role="$(cat /tmp/h360-role 2>/dev/null || true)"
+bench_dir=/home/frappe/frappe-bench
+
+redis_ping() {
+	# PING the Redis instance named in common_site_config.json (redis_queue by default).
+	"${bench_dir}/env/bin/python" - "${1:-redis_queue}" <<'PY'
+import json
+import sys
+
+import redis
+
+with open("/home/frappe/frappe-bench/sites/common_site_config.json") as handle:
+	url = json.load(handle)[sys.argv[1]]
+redis.Redis.from_url(url, socket_connect_timeout=3, socket_timeout=3).ping()
+PY
+}
+
+case "${role}" in
+	backend)
+		exec curl -fsS -o /dev/null --max-time 8 \
+			-H "Host: ${SITE_NAME:-localhost}" \
+			-H "X-Frappe-Site-Name: ${SITE_NAME:-localhost}" \
+			"http://127.0.0.1:8000/api/method/hostel360.api.health.liveness"
+		;;
+	frontend)
+		exec curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:${FRONTEND_PORT:-8080}/nginx-health"
+		;;
+	websocket)
+		exec node -e '
+			const socket = require("net").connect(Number(process.env.SOCKETIO_PORT || 9000), "127.0.0.1");
+			socket.setTimeout(3000, () => process.exit(1));
+			socket.on("connect", () => { socket.end(); process.exit(0); });
+			socket.on("error", () => process.exit(1));
+		'
+		;;
+	worker | scheduler)
+		redis_ping redis_queue
+		;;
+	*)
+		exit 0
+		;;
+esac

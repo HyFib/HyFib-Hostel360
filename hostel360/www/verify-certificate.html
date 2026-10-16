@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'en' }}">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="robots" content="noindex, nofollow">
+	<meta name="referrer" content="no-referrer">
+	<title>{{ _("Verify Certificate") }}{% if institution.institution_short_name %} · {{ institution.institution_short_name | e }}{% endif %}</title>
+	<style>
+		:root {
+			--bg: #f4f6fa;
+			--card: #ffffff;
+			--text: #1b2430;
+			--muted: #5d6b7c;
+			--border: #dde3eb;
+			--brand: #1f3a5f;
+			--ok: #157347;
+			--ok-bg: #e7f6ee;
+			--warn: #9a5b00;
+			--warn-bg: #fff4dc;
+			--bad: #b3261e;
+			--bad-bg: #fdecea;
+			--focus: #3d7bd9;
+		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #0f141b;
+				--card: #18202b;
+				--text: #e6ebf1;
+				--muted: #9aa8b8;
+				--border: #2a3644;
+				--brand: #8fb4e8;
+				--ok: #5fd39a;
+				--ok-bg: #12301f;
+				--warn: #f2c063;
+				--warn-bg: #33270d;
+				--bad: #f28b82;
+				--bad-bg: #3a1714;
+			}
+		}
+		* { box-sizing: border-box; }
+		html, body { margin: 0; padding: 0; }
+		body {
+			background: var(--bg);
+			color: var(--text);
+			font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Tamil", sans-serif;
+			min-height: 100vh;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			padding: 24px 16px;
+		}
+		.wrap { width: 100%; max-width: 560px; }
+		header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+		header img { width: 56px; height: 56px; object-fit: contain; }
+		header .name { font-weight: 650; font-size: 1.05rem; color: var(--brand); }
+		header .sub { color: var(--muted); font-size: 0.9rem; }
+		.card {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 24px;
+			box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+		}
+		h1 { font-size: 1.35rem; margin: 0 0 6px; }
+		p.lead { margin: 0 0 18px; color: var(--muted); }
+		form { display: flex; gap: 10px; flex-wrap: wrap; }
+		label { position: absolute; left: -9999px; }
+		input[type="text"] {
+			flex: 1 1 220px;
+			min-width: 0;
+			font: inherit;
+			font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+			letter-spacing: 0.04em;
+			padding: 12px 14px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			background: var(--bg);
+			color: var(--text);
+		}
+		input[type="text"]:focus, button:focus { outline: 3px solid var(--focus); outline-offset: 1px; }
+		button {
+			font: inherit;
+			font-weight: 600;
+			padding: 12px 20px;
+			border-radius: 10px;
+			border: 0;
+			background: var(--brand);
+			color: var(--card);
+			cursor: pointer;
+		}
+		.result { margin-top: 22px; border-radius: 12px; padding: 18px; border: 1px solid transparent; }
+		.result.valid { background: var(--ok-bg); border-color: var(--ok); }
+		.result.expired { background: var(--warn-bg); border-color: var(--warn); }
+		.result.not_found, .result.limited { background: var(--bad-bg); border-color: var(--bad); }
+		.verdict { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+		.valid .verdict { color: var(--ok); }
+		.expired .verdict { color: var(--warn); }
+		.not_found .verdict, .limited .verdict { color: var(--bad); }
+		.verdict svg { flex: none; width: 26px; height: 26px; }
+		.result p { margin: 8px 0 0; }
+		dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 16px 0 0; }
+		dt { color: var(--muted); }
+		dd { margin: 0; font-weight: 600; word-break: break-word; }
+		.help { margin-top: 18px; color: var(--muted); font-size: 0.9rem; }
+		footer { margin-top: 18px; color: var(--muted); font-size: 0.85rem; text-align: center; }
+		@media (max-width: 420px) {
+			.card { padding: 18px; }
+			button { width: 100%; }
+			dl { grid-template-columns: 1fr; gap: 2px; }
+			dd { margin-bottom: 8px; }
+		}
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<header>
+			{% if institution.logo %}<img src="{{ institution.logo | e }}" alt="">{% endif %}
+			<div>
+				<div class="name">{{ (institution.institution_name or _("Hostel Office")) | e }}</div>
+				<div class="sub">{{ _("Hostel certificate verification") }}</div>
+			</div>
+		</header>
+
+		<main class="card">
+			<h1>{{ _("Verify a bonafide certificate") }}</h1>
+			<p class="lead">{{ _("Scan the QR code on the certificate, or type the 16-character verification code printed beside it.") }}</p>
+
+			<form method="get" action="/verify-certificate" autocomplete="off">
+				<label for="code">{{ _("Verification code") }}</label>
+				<input type="text" id="code" name="code" value="{{ code | e }}" maxlength="64"
+					placeholder="{{ _('Verification code') }}" spellcheck="false" autocapitalize="off" required>
+				<button type="submit">{{ _("Verify") }}</button>
+			</form>
+
+			{% if rate_limited %}
+			<section class="result limited" role="status" aria-live="polite">
+				<div class="verdict">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/></svg>
+					{{ _("Too many checks") }}
+				</div>
+				<p>{{ _("Too many certificates were checked from your network. Please try again in a few minutes.") }}</p>
+			</section>
+			{% elif result %}
+				{% if result.state == "not_found" %}
+				<section class="result not_found" role="status" aria-live="polite">
+					<div class="verdict">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+						{{ _("Not found") }}
+					</div>
+					<p>{{ _("No certificate matches this code. Check the code for typing mistakes; codes are case-sensitive. If it still does not match, the certificate was not issued by this hostel.") }}</p>
+				</section>
+				{% else %}
+				<section class="result {{ result.state }}" role="status" aria-live="polite">
+					<div class="verdict">
+						{% if result.state == "valid" %}
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
+						{{ _("Valid certificate") }}
+						{% else %}
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.5"/></svg>
+						{{ _("Expired certificate") }}
+						{% endif %}
+					</div>
+					<p>
+						{% if result.state == "valid" %}
+						{{ _("This certificate was issued by the hostel office and is within its validity period.") }}
+						{% else %}
+						{{ _("This certificate was issued by the hostel office, but its validity ended on {0}.").format(result.valid_till | e) }}
+						{% endif %}
+					</p>
+					<dl>
+						<dt>{{ _("Certificate No.") }}</dt><dd>{{ result.certificate_number | e }}</dd>
+						<dt>{{ _("Student") }}</dt><dd>{{ result.student_name | e }}</dd>
+						{% if result.program %}<dt>{{ _("Programme") }}</dt><dd>{{ result.program | e }}</dd>{% endif %}
+						<dt>{{ _("Issued on") }}</dt><dd>{{ result.issue_date | e }}</dd>
+						<dt>{{ _("Valid till") }}</dt><dd>{{ result.valid_till | e }}</dd>
+					</dl>
+					<p class="help">{{ _("Compare these details with the printed certificate. The student's name is partly hidden to protect their privacy.") }}</p>
+				</section>
+				{% endif %}
+			{% endif %}
+		</main>
+
+		<footer>
+			{% if institution.phone or institution.email %}
+			{{ _("Questions about a certificate?") }}
+			{% if institution.phone %}{{ _("Call") }} {{ institution.phone | e }}{% endif %}
+			{% if institution.phone and institution.email %}·{% endif %}
+			{% if institution.email %}{{ institution.email | e }}{% endif %}
+			{% endif %}
+		</footer>
+	</div>
+</body>
+</html>

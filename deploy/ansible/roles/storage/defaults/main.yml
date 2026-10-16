@@ -1,0 +1,13 @@
+h360_data_device: /dev/oracleoci/oraclevdb
+h360_data_label: h360data
+h360_data_dir: /srv/hostel360
+# Tender clause 6.4: at least 4,000,000 inodes
+h360_min_inodes: 4000000
+
+# uid/gid of the users inside the containers that own each directory
+h360_uid_frappe: 1000
+h360_uid_mysql: 999
+h360_uid_redis: 999
+h360_gid_redis: 1000
+h360_uid_nginx: 101
+h360_uid_clamav: 1000

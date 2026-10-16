@@ -1,0 +1,241 @@
+{
+ "actions": [],
+ "autoname": "format:{hostel}-{room_number}",
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "location_section",
+  "hostel",
+  "block",
+  "floor",
+  "column_break_location",
+  "room_number",
+  "room_type",
+  "capacity",
+  "status_section",
+  "status",
+  "is_active",
+  "column_break_status",
+  "occupied_beds",
+  "vacant_beds",
+  "beds_section",
+  "beds_html",
+  "facilities_section",
+  "facilities",
+  "column_break_facilities",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "location_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "hostel",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Hostel",
+   "options": "Hostel",
+   "reqd": 1,
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "block",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Block",
+   "options": "Hostel Block",
+   "search_index": 1
+  },
+  {
+   "fieldname": "floor",
+   "fieldtype": "Link",
+   "label": "Floor",
+   "options": "Hostel Floor",
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_location",
+   "fieldtype": "Column Break"
+  },
+  {
+   "bold": 1,
+   "description": "Unique within the hostel, e.g. 101",
+   "fieldname": "room_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Room Number",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "Double",
+   "fieldname": "room_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Room Type",
+   "options": "Single\nDouble\nTriple\nFour Sharing\nDormitory",
+   "reqd": 1
+  },
+  {
+   "default": "2",
+   "description": "Number of beds. Beds A, B, C... are created automatically; occupied beds are never removed.",
+   "fieldname": "capacity",
+   "fieldtype": "Int",
+   "label": "Capacity",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "default": "Available",
+   "description": "Occupancy status is maintained automatically. Choose Under Maintenance or Blocked to stop new allotments.",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Available\nPartially Occupied\nFull\nUnder Maintenance\nBlocked",
+   "search_index": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active"
+  },
+  {
+   "fieldname": "column_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "occupied_beds",
+   "fieldtype": "Int",
+   "label": "Occupied Beds",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "vacant_beds",
+   "fieldtype": "Int",
+   "label": "Vacant Beds",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "beds_section",
+   "fieldtype": "Section Break",
+   "label": "Beds"
+  },
+  {
+   "fieldname": "beds_html",
+   "fieldtype": "HTML",
+   "label": "Beds"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "facilities_section",
+   "fieldtype": "Section Break",
+   "label": "Facilities"
+  },
+  {
+   "fieldname": "facilities",
+   "fieldtype": "Table MultiSelect",
+   "label": "Facilities",
+   "options": "Hostel Room Facility"
+  },
+  {
+   "fieldname": "column_break_facilities",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "icon": "door",
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Setup",
+ "name": "Hostel Room",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Warden"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "read": 1,
+   "role": "Mess Manager"
+  },
+  {
+   "read": 1,
+   "role": "Mess Staff"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "hostel,room_number,room_type",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

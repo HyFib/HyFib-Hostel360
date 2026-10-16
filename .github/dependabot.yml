@@ -1,0 +1,36 @@
+# Dependency updates. New releases are proposed only after 14 days, the same rule the portal's
+# `yarn deps:age` check enforces: hijacked or broken releases are usually caught by then.
+# Python dependencies come with the pinned Frappe release (deploy/docker/build.sh and
+# .github/workflows/ci.yml, FRAPPE_BRANCH) and are moved together with it, by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Kolkata
+    cooldown:
+      default-days: 14
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Kolkata
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    groups:
+      portal-dev-tooling:
+        dependency-type: development
+    commit-message:
+      prefix: "portal"

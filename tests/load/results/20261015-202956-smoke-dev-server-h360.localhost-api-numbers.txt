@@ -1,0 +1,465 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /scripts/hostel360.js
+        output: -
+
+     scenarios: (100.00%) 2 scenarios, 3 max VUs, 1m55s max duration (incl. graceful stop):
+              * desk: 1 looping VUs for 1m25s (exec: desk, gracefulStop: 30s)
+              * portal: Up to 2 looping VUs for 1m25s over 3 stages (gracefulRampDown: 30s, exec: portal, gracefulStop: 30s)
+
+time="2026-10-15T14:59:57Z" level=info msg="profile smoke: 2 portal users, 1 desk users, ramp 15s, hold 60s, ramp-down 10s, think 1-3s" source=console
+
+running (0m01.0s), 1/3 VUs, 0 complete and 0 interrupted iterations
+desk     [   1% ] 1 VUs    0m01.0s/1m25s
+portal   [   1% ] 0/2 VUs  0m01.0s/1m25.0s
+
+running (0m02.0s), 1/3 VUs, 0 complete and 0 interrupted iterations
+desk     [   2% ] 1 VUs    0m02.0s/1m25s
+portal   [   2% ] 0/2 VUs  0m02.0s/1m25.0s
+
+running (0m03.0s), 1/3 VUs, 0 complete and 0 interrupted iterations
+desk     [   3% ] 1 VUs    0m03.0s/1m25s
+portal   [   3% ] 0/2 VUs  0m03.0s/1m25.0s
+
+running (0m04.0s), 1/3 VUs, 1 complete and 0 interrupted iterations
+desk     [   5% ] 1 VUs    0m04.0s/1m25s
+portal   [   5% ] 0/2 VUs  0m04.0s/1m25.0s
+
+running (0m05.0s), 1/3 VUs, 1 complete and 0 interrupted iterations
+desk     [   6% ] 1 VUs    0m05.0s/1m25s
+portal   [   6% ] 0/2 VUs  0m05.0s/1m25.0s
+
+running (0m06.0s), 1/3 VUs, 1 complete and 0 interrupted iterations
+desk     [   7% ] 1 VUs    0m06.0s/1m25s
+portal   [   7% ] 0/2 VUs  0m06.0s/1m25.0s
+
+running (0m07.0s), 1/3 VUs, 1 complete and 0 interrupted iterations
+desk     [   8% ] 1 VUs    0m07.0s/1m25s
+portal   [   8% ] 0/2 VUs  0m07.0s/1m25.0s
+
+running (0m08.0s), 2/3 VUs, 2 complete and 0 interrupted iterations
+desk     [   9% ] 1 VUs    0m08.0s/1m25s
+portal   [   9% ] 1/2 VUs  0m08.0s/1m25.0s
+
+running (0m09.0s), 2/3 VUs, 2 complete and 0 interrupted iterations
+desk     [  11% ] 1 VUs    0m09.0s/1m25s
+portal   [  11% ] 1/2 VUs  0m09.0s/1m25.0s
+
+running (0m10.0s), 2/3 VUs, 2 complete and 0 interrupted iterations
+desk     [  12% ] 1 VUs    0m10.0s/1m25s
+portal   [  12% ] 1/2 VUs  0m10.0s/1m25.0s
+
+running (0m11.0s), 2/3 VUs, 2 complete and 0 interrupted iterations
+desk     [  13% ] 1 VUs    0m11.0s/1m25s
+portal   [  13% ] 1/2 VUs  0m11.0s/1m25.0s
+
+running (0m12.0s), 2/3 VUs, 2 complete and 0 interrupted iterations
+desk     [  14% ] 1 VUs    0m12.0s/1m25s
+portal   [  14% ] 1/2 VUs  0m12.0s/1m25.0s
+
+running (0m13.0s), 2/3 VUs, 2 complete and 0 interrupted iterations
+desk     [  15% ] 1 VUs    0m13.0s/1m25s
+portal   [  15% ] 1/2 VUs  0m13.0s/1m25.0s
+
+running (0m14.0s), 2/3 VUs, 4 complete and 0 interrupted iterations
+desk     [  16% ] 1 VUs    0m14.0s/1m25s
+portal   [  16% ] 1/2 VUs  0m14.0s/1m25.0s
+
+running (0m15.0s), 2/3 VUs, 4 complete and 0 interrupted iterations
+desk     [  18% ] 1 VUs    0m15.0s/1m25s
+portal   [  18% ] 1/2 VUs  0m15.0s/1m25.0s
+
+running (0m16.0s), 3/3 VUs, 5 complete and 0 interrupted iterations
+desk     [  19% ] 1 VUs    0m16.0s/1m25s
+portal   [  19% ] 2/2 VUs  0m16.0s/1m25.0s
+
+running (0m17.0s), 3/3 VUs, 5 complete and 0 interrupted iterations
+desk     [  20% ] 1 VUs    0m17.0s/1m25s
+portal   [  20% ] 2/2 VUs  0m17.0s/1m25.0s
+
+running (0m18.0s), 3/3 VUs, 6 complete and 0 interrupted iterations
+desk     [  21% ] 1 VUs    0m18.0s/1m25s
+portal   [  21% ] 2/2 VUs  0m18.0s/1m25.0s
+
+running (0m19.0s), 3/3 VUs, 6 complete and 0 interrupted iterations
+desk     [  22% ] 1 VUs    0m19.0s/1m25s
+portal   [  22% ] 2/2 VUs  0m19.0s/1m25.0s
+
+running (0m20.0s), 3/3 VUs, 8 complete and 0 interrupted iterations
+desk     [  23% ] 1 VUs    0m20.0s/1m25s
+portal   [  23% ] 2/2 VUs  0m20.0s/1m25.0s
+
+running (0m21.0s), 3/3 VUs, 10 complete and 0 interrupted iterations
+desk     [  25% ] 1 VUs    0m21.0s/1m25s
+portal   [  25% ] 2/2 VUs  0m21.0s/1m25.0s
+
+running (0m22.0s), 3/3 VUs, 10 complete and 0 interrupted iterations
+desk     [  26% ] 1 VUs    0m22.0s/1m25s
+portal   [  26% ] 2/2 VUs  0m22.0s/1m25.0s
+
+running (0m23.0s), 3/3 VUs, 12 complete and 0 interrupted iterations
+desk     [  27% ] 1 VUs    0m23.0s/1m25s
+portal   [  27% ] 2/2 VUs  0m23.0s/1m25.0s
+
+running (0m24.0s), 3/3 VUs, 12 complete and 0 interrupted iterations
+desk     [  28% ] 1 VUs    0m24.0s/1m25s
+portal   [  28% ] 2/2 VUs  0m24.0s/1m25.0s
+
+running (0m25.0s), 3/3 VUs, 15 complete and 0 interrupted iterations
+desk     [  29% ] 1 VUs    0m25.0s/1m25s
+portal   [  29% ] 2/2 VUs  0m25.0s/1m25.0s
+
+running (0m26.0s), 3/3 VUs, 16 complete and 0 interrupted iterations
+desk     [  31% ] 1 VUs    0m26.0s/1m25s
+portal   [  31% ] 2/2 VUs  0m26.0s/1m25.0s
+
+running (0m27.0s), 3/3 VUs, 16 complete and 0 interrupted iterations
+desk     [  32% ] 1 VUs    0m27.0s/1m25s
+portal   [  32% ] 2/2 VUs  0m27.0s/1m25.0s
+
+running (0m28.0s), 3/3 VUs, 18 complete and 0 interrupted iterations
+desk     [  33% ] 1 VUs    0m28.0s/1m25s
+portal   [  33% ] 2/2 VUs  0m28.0s/1m25.0s
+
+running (0m29.0s), 3/3 VUs, 19 complete and 0 interrupted iterations
+desk     [  34% ] 1 VUs    0m29.0s/1m25s
+portal   [  34% ] 2/2 VUs  0m29.0s/1m25.0s
+
+running (0m30.0s), 3/3 VUs, 21 complete and 0 interrupted iterations
+desk     [  35% ] 1 VUs    0m30.0s/1m25s
+portal   [  35% ] 2/2 VUs  0m30.0s/1m25.0s
+
+running (0m31.0s), 3/3 VUs, 22 complete and 0 interrupted iterations
+desk     [  36% ] 1 VUs    0m31.0s/1m25s
+portal   [  36% ] 2/2 VUs  0m31.0s/1m25.0s
+
+running (0m32.0s), 3/3 VUs, 24 complete and 0 interrupted iterations
+desk     [  38% ] 1 VUs    0m32.0s/1m25s
+portal   [  38% ] 2/2 VUs  0m32.0s/1m25.0s
+
+running (0m33.0s), 3/3 VUs, 24 complete and 0 interrupted iterations
+desk     [  39% ] 1 VUs    0m33.0s/1m25s
+portal   [  39% ] 2/2 VUs  0m33.0s/1m25.0s
+
+running (0m34.0s), 3/3 VUs, 25 complete and 0 interrupted iterations
+desk     [  40% ] 1 VUs    0m34.0s/1m25s
+portal   [  40% ] 2/2 VUs  0m34.0s/1m25.0s
+
+running (0m35.0s), 3/3 VUs, 27 complete and 0 interrupted iterations
+desk     [  41% ] 1 VUs    0m35.0s/1m25s
+portal   [  41% ] 2/2 VUs  0m35.0s/1m25.0s
+
+running (0m36.0s), 3/3 VUs, 28 complete and 0 interrupted iterations
+desk     [  42% ] 1 VUs    0m36.0s/1m25s
+portal   [  42% ] 2/2 VUs  0m36.0s/1m25.0s
+
+running (0m37.0s), 3/3 VUs, 28 complete and 0 interrupted iterations
+desk     [  43% ] 1 VUs    0m37.0s/1m25s
+portal   [  43% ] 2/2 VUs  0m37.0s/1m25.0s
+
+running (0m38.0s), 3/3 VUs, 30 complete and 0 interrupted iterations
+desk     [  45% ] 1 VUs    0m38.0s/1m25s
+portal   [  45% ] 2/2 VUs  0m38.0s/1m25.0s
+
+running (0m39.0s), 3/3 VUs, 31 complete and 0 interrupted iterations
+desk     [  46% ] 1 VUs    0m39.0s/1m25s
+portal   [  46% ] 2/2 VUs  0m39.0s/1m25.0s
+
+running (0m40.0s), 3/3 VUs, 31 complete and 0 interrupted iterations
+desk     [  47% ] 1 VUs    0m40.0s/1m25s
+portal   [  47% ] 2/2 VUs  0m40.0s/1m25.0s
+
+running (0m41.0s), 3/3 VUs, 33 complete and 0 interrupted iterations
+desk     [  48% ] 1 VUs    0m41.0s/1m25s
+portal   [  48% ] 2/2 VUs  0m41.0s/1m25.0s
+
+running (0m42.0s), 3/3 VUs, 34 complete and 0 interrupted iterations
+desk     [  49% ] 1 VUs    0m42.0s/1m25s
+portal   [  49% ] 2/2 VUs  0m42.0s/1m25.0s
+
+running (0m43.0s), 3/3 VUs, 35 complete and 0 interrupted iterations
+desk     [  51% ] 1 VUs    0m43.0s/1m25s
+portal   [  51% ] 2/2 VUs  0m43.0s/1m25.0s
+
+running (0m44.0s), 3/3 VUs, 38 complete and 0 interrupted iterations
+desk     [  52% ] 1 VUs    0m44.0s/1m25s
+portal   [  52% ] 2/2 VUs  0m44.0s/1m25.0s
+
+running (0m45.0s), 3/3 VUs, 38 complete and 0 interrupted iterations
+desk     [  53% ] 1 VUs    0m45.0s/1m25s
+portal   [  53% ] 2/2 VUs  0m45.0s/1m25.0s
+
+running (0m46.0s), 3/3 VUs, 40 complete and 0 interrupted iterations
+desk     [  54% ] 1 VUs    0m46.0s/1m25s
+portal   [  54% ] 2/2 VUs  0m46.0s/1m25.0s
+
+running (0m47.0s), 3/3 VUs, 41 complete and 0 interrupted iterations
+desk     [  55% ] 1 VUs    0m47.0s/1m25s
+portal   [  55% ] 2/2 VUs  0m47.0s/1m25.0s
+
+running (0m48.0s), 3/3 VUs, 42 complete and 0 interrupted iterations
+desk     [  56% ] 1 VUs    0m48.0s/1m25s
+portal   [  56% ] 2/2 VUs  0m48.0s/1m25.0s
+
+running (0m49.0s), 3/3 VUs, 43 complete and 0 interrupted iterations
+desk     [  58% ] 1 VUs    0m49.0s/1m25s
+portal   [  58% ] 2/2 VUs  0m49.0s/1m25.0s
+
+running (0m50.0s), 3/3 VUs, 45 complete and 0 interrupted iterations
+desk     [  59% ] 1 VUs    0m50.0s/1m25s
+portal   [  59% ] 2/2 VUs  0m50.0s/1m25.0s
+
+running (0m51.0s), 3/3 VUs, 45 complete and 0 interrupted iterations
+desk     [  60% ] 1 VUs    0m51.0s/1m25s
+portal   [  60% ] 2/2 VUs  0m51.0s/1m25.0s
+
+running (0m52.0s), 3/3 VUs, 48 complete and 0 interrupted iterations
+desk     [  61% ] 1 VUs    0m52.0s/1m25s
+portal   [  61% ] 2/2 VUs  0m52.0s/1m25.0s
+
+running (0m53.0s), 3/3 VUs, 48 complete and 0 interrupted iterations
+desk     [  62% ] 1 VUs    0m53.0s/1m25s
+portal   [  62% ] 2/2 VUs  0m53.0s/1m25.0s
+
+running (0m54.0s), 3/3 VUs, 50 complete and 0 interrupted iterations
+desk     [  63% ] 1 VUs    0m54.0s/1m25s
+portal   [  63% ] 2/2 VUs  0m54.0s/1m25.0s
+
+running (0m55.0s), 3/3 VUs, 50 complete and 0 interrupted iterations
+desk     [  65% ] 1 VUs    0m55.0s/1m25s
+portal   [  65% ] 2/2 VUs  0m55.0s/1m25.0s
+
+running (0m56.0s), 3/3 VUs, 51 complete and 0 interrupted iterations
+desk     [  66% ] 1 VUs    0m56.0s/1m25s
+portal   [  66% ] 2/2 VUs  0m56.0s/1m25.0s
+
+running (0m57.0s), 3/3 VUs, 53 complete and 0 interrupted iterations
+desk     [  67% ] 1 VUs    0m57.0s/1m25s
+portal   [  67% ] 2/2 VUs  0m57.0s/1m25.0s
+
+running (0m58.0s), 3/3 VUs, 53 complete and 0 interrupted iterations
+desk     [  68% ] 1 VUs    0m58.0s/1m25s
+portal   [  68% ] 2/2 VUs  0m58.0s/1m25.0s
+
+running (0m59.0s), 3/3 VUs, 55 complete and 0 interrupted iterations
+desk     [  69% ] 1 VUs    0m59.0s/1m25s
+portal   [  69% ] 2/2 VUs  0m59.0s/1m25.0s
+
+running (1m00.0s), 3/3 VUs, 57 complete and 0 interrupted iterations
+desk     [  71% ] 1 VUs    1m00.0s/1m25s
+portal   [  71% ] 2/2 VUs  1m00.0s/1m25.0s
+
+running (1m01.0s), 3/3 VUs, 58 complete and 0 interrupted iterations
+desk     [  72% ] 1 VUs    1m01.0s/1m25s
+portal   [  72% ] 2/2 VUs  1m01.0s/1m25.0s
+
+running (1m02.0s), 3/3 VUs, 59 complete and 0 interrupted iterations
+desk     [  73% ] 1 VUs    1m02.0s/1m25s
+portal   [  73% ] 2/2 VUs  1m02.0s/1m25.0s
+
+running (1m03.0s), 3/3 VUs, 61 complete and 0 interrupted iterations
+desk     [  74% ] 1 VUs    1m03.0s/1m25s
+portal   [  74% ] 2/2 VUs  1m03.0s/1m25.0s
+
+running (1m04.0s), 3/3 VUs, 61 complete and 0 interrupted iterations
+desk     [  75% ] 1 VUs    1m04.0s/1m25s
+portal   [  75% ] 2/2 VUs  1m04.0s/1m25.0s
+
+running (1m05.0s), 3/3 VUs, 62 complete and 0 interrupted iterations
+desk     [  76% ] 1 VUs    1m05.0s/1m25s
+portal   [  76% ] 2/2 VUs  1m05.0s/1m25.0s
+
+running (1m06.0s), 3/3 VUs, 63 complete and 0 interrupted iterations
+desk     [  78% ] 1 VUs    1m06.0s/1m25s
+portal   [  78% ] 2/2 VUs  1m06.0s/1m25.0s
+
+running (1m07.0s), 3/3 VUs, 65 complete and 0 interrupted iterations
+desk     [  79% ] 1 VUs    1m07.0s/1m25s
+portal   [  79% ] 2/2 VUs  1m07.0s/1m25.0s
+
+running (1m08.0s), 3/3 VUs, 65 complete and 0 interrupted iterations
+desk     [  80% ] 1 VUs    1m08.0s/1m25s
+portal   [  80% ] 2/2 VUs  1m08.0s/1m25.0s
+
+running (1m09.0s), 3/3 VUs, 68 complete and 0 interrupted iterations
+desk     [  81% ] 1 VUs    1m09.0s/1m25s
+portal   [  81% ] 2/2 VUs  1m09.0s/1m25.0s
+
+running (1m10.0s), 3/3 VUs, 68 complete and 0 interrupted iterations
+desk     [  82% ] 1 VUs    1m10.0s/1m25s
+portal   [  82% ] 2/2 VUs  1m10.0s/1m25.0s
+
+running (1m11.0s), 3/3 VUs, 70 complete and 0 interrupted iterations
+desk     [  84% ] 1 VUs    1m11.0s/1m25s
+portal   [  84% ] 2/2 VUs  1m11.0s/1m25.0s
+
+running (1m12.0s), 3/3 VUs, 71 complete and 0 interrupted iterations
+desk     [  85% ] 1 VUs    1m12.0s/1m25s
+portal   [  85% ] 2/2 VUs  1m12.0s/1m25.0s
+
+running (1m13.0s), 3/3 VUs, 73 complete and 0 interrupted iterations
+desk     [  86% ] 1 VUs    1m13.0s/1m25s
+portal   [  86% ] 2/2 VUs  1m13.0s/1m25.0s
+
+running (1m14.0s), 3/3 VUs, 73 complete and 0 interrupted iterations
+desk     [  87% ] 1 VUs    1m14.0s/1m25s
+portal   [  87% ] 2/2 VUs  1m14.0s/1m25.0s
+
+running (1m15.0s), 3/3 VUs, 74 complete and 0 interrupted iterations
+desk     [  88% ] 1 VUs    1m15.0s/1m25s
+portal   [  88% ] 2/2 VUs  1m15.0s/1m25.0s
+
+running (1m16.0s), 3/3 VUs, 77 complete and 0 interrupted iterations
+desk     [  89% ] 1 VUs    1m16.0s/1m25s
+portal   [  89% ] 2/2 VUs  1m16.0s/1m25.0s
+
+running (1m17.0s), 3/3 VUs, 77 complete and 0 interrupted iterations
+desk     [  91% ] 1 VUs    1m17.0s/1m25s
+portal   [  91% ] 2/2 VUs  1m17.0s/1m25.0s
+
+running (1m18.0s), 3/3 VUs, 79 complete and 0 interrupted iterations
+desk     [  92% ] 1 VUs    1m18.0s/1m25s
+portal   [  92% ] 2/2 VUs  1m18.0s/1m25.0s
+
+running (1m19.0s), 3/3 VUs, 79 complete and 0 interrupted iterations
+desk     [  93% ] 1 VUs    1m19.0s/1m25s
+portal   [  93% ] 2/2 VUs  1m19.0s/1m25.0s
+
+running (1m20.0s), 3/3 VUs, 81 complete and 0 interrupted iterations
+desk     [  94% ] 1 VUs    1m20.0s/1m25s
+portal   [  94% ] 2/2 VUs  1m20.0s/1m25.0s
+
+running (1m21.0s), 2/3 VUs, 83 complete and 0 interrupted iterations
+desk     [  95% ] 1 VUs    1m21.0s/1m25s
+portal   [  95% ] 1/2 VUs  1m21.0s/1m25.0s
+
+running (1m22.0s), 2/3 VUs, 83 complete and 0 interrupted iterations
+desk     [  96% ] 1 VUs    1m22.0s/1m25s
+portal   [  96% ] 1/2 VUs  1m22.0s/1m25.0s
+
+running (1m23.0s), 2/3 VUs, 85 complete and 0 interrupted iterations
+desk     [  98% ] 1 VUs    1m23.0s/1m25s
+portal   [  98% ] 1/2 VUs  1m23.0s/1m25.0s
+
+running (1m24.0s), 2/3 VUs, 85 complete and 0 interrupted iterations
+desk     [  99% ] 1 VUs    1m24.0s/1m25s
+portal   [  99% ] 1/2 VUs  1m24.0s/1m25.0s
+
+running (1m25.0s), 2/3 VUs, 87 complete and 0 interrupted iterations
+desk     [ 100% ] 1 VUs    1m25.0s/1m25s
+portal   [ 100% ] 1/2 VUs  1m25.0s/1m25.0s
+
+running (1m26.0s), 2/3 VUs, 87 complete and 0 interrupted iterations
+desk   ↓ [ 100% ] 1 VUs    1m25s
+portal ↓ [ 100% ] 1/2 VUs  1m25s
+
+running (1m27.0s), 2/3 VUs, 87 complete and 0 interrupted iterations
+desk   ↓ [ 100% ] 1 VUs    1m25s
+portal ↓ [ 100% ] 1/2 VUs  1m25s
+
+running (1m28.0s), 1/3 VUs, 88 complete and 0 interrupted iterations
+desk   ↓ [ 100% ] 1 VUs    1m25s
+portal ✓ [ 100% ] 0/2 VUs  1m25s
+
+running (1m29.0s), 1/3 VUs, 88 complete and 0 interrupted iterations
+desk   ↓ [ 100% ] 1 VUs    1m25s
+portal ✓ [ 100% ] 0/2 VUs  1m25s
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration
+    ✓ 'p(95)<800' p(95)=27.77ms
+
+      {flow:desk}
+      ✓ 'p(95)<800' p(95)=17.25ms
+
+      {flow:portal}
+      ✓ 'p(95)<800' p(95)=27.81ms
+
+      {flow:sign_in}
+      ✓ 'p(95)<800' p(95)=86.06ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+      {flow:desk}
+      ✓ 'rate<0.01' rate=0.00%
+
+      {flow:portal}
+      ✓ 'rate<0.01' rate=0.00%
+
+      {flow:sign_in}
+      ✓ 'rate<0.01' rate=0.00%
+
+    portal_sign_in_failures
+    ✓ 'count<1' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 135     1.502642/s
+    checks_succeeded...: 100.00% 135 out of 135
+    checks_failed......: 0.00%   0 out of 135
+
+    ✓ desk list loaded
+    ✓ desk list counted
+    ✓ student number found
+    ✓ sign-in code requested
+    ✓ sign-in code accepted
+    ✓ CSRF token issued
+    ✓ portal session loaded
+    ✓ privacy notice accepted answered 200
+    ✓ profile loaded answered 200
+    ✓ details confirmed answered 200
+    ✓ dashboard answered 200
+    ✓ notifications answered 200
+    ✓ desk form opened
+    ✓ menu answered 200
+    ✓ fees answered 200
+    ✓ leave list answered 200
+    ✓ portal page loaded
+    ✓ session answered 200
+
+    CUSTOM
+    portal_sign_in_failures........: 0      0/s
+    portal_sign_ins................: 2      0.022261/s
+
+    HTTP
+    http_req_duration..............: avg=15.52ms med=13.52ms p(90)=23.93ms p(95)=27.77ms p(99)=55.75ms max=127.73ms
+      { expected_response:true }...: avg=15.52ms med=13.52ms p(90)=23.93ms p(95)=27.77ms p(99)=55.75ms max=127.73ms
+      { flow:desk }................: avg=10.89ms med=10.03ms p(90)=15.98ms p(95)=17.25ms p(99)=18.51ms max=18.8ms  
+      { flow:portal }..............: avg=16.78ms med=16.64ms p(90)=27.14ms p(95)=27.81ms p(99)=28.74ms max=28.96ms 
+      { flow:sign_in }.............: avg=23.53ms med=14.51ms p(90)=47.44ms p(95)=86.06ms p(99)=119.4ms max=127.73ms
+    http_req_failed................: 0.00%  0 out of 139
+      { flow:desk }................: 0.00%  0 out of 46
+      { flow:portal }..............: 0.00%  0 out of 73
+      { flow:sign_in }.............: 0.00%  0 out of 16
+    http_reqs......................: 139    1.547165/s
+
+    EXECUTION
+    iteration_duration.............: avg=2.64s   med=2.23s   p(90)=5.05s   p(95)=5.75s   p(99)=7.82s   max=7.95s   
+    iterations.....................: 89     0.990631/s
+    vus............................: 1      min=1        max=3
+    vus_max........................: 3      min=3        max=3
+
+    NETWORK
+    data_received..................: 138 kB 1.5 kB/s
+    data_sent......................: 89 kB  986 B/s
+
+
+
+
+running (1m29.8s), 0/3 VUs, 89 complete and 0 interrupted iterations
+desk   ✓ [ 100% ] 1 VUs    1m25s
+portal ✓ [ 100% ] 0/2 VUs  1m25s

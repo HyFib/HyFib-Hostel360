@@ -1,0 +1,25 @@
+# HyFib Hostel360 container stack (docker compose).
+# Started at boot once Docker and the data volume are available; h360-deploy changes the
+# image tag in /etc/hostel360/stack.env and recreates the containers itself. Container
+# health is watched by h360-agent, not by this unit.
+[Unit]
+Description=HyFib Hostel360 application stack
+Documentation=file:///opt/hostel360/deploy/README.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+RequiresMountsFor=/srv/hostel360
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/hostel360/deploy/compose
+ExecStartPre=/usr/bin/test -s /etc/hostel360/secrets/db_root_password
+ExecStart=/usr/bin/docker compose --project-name hostel360 --env-file /etc/hostel360/stack.env --file /opt/hostel360/deploy/compose/compose.yml up --detach --remove-orphans
+ExecReload=/usr/bin/docker compose --project-name hostel360 --env-file /etc/hostel360/stack.env --file /opt/hostel360/deploy/compose/compose.yml up --detach --remove-orphans
+ExecStop=/usr/bin/docker compose --project-name hostel360 --env-file /etc/hostel360/stack.env --file /opt/hostel360/deploy/compose/compose.yml stop --timeout 120
+TimeoutStartSec=1200
+TimeoutStopSec=600
+
+[Install]
+WantedBy=multi-user.target

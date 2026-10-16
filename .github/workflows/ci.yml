@@ -1,0 +1,262 @@
+# Continuous integration: lint, portal checks and the server test suite.
+#
+# The server job builds a bench the way production does (Frappe pinned to the release the
+# image uses, Python 3.14, Node 24, MariaDB 11.8, Redis) and runs every hostel360 test with
+# coverage. Keep FRAPPE_BRANCH in step with FRAPPE_VERSION in deploy/docker/build.sh.
+# Third-party actions are pinned to commit SHAs; Dependabot proposes updates
+# (.github/dependabot.yml).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+  NODE_VERSION: "24"
+  FRAPPE_BRANCH: v16.52.0
+  FRAPPE_BENCH_VERSION: "5.31.0"
+  RUFF_VERSION: "0.16.10"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install ruff
+        run: python -m pip install --disable-pip-version-check "ruff==${RUFF_VERSION}"
+
+      - name: ruff check
+        run: ruff check --output-format=github .
+
+      - name: ruff format
+        if: ${{ !cancelled() }}
+        run: ruff format --check --diff .
+
+      - name: Check workflow files
+        if: ${{ !cancelled() }}
+        run: |
+          docker run --rm -v "${GITHUB_WORKSPACE}:/repo:ro" -w /repo \
+            rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
+
+  portal:
+    name: Portal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --non-interactive
+
+      - name: Dependency age (14 days)
+        run: yarn deps:age
+
+      - name: Type check
+        run: yarn typecheck
+
+      - name: Unit tests
+        run: yarn test --run
+
+      - name: Production build
+        run: yarn build
+
+      - name: Upload the build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: portal-build
+          path: |
+            hostel360/public/frontend
+            hostel360/www/hostel.html
+          retention-days: 7
+          if-no-files-found: error
+
+  server:
+    name: Server tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      BENCH_DIR: /home/runner/frappe-bench
+      # Throwaway credentials of the CI database service; nothing else uses them.
+      DB_ROOT_PASSWORD: ci-root
+      PYTHONWARNINGS: "module,ignore:::babel.messages.extract"
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: ci-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+      redis-cache:
+        image: redis:8.6-alpine
+        ports:
+          - 13000:6379
+      redis-queue:
+        image: redis:8.6-alpine
+        ports:
+          - 11000:6379
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Python and Node downloads
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/uv
+            ~/.cache/yarn
+          key: bench-${{ runner.os }}-${{ env.FRAPPE_BRANCH }}-${{ hashFiles('pyproject.toml', 'frontend/yarn.lock') }}
+          restore-keys: |
+            bench-${{ runner.os }}-${{ env.FRAPPE_BRANCH }}-
+
+      - name: Install system packages
+        env:
+          # wkhtmltopdf with patched Qt renders receipts, certificates and reports in the tests.
+          WKHTMLTOX_URL: https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb
+          WKHTMLTOX_SHA256: ee88d74834bdec650f7432c7d3ef1c981e42ae7a762a75a01f7f5da59abc18d5
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mariadb-client libmariadb-dev pkg-config
+          curl -sSfL -o "${RUNNER_TEMP}/wkhtmltox.deb" "${WKHTMLTOX_URL}"
+          echo "${WKHTMLTOX_SHA256}  ${RUNNER_TEMP}/wkhtmltox.deb" | sha256sum --check --strict
+          sudo apt-get install -y -qq "${RUNNER_TEMP}/wkhtmltox.deb"
+          wkhtmltopdf --version
+
+      - name: Install bench
+        run: python -m pip install --disable-pip-version-check "frappe-bench==${FRAPPE_BENCH_VERSION}"
+
+      - name: Initialise bench (Frappe ${{ env.FRAPPE_BRANCH }})
+        run: |
+          bench init "${BENCH_DIR}" \
+            --frappe-branch "${FRAPPE_BRANCH}" \
+            --python "$(command -v python)" \
+            --skip-redis-config-generation \
+            --skip-assets \
+            --no-backups
+          cd "${BENCH_DIR}"
+          bench set-config -g redis_cache redis://127.0.0.1:13000
+          bench set-config -g redis_queue redis://127.0.0.1:11000
+          bench set-config -g redis_socketio redis://127.0.0.1:11000
+
+      - name: Get hostel360 from this checkout
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          bench get-app --skip-assets hostel360 "${GITHUB_WORKSPACE}"
+          bench setup requirements --dev
+
+      - name: Create the test site
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          bench new-site test_site \
+            --db-host 127.0.0.1 \
+            --db-root-username root \
+            --db-root-password "${DB_ROOT_PASSWORD}" \
+            --admin-password admin
+          bench --site test_site install-app hostel360
+          bench --site test_site set-config allow_tests 1 --parse
+          # No clamd in CI: scanning is switched off; the upload tests mock the scanner.
+          bench --site test_site set-config clamd_host ""
+          bench --site test_site set-config host_name "http://test_site:8000"
+          bench use test_site
+          # Print views and e-mails load the built asset manifest, and wkhtmltopdf fetches their
+          # stylesheets from host_name, so assets are built and the site name must resolve.
+          echo "127.0.0.1 test_site" | sudo tee -a /etc/hosts
+          bench build
+
+      - name: Start background workers
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          # Workers and a web process, as in Frappe's own CI; no file watcher, scheduler or socket.io.
+          sed -i -e '/^watch:/d' -e '/^schedule:/d' -e '/^socketio:/d' Procfile
+          bench start &> "${GITHUB_WORKSPACE}/bench_start.log" &
+
+      - name: Run tests
+        working-directory: ${{ env.BENCH_DIR }}
+        env:
+          CI: "Yes"
+        run: |
+          bench --site test_site run-tests --app hostel360 --coverage \
+            --junit-xml-output "${GITHUB_WORKSPACE}/junit-server.xml"
+
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          if [ -f sites/coverage.xml ]; then
+            python - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
+          import xml.etree.ElementTree as ET
+          root = ET.parse("sites/coverage.xml").getroot()
+          rate = float(root.get("line-rate", 0)) * 100
+          print(f"### Server coverage\n\nhostel360 line coverage: **{rate:.1f} %**")
+          PY
+            cp sites/coverage.xml "${GITHUB_WORKSPACE}/coverage-server.xml"
+          fi
+
+      - name: Upload test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-test-reports
+          path: |
+            junit-server.xml
+            coverage-server.xml
+            bench_start.log
+          retention-days: 14
+          if-no-files-found: warn

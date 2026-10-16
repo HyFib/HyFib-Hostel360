@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# Deploy a Hostel360 image tag to this server, with automatic rollback.
+#
+#   h360-deploy <tag> [--no-snapshot] [--no-offsite]
+#   h360-deploy --rollback        redeploy the tag that ran before the last deployment
+#   h360-deploy --status          current and previous tags
+#   h360-deploy --prepare         registry login and pull of the configured images only
+#                                 (first installation, before the stack is started)
+#
+# Sequence:
+#   1. log in to OCI Registry (instance principal) and pull the image; nothing changes if
+#      this fails
+#   2. maintenance mode on, background workers and scheduler stopped
+#   3. database dump to the block volume (the rollback point), offsite restic snapshot
+#      tagged pre-deploy, OCI block volume backup (h360-snapshot)
+#   4. configurator and "bench migrate" run from the NEW image against the database
+#   5. stack.env switched to the new tag, containers recreated
+#   6. application boot verified, maintenance mode off, readiness and liveness checked
+#      through the WAF exactly as the load balancer reaches it
+# Any failure from step 4 on restores the database dump, switches back to the previous tag
+# and raises a critical alert; the site is left running the old release.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-deploy
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_load_env "${H360_CONFIG_DIR}/backup.env" optional
+h360_require_cmd docker jq curl gzip
+
+stack_env="${H360_STACK_ENV:-${H360_CONFIG_DIR}/stack.env}"
+state="${H360_STATE_DIR}/deploy"
+data_dir="${H360_DATA_DIR:-/srv/hostel360}"
+dump_dir="${data_dir}/backups/pre-deploy"
+mkdir -p "${state}" "${dump_dir}"
+chmod 0700 "${dump_dir}"
+
+snapshot=1
+offsite=1
+target=""
+mode=deploy
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--no-snapshot) snapshot=0 ;;
+		--no-offsite) offsite=0 ;;
+		--rollback) mode=rollback ;;
+		--status) mode=status ;;
+		--prepare) mode=prepare ;;
+		-h | --help)
+			sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+			exit 0
+			;;
+		-*) die "unknown option $1" ;;
+		*) target="$1" ;;
+	esac
+	shift
+done
+
+image="$(h360_stack_value H360_IMAGE)"
+current="$(h360_stack_value H360_IMAGE_TAG)"
+site="$(h360_stack_value SITE_NAME)"
+waf_port="$(h360_stack_value WAF_HTTPS_PORT)"
+waf_port="${waf_port:-8443}"
+previous="$(cat "${state}/previous_tag" 2>/dev/null || true)"
+[[ -n "${image}" && -n "${current}" && -n "${site}" ]] || die "H360_IMAGE, H360_IMAGE_TAG and SITE_NAME must be set in ${stack_env}"
+
+registry_login() {
+	local registry="${image%%/*}" token
+	[[ "${registry}" == *.ocir.io ]] || return 0
+	[[ "${H360_REGISTRY_AUTH:-instance_principal}" == instance_principal ]] || return 0
+	h360_require_cmd oci
+	token="$(oci raw-request --auth instance_principal --http-method GET \
+		--target-uri "https://${registry}/20180419/docker/token" | jq -r '.data.token // empty')"
+	[[ -n "${token}" ]] || die "could not obtain a registry token for ${registry} (instance principal policy?)"
+	printf '%s' "${token}" | docker login "${registry}" --username BEARER_TOKEN --password-stdin >/dev/null
+}
+
+if [[ "${mode}" == status ]]; then
+	printf 'image:    %s\ncurrent:  %s\nprevious: %s\n' "${image}" "${current}" "${previous:-none}"
+	exit 0
+fi
+if [[ "${mode}" == prepare ]]; then
+	h360_lock deploy
+	registry_login
+	h360_compose pull --quiet || die "could not pull the stack images"
+	log_notice "images for ${image}:${current} and the stack pulled"
+	exit 0
+fi
+if [[ "${mode}" == rollback ]]; then
+	[[ -n "${previous}" ]] || die "no previous tag recorded"
+	target="${previous}"
+fi
+[[ -n "${target}" ]] || die "usage: h360-deploy <tag> | --rollback | --status"
+[[ "${target}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || die "invalid image tag: ${target}"
+[[ "${target}" != latest ]] || die "deployments use an exact tag, not latest"
+if [[ "${target}" == "${current}" ]]; then
+	log_notice "${image}:${target} is already deployed"
+	exit 0
+fi
+
+h360_lock deploy
+# Keeps the nightly backup from starting in the middle of a deployment.
+h360_lock backup 3600
+
+host="$(h360_host)"
+ts="$(date +%Y%m%d-%H%M%S)"
+dump="${dump_dir}/${ts}-${current}.sql.gz"
+migrated=0
+
+# --------------------------------------------------------------------------- helpers
+
+set_tag() {
+	# set_tag <tag>: rewrite H360_IMAGE_TAG in stack.env atomically
+	local tmp
+	tmp="$(mktemp "${stack_env}.XXXXXX")"
+	sed "s/^H360_IMAGE_TAG=.*/H360_IMAGE_TAG=$1/" "${stack_env}" >"${tmp}"
+	chmod 0600 "${tmp}"
+	mv -f -- "${tmp}" "${stack_env}"
+}
+
+rollback() {
+	local reason="$1"
+	log_error "deployment of ${target} failed: ${reason}; rolling back to ${current}"
+	h360_maintenance "${site}" on
+	h360_compose stop scheduler queue-short queue-long >/dev/null 2>&1 || true
+	if [[ "${migrated}" == 1 ]]; then
+		# Migrations may have changed the schema; the old release needs the old database.
+		log_warn "restoring the database from ${dump}"
+		if ! { h360_drop_site_databases && gzip -dc "${dump}" | h360_db_exec; }; then
+			log_error "database restore from ${dump} failed; restore it with: gzip -dc ${dump} | (mariadb as root)"
+		fi
+	fi
+	set_tag "${current}"
+	h360_compose up -d --remove-orphans || log_error "could not start the previous release"
+	h360_wait_for_boot "${site}" || log_error "previous release did not boot"
+	h360_maintenance "${site}" off
+	if h360_smoke_check "${site}" "${waf_port}"; then
+		log_notice "rolled back to ${current}; the site is up"
+	else
+		log_error "rolled back to ${current} but the smoke check still fails"
+	fi
+	h360_alert "deploy.${host}" Critical Other "Deployment of ${target} failed on ${host}" \
+		"${reason}. Rolled back to ${current}. Pre-deploy dump: ${dump}."
+	exit 1
+}
+
+# --------------------------------------------------------------------------- 1. image
+
+log_notice "deploying ${image}:${target} (running ${current})"
+registry_login
+if ! docker pull --quiet "${image}:${target}" >/dev/null; then
+	# An image loaded by hand (docker load) can still be deployed when the registry is out of reach.
+	docker image inspect "${image}:${target}" >/dev/null 2>&1 ||
+		die "could not pull ${image}:${target}; nothing was changed"
+	log_warn "registry pull failed; deploying the local copy of ${image}:${target}"
+fi
+H360_IMAGE_TAG="${target}" h360_compose pull --quiet --ignore-buildable \
+	waf php-fpm mariadb redis-cache redis-queue clamav >/dev/null 2>&1 ||
+	log_warn "could not refresh the third-party images; the ones present are used"
+
+# --------------------------------------------------------------------------- 2-3. freeze and back up
+
+h360_maintenance "${site}" on
+h360_compose stop scheduler queue-short queue-long >/dev/null
+
+log_info "dumping the database to ${dump}"
+if ! h360_dump_databases "${dump}"; then
+	h360_maintenance "${site}" off
+	h360_compose up -d >/dev/null
+	die "pre-deploy database dump failed; nothing was changed"
+fi
+
+if [[ "${offsite}" == 1 ]]; then
+	H360_BACKUP_LOCK_HELD=1 /usr/local/sbin/h360-backup --db-only --tag pre-deploy ||
+		log_warn "offsite pre-deploy backup failed; continuing with the local dump"
+fi
+if [[ "${snapshot}" == 1 && -n "${H360_BLOCK_VOLUME_ID:-}" ]]; then
+	/usr/local/sbin/h360-snapshot --reason pre-deploy >/dev/null || log_warn "volume backup failed; continuing with the local dump"
+fi
+
+# --------------------------------------------------------------------------- 4. migrate
+
+log_info "running configurator and migrations with ${target}"
+H360_IMAGE_TAG="${target}" h360_compose run --rm --no-deps -T configurator >/dev/null || rollback "configurator failed"
+migrated=1
+if ! H360_IMAGE_TAG="${target}" h360_compose run --rm --no-deps -T backend migrate; then
+	rollback "bench migrate failed"
+fi
+
+# --------------------------------------------------------------------------- 5-6. switch and verify
+
+printf '%s\n' "${current}" >"${state}/previous_tag"
+set_tag "${target}"
+h360_compose up -d --remove-orphans || rollback "containers did not start"
+h360_wait_for_boot "${site}" || rollback "the backend did not start"
+h360_maintenance "${site}" off
+h360_smoke_check "${site}" "${waf_port}" || rollback "readiness check failed after the switch"
+
+printf '%s %s -> %s\n' "$(h360_now_iso)" "${current}" "${target}" >>"${state}/history"
+find "${dump_dir}" -maxdepth 1 -type f -name '*.sql.gz' -printf '%T@ %p\n' | sort -rn | tail -n +6 |
+	cut -d' ' -f2- | xargs -r rm -f --
+h360_alert "deploy.${host}" Info Other "Deployed ${target} on ${host}" "Previous release ${current}."
+h360_resolve "deploy.${host}" "Deployment of ${target} completed."
+log_notice "deployed ${image}:${target}"

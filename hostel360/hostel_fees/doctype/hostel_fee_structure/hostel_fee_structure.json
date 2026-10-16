@@ -1,0 +1,265 @@
+{
+ "actions": [],
+ "autoname": "field:structure_name",
+ "creation": "2026-10-15 16:30:00.000000",
+ "default_print_format": "Hostel Fee Structure",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "structure_name",
+  "academic_year",
+  "due_date",
+  "column_break_main",
+  "is_active",
+  "total_amount",
+  "section_applicability",
+  "hostel",
+  "column_break_applicability",
+  "year_of_study",
+  "column_break_program",
+  "program",
+  "section_items",
+  "items",
+  "notes",
+  "section_publishing",
+  "publish_status",
+  "invoices_created",
+  "column_break_publishing",
+  "last_published_on",
+  "last_published_by",
+  "publish_log"
+ ],
+ "fields": [
+  {
+   "fieldname": "structure_name",
+   "fieldtype": "Data",
+   "label": "Structure Name",
+   "reqd": 1,
+   "unique": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "academic_year",
+   "fieldtype": "Link",
+   "label": "Academic Year",
+   "options": "Hostel Academic Year",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Date",
+   "label": "Due Date",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": "1",
+   "in_standard_filter": 1,
+   "description": "Only active structures can be published and appear on the fee structure download."
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "label": "Total per Student",
+   "options": "",
+   "read_only": 1,
+   "bold": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_applicability",
+   "fieldtype": "Section Break",
+   "label": "Applies To",
+   "description": "Leave a filter blank to apply the structure to every student for that criterion."
+  },
+  {
+   "fieldname": "hostel",
+   "fieldtype": "Link",
+   "label": "Hostel",
+   "options": "Hostel",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Blank = all hostels."
+  },
+  {
+   "fieldname": "column_break_applicability",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "year_of_study",
+   "fieldtype": "Select",
+   "label": "Year of Study",
+   "options": "\n1\n2\n3\n4\n5",
+   "in_standard_filter": 1,
+   "description": "Blank = all years."
+  },
+  {
+   "fieldname": "column_break_program",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "program",
+   "fieldtype": "Link",
+   "label": "Programme",
+   "options": "Academic Program",
+   "description": "Blank = all programmes."
+  },
+  {
+   "fieldname": "section_items",
+   "fieldtype": "Section Break",
+   "label": "Fee Components"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Fee Components",
+   "options": "Hostel Fee Structure Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "description": "Printed on the fee structure, e.g. payment instructions or the refund policy."
+  },
+  {
+   "fieldname": "section_publishing",
+   "fieldtype": "Section Break",
+   "label": "Publishing",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "publish_status",
+   "fieldtype": "Select",
+   "label": "Publish Status",
+   "options": "Not Published\nQueued\nIn Progress\nCompleted\nCompleted with Errors\nFailed",
+   "default": "Not Published",
+   "read_only": 1,
+   "no_copy": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "invoices_created",
+   "fieldtype": "Int",
+   "label": "Invoices Created",
+   "read_only": 1,
+   "no_copy": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_publishing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_published_on",
+   "fieldtype": "Datetime",
+   "label": "Last Published On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "last_published_by",
+   "fieldtype": "Link",
+   "label": "Last Published By",
+   "options": "User",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "publish_log",
+   "fieldtype": "Small Text",
+   "label": "Publish Log",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "links": [
+  {
+   "link_doctype": "Hostel Fee Invoice",
+   "link_fieldname": "fee_structure",
+   "group": "Invoices"
+  }
+ ],
+ "modified": "2026-10-15 16:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Fees",
+ "name": "Hostel Fee Structure",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Hostel Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Hostel Warden",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "Deputy Warden",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "Hostel Office Staff",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Mess Manager",
+   "read": 1
+  },
+  {
+   "role": "Institution Auditor",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "structure_name",
+ "track_changes": 1
+}

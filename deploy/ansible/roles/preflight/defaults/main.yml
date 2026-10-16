@@ -1,0 +1,13 @@
+# "production" enforces the go-live checks in tasks/main.yml; use "staging" for a test or
+# load-test server, where the campus addresses may not be known yet.
+h360_environment: production
+
+# Public egress addresses of the campus network (the NAT or firewall in front of the hostel
+# and college Wi-Fi), as single addresses or CIDR ranges. Hundreds of residents share each
+# of these addresses, so they are exempt from every per-address limit:
+#   - the WAF's sign-in rate limits (roles/app, rate-exempt.conf)
+#   - fail2ban bans at the WAF (roles/fail2ban, ignoreip)
+#   - the OTP per-address limit (Messaging Settings > Trusted Networks, kept in step by
+#     h360-site-init from CAMPUS_EGRESS_CIDRS in stack.env)
+# Required in production; there is deliberately no default.
+h360_campus_egress_cidrs: []

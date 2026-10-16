@@ -1,0 +1,10 @@
+guardian_id,name,relation,mobile,occupation,email
+G001,MURUGAN K,FATHER,9876500101,Farmer,
+G002,Raja S,FATHER,9876500102,Teacher,raja.s@example.com
+G003,Selvam P,FATHER,98765-00103,Business,
+G004,Prakash M,FATHER,9876500104,Driver,
+G005,Kumar R,FATHER,9876500105,Government Employee,
+G006,Lakshmi V,MOTHER,9876500106,Teacher,
+G007,Ravi K,FATHER,9876500107,Electrician,
+G008,Lakshmanan P,FATHER,9876500108,Farmer,
+G009,Meenakshi L,MOTHER,9876500118,Homemaker,

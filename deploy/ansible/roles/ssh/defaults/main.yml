@@ -1,0 +1,5 @@
+# Groups allowed to log in. "sudo" keeps the image's default user (used by Bastion
+# managed SSH sessions); h360_admin_group holds the named administrators.
+h360_ssh_allow_groups:
+  - sudo
+  - hostel360-admins

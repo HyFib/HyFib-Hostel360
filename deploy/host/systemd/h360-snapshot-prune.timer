@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly pruning of Hostel360 ad-hoc volume backups
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00 Asia/Kolkata
+Persistent=true
+
+[Install]
+WantedBy=timers.target

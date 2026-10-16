@@ -1,0 +1,5 @@
+floor_id,block_id,floor_no,label
+F1,B1,0,Ground Floor
+F2,B1,1,First Floor
+F3,B2,0,Ground Floor
+F4,B3,0,Ground Floor

@@ -1,0 +1,308 @@
+{
+ "actions": [],
+ "autoname": "field:export_name",
+ "creation": "2026-10-15 20:00:00.000000",
+ "description": "Every exit export made on this site, whether it was verified, and the deletion that followed once the institution confirmed receipt (tender TR 22).",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "export_name",
+  "status",
+  "site",
+  "column_break_main",
+  "exported_on",
+  "exported_by",
+  "recorded_from",
+  "contents_section",
+  "include_files",
+  "encrypted",
+  "doctype_count",
+  "column_break_contents",
+  "entry_count",
+  "total_bytes",
+  "location_section",
+  "archive_path",
+  "directory_path",
+  "checksums_section",
+  "manifest_sha256",
+  "column_break_checksums",
+  "archive_sha256",
+  "verification_section",
+  "verified_on",
+  "verified_by",
+  "column_break_verification",
+  "verified_path",
+  "verification_problems",
+  "deletion_section",
+  "acknowledgement_reference",
+  "purged_on",
+  "column_break_deletion",
+  "certificate_id",
+  "export_copy_deleted"
+ ],
+ "fields": [
+  {
+   "bold": 1,
+   "fieldname": "export_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Export",
+   "read_only": 1,
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "Exported",
+   "description": "Verified: an h360-verify-export run on this site found every file intact and the manifest unchanged.",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Exported\nVerified\nVerification Failed",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "site",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Site",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "exported_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Exported On",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Login that ran the export.",
+   "fieldname": "exported_by",
+   "fieldtype": "Data",
+   "label": "Exported By",
+   "read_only": 1
+  },
+  {
+   "default": "Export",
+   "description": "Export: written by h360-export. Verification: an older export adopted the first time it was verified on this site.",
+   "fieldname": "recorded_from",
+   "fieldtype": "Select",
+   "label": "Recorded From",
+   "options": "Export\nVerification",
+   "read_only": 1
+  },
+  {
+   "fieldname": "contents_section",
+   "fieldtype": "Section Break",
+   "label": "Contents"
+  },
+  {
+   "default": "0",
+   "description": "Uploaded files were included. An export without them cannot clear the way for deletion.",
+   "fieldname": "include_files",
+   "fieldtype": "Check",
+   "label": "Includes Uploaded Files",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "encrypted",
+   "fieldtype": "Check",
+   "label": "Encrypted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "doctype_count",
+   "fieldtype": "Int",
+   "label": "DocTypes Exported",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_contents",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "entry_count",
+   "fieldtype": "Int",
+   "label": "Files in Export",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_bytes",
+   "fieldtype": "Long Int",
+   "label": "Size (bytes)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "location_section",
+   "fieldtype": "Section Break",
+   "label": "Location on the Server"
+  },
+  {
+   "description": "The archive as written by h360-export. It is deleted with the institution's data unless the deletion is told to keep it.",
+   "fieldname": "archive_path",
+   "fieldtype": "Small Text",
+   "label": "Archive",
+   "read_only": 1
+  },
+  {
+   "description": "The unpacked export folder, when one was kept (exports made without --encrypt).",
+   "fieldname": "directory_path",
+   "fieldtype": "Small Text",
+   "label": "Folder",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checksums_section",
+   "fieldtype": "Section Break",
+   "label": "Checksums"
+  },
+  {
+   "description": "SHA-256 of manifest.json. The manifest lists the size and SHA-256 of every file, so this one value identifies the whole export.",
+   "fieldname": "manifest_sha256",
+   "fieldtype": "Data",
+   "label": "Manifest SHA-256",
+   "length": 64,
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_checksums",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "archive_sha256",
+   "fieldtype": "Data",
+   "label": "Archive SHA-256",
+   "length": 64,
+   "read_only": 1
+  },
+  {
+   "fieldname": "verification_section",
+   "fieldtype": "Section Break",
+   "label": "Verification"
+  },
+  {
+   "fieldname": "verified_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Last Verified On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Data",
+   "label": "Verified By",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_verification",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The folder, archive or encrypted archive that was checked.",
+   "fieldname": "verified_path",
+   "fieldtype": "Small Text",
+   "label": "Verified Copy",
+   "read_only": 1
+  },
+  {
+   "fieldname": "verification_problems",
+   "fieldtype": "Small Text",
+   "label": "Problems Found",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "eval:!doc.purged_on",
+   "fieldname": "deletion_section",
+   "fieldtype": "Section Break",
+   "label": "Deletion After Exit"
+  },
+  {
+   "description": "Reference of ACGCET's written confirmation that the export was received.",
+   "fieldname": "acknowledgement_reference",
+   "fieldtype": "Data",
+   "label": "Acknowledgement Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "purged_on",
+   "fieldtype": "Datetime",
+   "label": "Institution Data Deleted On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_deletion",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "certificate_id",
+   "fieldtype": "Data",
+   "label": "Deletion Certificate",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "export_copy_deleted",
+   "fieldtype": "Check",
+   "label": "Server Copy Deleted",
+   "read_only": 1
+  }
+ ],
+ "in_create": 1,
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Migration",
+ "name": "Exit Export Log",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "HyFib Operations"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  }
+ ],
+ "read_only": 1,
+ "row_format": "Dynamic",
+ "search_fields": "status,exported_on,site",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "export_name",
+ "track_changes": 1
+}

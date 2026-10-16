@@ -1,0 +1,77 @@
+# Go-live checks that need nothing on the server; they run before any role changes it.
+
+- name: Check the deployment kind
+  ansible.builtin.assert:
+    that:
+      - h360_environment in ["production", "staging"]
+    fail_msg: 'h360_environment must be "production" or "staging", not "{{ h360_environment }}"'
+    quiet: true
+
+- name: Check that the campus egress addresses are a list
+  ansible.builtin.assert:
+    that:
+      - h360_campus_egress_cidrs is sequence
+      - h360_campus_egress_cidrs is not string
+      - h360_campus_egress_cidrs is not mapping
+    fail_msg: "h360_campus_egress_cidrs must be a YAML list of addresses or CIDR ranges"
+    quiet: true
+
+# Every resident on campus Wi-Fi reaches the portal from these few addresses. Without them
+# the 21st sign-in code requested from campus in an hour is refused, and the refusals turn
+# into fail2ban bans of the whole campus at the WAF.
+- name: Require the campus egress addresses in production
+  ansible.builtin.assert:
+    that:
+      - h360_environment != "production" or (h360_campus_egress_cidrs | length) > 0
+    fail_msg: >-
+      Set h360_campus_egress_cidrs in group_vars/hostel360/main.yml to the public egress
+      address(es) of the ACGCET campus network (ask the institution's network administrator,
+      or run "curl -s https://ifconfig.me" on a campus PC). Hundreds of residents share these
+      addresses; without them campus users are rate limited and banned as one client.
+    quiet: true
+
+# Exempting a wide range would switch the per-address limits off for a large part of the
+# internet, so each entry must be a host or a network no wider than /16 (IPv4) or /32 (IPv6).
+- name: Check each campus egress address
+  ansible.builtin.assert:
+    that:
+      - (item | string) is match(h360_preflight_ipv4_re) or (item | string) is match(h360_preflight_ipv6_re)
+      - (((item | string).split('/') + [('128' if ':' in (item | string) else '32')])[1] | int) >= (32 if ':' in (item | string) else 16)
+    fail_msg: >-
+      "{{ item }}" in h360_campus_egress_cidrs is not an IPv4/IPv6 address or CIDR range no
+      wider than /16 (IPv4) or /32 (IPv6)
+    quiet: true
+  loop: "{{ h360_campus_egress_cidrs }}"
+  vars:
+    h360_preflight_ipv4_re: '^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(/(3[0-2]|[12][0-9]|[0-9]))?$'
+    h360_preflight_ipv6_re: '^[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7}(/(12[0-8]|1[01][0-9]|[1-9]?[0-9]))?$'
+
+# The WAF sees the public address a campus client comes from, so a private, loopback or
+# documentation range (such as the placeholder in main.yml.example) can never match one.
+- name: Check that the campus egress addresses are public (production)
+  ansible.builtin.assert:
+    that:
+      - not ((item | string) is match(h360_preflight_non_public_re))
+    fail_msg: >-
+      "{{ item }}" in h360_campus_egress_cidrs is a private, loopback or documentation address;
+      use the campus network's public egress address
+    quiet: true
+  loop: "{{ h360_campus_egress_cidrs }}"
+  when: h360_environment == "production"
+  vars:
+    h360_preflight_non_public_prefixes:
+      - '0\.'
+      - '10\.'
+      - '100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.'  # carrier-grade NAT
+      - '127\.'
+      - '169\.254\.'
+      - '172\.(1[6-9]|2[0-9]|3[01])\.'
+      - '192\.168\.'
+      - '192\.0\.2\.'  # documentation ranges
+      - '198\.51\.100\.'
+      - '203\.0\.113\.'
+      - '(?i:f[cd][0-9a-f]{2}:)'  # IPv6 unique local, link-local, loopback, documentation
+      - '(?i:fe80:)'
+      - '::1(/|$)'
+      - '(?i:2001:db8:)'
+    h360_preflight_non_public_re: "^({{ h360_preflight_non_public_prefixes | join('|') }})"

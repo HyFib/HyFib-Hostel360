@@ -1,0 +1,56 @@
+{
+ "allow_roles": [
+  {
+   "role": "Hostel Administrator"
+  }
+ ],
+ "creation": "2026-10-15 18:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Module Onboarding",
+ "idx": 0,
+ "is_complete": 0,
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Setup",
+ "name": "Get started with Hostel360",
+ "owner": "Administrator",
+ "steps": [
+  {
+   "is_optional": 0,
+   "step": "Create Hostels"
+  },
+  {
+   "is_optional": 0,
+   "step": "Add Hostel Rooms"
+  },
+  {
+   "is_optional": 0,
+   "step": "Register Hostel Staff"
+  },
+  {
+   "is_optional": 0,
+   "step": "Import Hostel Students"
+  },
+  {
+   "is_optional": 0,
+   "step": "Set Up Hostel Fee Structures"
+  },
+  {
+   "is_optional": 0,
+   "step": "Configure Hostel Payment Gateway"
+  },
+  {
+   "is_optional": 0,
+   "step": "Configure SMS and WhatsApp"
+  },
+  {
+   "is_optional": 0,
+   "step": "Publish Mess Menu"
+  },
+  {
+   "is_optional": 1,
+   "step": "Set Up HyFib Alert Channels"
+  }
+ ],
+ "title": "Get started with Hostel360"
+}

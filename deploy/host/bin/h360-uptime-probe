@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Hostel360 uptime probe (h360-uptime-probe.timer, every minute).
+#
+# Requests the public liveness URL the way a student's phone does (DNS, load balancer,
+# public certificate, WAF, application) and records uptime_probe = 1 or 0 with the response
+# time. Samples are sent in batches of H360_PROBE_BATCH (default 5) to keep the ingest
+# traffic low; the monthly performance report computes availability from them.
+#
+# After H360_PROBE_FAIL_ALERT consecutive failures (default 3) an outage alert is raised,
+# once per outage: escalation and repeat notifications are the application's job. While the
+# outage lasts the alert is sent again only every H360_PROBE_ALERT_REPEAT_MINUTES (default
+# 60; 0 = never), which keeps its "last seen" time current and re-opens it if someone
+# resolved it by hand too early. An alert a minute would fill the ingest spool during a
+# long outage, push out the probe samples that record it and page OCI Notifications every
+# minute while the application cannot take the alert itself.
+#
+# The external monitor in ap-mumbai-1 (deploy/monitoring) watches the same URL from outside
+# OCI Hyderabad, so an outage of the whole region is still noticed.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-uptime-probe
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_require_cmd curl jq
+h360_lock uptime-probe
+
+: "${H360_PUBLIC_URL:?H360_PUBLIC_URL is not set in agent.env}"
+: "${H360_PROBE_URL:=${H360_PUBLIC_URL%/}/api/method/hostel360.api.health.liveness}"
+: "${H360_PROBE_BATCH:=5}"
+: "${H360_PROBE_FAIL_ALERT:=3}"
+: "${H360_PROBE_TIMEOUT:=10}"
+: "${H360_PROBE_ALERT_REPEAT_MINUTES:=60}"
+[[ "${H360_PROBE_ALERT_REPEAT_MINUTES}" =~ ^[0-9]{1,5}$ ]] || die "H360_PROBE_ALERT_REPEAT_MINUTES must be a whole number of minutes"
+
+state="${H360_STATE_DIR}/probe"
+mkdir -p "${state}"
+buffer="${state}/samples"
+host="$(h360_host)"
+key="host.uptime.${host}"
+
+recorded_at="$(h360_now_iso)"
+result="$(curl --silent --output /dev/null --max-time "${H360_PROBE_TIMEOUT}" --connect-timeout 5 \
+	--write-out '%{http_code} %{time_total}' "${H360_PROBE_URL}" 2>/dev/null || echo "000 ${H360_PROBE_TIMEOUT}")"
+read -r status seconds <<<"${result}"
+milliseconds="$(awk -v s="${seconds:-0}" 'BEGIN { printf "%.0f", s * 1000 }')"
+if [[ "${status}" == 200 ]]; then
+	up=1
+else
+	up=0
+fi
+printf '%s %s %s %s\n' "${recorded_at}" "${up}" "${milliseconds}" "${status}" >>"${buffer}"
+
+failures="$(cat "${state}/failures" 2>/dev/null || echo 0)"
+[[ "${failures}" =~ ^[0-9]+$ ]] || failures=0
+was_down=0
+[[ -f "${state}/alert_open" ]] && was_down=1
+
+alert_due() {
+	# First alert of this outage, or the repeat interval has passed since the last one.
+	[[ "${was_down}" == 0 ]] && return 0
+	((H360_PROBE_ALERT_REPEAT_MINUTES > 0)) || return 1
+	local sent
+	sent="$(stat -c '%Y' "${state}/alert_open" 2>/dev/null || echo 0)"
+	(($(date +%s) - sent >= H360_PROBE_ALERT_REPEAT_MINUTES * 60))
+}
+
+if [[ "${up}" == 1 ]]; then
+	printf '0\n' >"${state}/failures"
+	if [[ "${was_down}" == 1 ]]; then
+		h360_report "$(jq -cn --arg key "${key}" --arg notes "Portal answering again (HTTP ${status}, ${milliseconds} ms)." \
+			'{type: "resolve", source: "Uptime Probe", key: $key, notes: $notes}')"
+		rm -f -- "${state}/alert_open"
+		log_notice "portal reachable again"
+	fi
+else
+	failures=$((failures + 1))
+	printf '%s\n' "${failures}" >"${state}/failures"
+	log_warn "probe failed (HTTP ${status}), ${failures} in a row"
+	if ((failures >= H360_PROBE_FAIL_ALERT)) && alert_due; then
+		h360_report "$(jq -cn --arg key "${key}" --arg host "${host}" --arg url "${H360_PROBE_URL}" \
+			--arg description "The portal has not answered for ${failures} minutes (last HTTP status ${status})." \
+			--argjson failures "${failures}" \
+			'{type: "alert", source: "Uptime Probe", key: $key, severity: "Critical", category: "Availability",
+			  title: "Portal unreachable", description: $description, is_outage: true,
+			  details: {host: $host, url: $url, consecutive_failures: $failures}}')"
+		# The file's time is when the alert was last sent.
+		touch "${state}/alert_open"
+	fi
+fi
+
+# Send the batch when it is full, or straight away when the state has just changed.
+lines="$(wc -l <"${buffer}")"
+if ((lines >= H360_PROBE_BATCH)) || [[ "${up}" == 0 && "${failures}" == 1 ]] || [[ "${up}" == 1 && "${was_down}" == 1 ]]; then
+	payload="$(awk '{ printf "{\"metric\":\"uptime_probe\",\"value\":%s,\"recorded_at\":\"%s\"}\n{\"metric\":\"probe_response_ms\",\"value\":%s,\"unit\":\"ms\",\"recorded_at\":\"%s\"}\n", $2, $1, $3, $1 }' "${buffer}" |
+		jq -cs --arg host "${host}" '{type: "metrics", source: "Uptime Probe", host: $host, samples: .}')"
+	# Spooled by h360-ingest if it cannot be delivered, so the buffer can be cleared.
+	h360_report "${payload}"
+	: >"${buffer}"
+fi

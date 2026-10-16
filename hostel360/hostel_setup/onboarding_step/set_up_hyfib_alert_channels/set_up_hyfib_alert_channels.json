@@ -1,0 +1,22 @@
+{
+ "action": "Update Settings",
+ "action_label": "Open Alert Settings",
+ "creation": "2026-10-15 18:00:00.000000",
+ "description": "Add the e-mail, SMS and webhook channels that reach HyFib support and review the escalation matrix, so outages and failed backups are acted on round the clock. HyFib usually completes this during commissioning.",
+ "docstatus": 0,
+ "doctype": "Onboarding Step",
+ "field": "channels",
+ "idx": 0,
+ "is_complete": 0,
+ "is_single": 1,
+ "is_skipped": 0,
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "Set Up HyFib Alert Channels",
+ "owner": "Administrator",
+ "reference_document": "Ops Alert Settings",
+ "show_form_tour": 0,
+ "show_full_form": 0,
+ "title": "Set up HyFib alert channels",
+ "validate_action": 0
+}

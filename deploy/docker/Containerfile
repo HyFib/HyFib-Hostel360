@@ -1,0 +1,171 @@
+# syntax=docker/dockerfile:1.7
+#
+# HyFib Hostel360 application image (linux/arm64 for OCI Ampere A1, linux/amd64).
+#
+# Build context is the repository root; use deploy/docker/build.sh rather than calling
+# buildx directly so tags and labels stay consistent.
+#
+#   builder  frappe/build  bench init with Frappe pinned to a release tag, hostel360 installed,
+#                          production build of every app (desk bundles + portal SPA)
+#   runtime  frappe/base   the finished bench; built assets live in the image layer and are
+#                          linked into the sites volume at start-up, so a new image can never
+#                          serve stale assets left in the volume by an older one; Tamil fonts
+#                          for print PDFs
+#
+# One image runs every role (backend, websocket, worker, scheduler, frontend, configure,
+# migrate); the role is the first argument, see deploy/docker/entrypoint.sh.
+
+# The build and base images are published from the same frappe_docker pipeline run but carry
+# their own release numbers; both are the version-16 images current at the time of pinning.
+ARG FRAPPE_BUILD_IMAGE=frappe/build:v16.51.0
+ARG FRAPPE_BASE_IMAGE=frappe/base:v16.52.0
+
+# --------------------------------------------------------------------------- builder
+FROM ${FRAPPE_BUILD_IMAGE} AS builder
+
+ARG FRAPPE_VERSION=v16.52.0
+ARG FRAPPE_REPO=https://github.com/frappe/frappe
+
+# Tells Frappe's asset build that no Redis is reachable (it would otherwise stop before
+# running the apps' own build scripts, which is where the portal SPA is compiled).
+ENV FRAPPE_DOCKER_BUILD=1
+
+USER frappe
+WORKDIR /home/frappe
+
+RUN bench init \
+		--frappe-branch "${FRAPPE_VERSION}" \
+		--frappe-path "${FRAPPE_REPO}" \
+		--no-procfile \
+		--no-backups \
+		--skip-redis-config-generation \
+		--skip-assets \
+		--verbose \
+		/home/frappe/frappe-bench
+
+WORKDIR /home/frappe/frappe-bench
+
+COPY --chown=frappe:root . apps/hostel360
+
+# Frappe recognises an app directory by hooks.py, modules.txt and patches.txt; without the
+# last one the asset build skips the app entirely. An empty patch list is equivalent to no
+# file for "bench migrate", so it is supplied when the source tree does not have one yet.
+RUN set -eux; \
+	rm -rf apps/hostel360/deploy; \
+	if [ ! -f apps/hostel360/hostel360/patches.txt ]; then \
+		echo "hostel360/patches.txt is missing; using an empty patch list" >&2; \
+		printf '[pre_model_sync]\n\n[post_model_sync]\n' > apps/hostel360/hostel360/patches.txt; \
+	fi; \
+	env/bin/python -m pip install --no-cache-dir --quiet -e apps/hostel360; \
+	printf 'frappe\nhostel360\n' > sites/apps.txt; \
+	echo '{}' > sites/common_site_config.json
+
+# The root package.json postinstall installs the portal SPA from frontend/yarn.lock.
+RUN set -eux; \
+	cd apps/hostel360; \
+	yarn install --frozen-lockfile --non-interactive --network-timeout 600000
+
+# --force builds locally instead of downloading prebuilt Frappe assets, so the image is
+# reproducible from source. Frappe's build also runs hostel360's "yarn build" (portal SPA).
+# The checks after the build make a missing desk bundle or portal build fail the image
+# instead of shipping a site without them.
+RUN set -eux; \
+	bench build --production --force; \
+	ls apps/hostel360/hostel360/public/dist/js/hostel360_desk.bundle.*.js >/dev/null; \
+	test -s apps/hostel360/hostel360/www/hostel.html; \
+	test -s apps/hostel360/hostel360/public/frontend/sw.js
+
+# Trim what only the build needed:
+#  - git metadata of every app
+#  - hostel360's node_modules (portal and desk bundles are compiled)
+#  - Frappe's node_modules, except the three packages its realtime server (socketio.js)
+#    loads at runtime; the exact versions resolved from Frappe's yarn.lock are kept.
+RUN set -eux; \
+	find apps -mindepth 2 -maxdepth 2 -name .git -exec rm -rf {} +; \
+	rm -rf apps/hostel360/node_modules apps/hostel360/frontend/node_modules; \
+	find apps -mindepth 3 -maxdepth 4 -path '*/public/node_modules' -xtype l -delete; \
+	mkdir -p /tmp/realtime; \
+	cd apps/frappe; \
+	node -e ' \
+		const fs = require("fs"); \
+		const deps = ["socket.io", "@redis/client", "cookie"]; \
+		const pkg = { name: "frappe-realtime-runtime", private: true, dependencies: {} }; \
+		for (const dep of deps) { \
+			pkg.dependencies[dep] = require(`./node_modules/${dep}/package.json`).version; \
+		} \
+		fs.writeFileSync("/tmp/realtime/package.json", JSON.stringify(pkg, null, 2)); \
+	'; \
+	cd /tmp/realtime; \
+	npm install --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error; \
+	cd /home/frappe/frappe-bench; \
+	rm -rf apps/frappe/node_modules; \
+	mv /tmp/realtime/node_modules apps/frappe/node_modules; \
+	mv sites/assets /home/frappe/frappe-bench/assets; \
+	# Precompiled bytecode: containers start faster and never need to write into the image.
+	# Frappe ships a few non-Python templates with a .py suffix, so failures are not fatal.
+	env/bin/python -m compileall -q -j 0 apps/frappe/frappe apps/hostel360/hostel360 >/dev/null || true; \
+	rm -rf /home/frappe/.cache /home/frappe/.npm /tmp/realtime
+
+# --------------------------------------------------------------------------- runtime
+FROM ${FRAPPE_BASE_IMAGE} AS runtime
+
+ARG FRAPPE_BASE_IMAGE
+ARG FRAPPE_VERSION=v16.52.0
+ARG VERSION=0.0.0-dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=1970-01-01T00:00:00Z
+
+LABEL org.opencontainers.image.title="HyFib Hostel360" \
+	org.opencontainers.image.description="Hostel management for ACGCET Hostels: Frappe Framework v16 with the hostel360 app" \
+	org.opencontainers.image.vendor="HyFib Solutions Private Limited" \
+	org.opencontainers.image.authors="HyFib Solutions Private Limited <support@hyfib.com>" \
+	org.opencontainers.image.url="https://www.hyfib.com" \
+	org.opencontainers.image.licenses="MIT" \
+	org.opencontainers.image.version="${VERSION}" \
+	org.opencontainers.image.revision="${VCS_REF}" \
+	org.opencontainers.image.created="${BUILD_DATE}" \
+	org.opencontainers.image.base.name="docker.io/${FRAPPE_BASE_IMAGE}" \
+	com.hyfib.hostel360.frappe-version="${FRAPPE_VERSION}"
+
+# Fonts with Tamil glyphs for print PDFs. The base image has only DejaVu, which has none, so
+# wkhtmltopdf and Chromium left every Tamil character out of receipts, certificates and bills
+# (labels, names, addresses). fonts-noto-core carries Noto Sans Tamil and Noto Serif Tamil,
+# which the print formats name and the fontconfig rule makes the default for Tamil text;
+# Lohit Tamil is the small fallback stock fontconfig already knows. Kept ahead of the bench
+# copy so this layer is reused across application builds. The checks fail the build if
+# fontconfig cannot find the faces (deploy/tests/image/run.sh renders real PDFs).
+COPY --chmod=0644 deploy/docker/fontconfig/64-hostel360-tamil.conf /etc/fonts/conf.d/64-hostel360-tamil.conf
+RUN set -eux; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends fonts-noto-core fonts-lohit-taml; \
+	rm -rf /var/lib/apt/lists/*; \
+	fc-cache -f; \
+	fc-list :lang=ta family | grep -qx 'Noto Sans Tamil'; \
+	fc-list :lang=ta family | grep -qx 'Noto Serif Tamil'; \
+	test "$(fc-match -f '%{family[0]}' 'sans-serif:lang=ta')" = 'Noto Sans Tamil'; \
+	test "$(fc-match -f '%{family[0]}' 'serif:lang=ta')" = 'Noto Serif Tamil'
+
+COPY --from=builder --chown=frappe:root /home/frappe/frappe-bench /home/frappe/frappe-bench
+COPY --chmod=0755 deploy/docker/entrypoint.sh /usr/local/bin/h360-entrypoint
+COPY --chmod=0755 deploy/docker/bin/ /usr/local/bin/
+COPY --chmod=0644 deploy/docker/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY --chmod=0644 deploy/docker/nginx/hostel360.conf.template /templates/nginx/hostel360.conf.template
+
+RUN set -eux; \
+	printf '{"version": "%s", "revision": "%s", "created": "%s", "frappe": "%s"}\n' \
+		"${VERSION}" "${VCS_REF}" "${BUILD_DATE}" "${FRAPPE_VERSION}" > /home/frappe/frappe-bench/.image-version.json; \
+	chown frappe:root /home/frappe/frappe-bench/.image-version.json
+
+ENV TZ=Asia/Kolkata \
+	PYTHONUNBUFFERED=1 \
+	PYTHONDONTWRITEBYTECODE=1
+
+USER frappe
+WORKDIR /home/frappe/frappe-bench
+
+EXPOSE 8000 8080 9000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 CMD ["h360-healthcheck"]
+
+ENTRYPOINT ["h360-entrypoint"]
+CMD ["backend"]

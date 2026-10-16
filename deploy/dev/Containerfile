@@ -1,0 +1,26 @@
+# Development bench image: frappe/build with what print PDFs need to come out as they do in
+# production (deploy/docker/Containerfile). Built by deploy/dev/compose.yml from the
+# deploy/docker context, so both images use the same fontconfig rule.
+#
+#   fonts-noto-core, fonts-lohit-taml   Tamil glyphs; without them wkhtmltopdf and Chromium
+#                                       drop every Tamil character from a PDF
+#   libnss-myhostname                   resolves every *.localhost name to the container itself.
+#                                       wkhtmltopdf loads logos, /files and /assets from the
+#                                       site URL (http://<site>.localhost:8000), and plain
+#                                       glibc does not resolve *.localhost, so each PDF of a
+#                                       site without host_name failed with HostNotFoundError
+FROM frappe/build:v16
+
+USER root
+
+COPY --chmod=0644 fontconfig/64-hostel360-tamil.conf /etc/fonts/conf.d/64-hostel360-tamil.conf
+
+RUN set -eux; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends fonts-noto-core fonts-lohit-taml libnss-myhostname; \
+	rm -rf /var/lib/apt/lists/*; \
+	fc-cache -f; \
+	grep -Eq '^hosts:.*myhostname' /etc/nsswitch.conf; \
+	test "$(fc-match -f '%{family[0]}' 'sans-serif:lang=ta')" = 'Noto Sans Tamil'
+
+USER frappe

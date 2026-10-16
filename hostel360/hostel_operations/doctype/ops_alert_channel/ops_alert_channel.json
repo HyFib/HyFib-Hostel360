@@ -1,0 +1,79 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "channel_type",
+  "target",
+  "secret_url",
+  "signing_secret",
+  "min_severity",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "channel_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Channel",
+   "options": "Email\nSMS\nWhatsApp\nSlack Webhook\nMicrosoft Teams Webhook\nGoogle Chat Webhook\nGeneric Webhook",
+   "reqd": 1
+  },
+  {
+   "columns": 3,
+   "description": "E-mail address or mobile number (several may be separated by commas). For webhooks, a label such as #hostel360-alerts.",
+   "fieldname": "target",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Target"
+  },
+  {
+   "depends_on": "eval:[\"Slack Webhook\",\"Microsoft Teams Webhook\",\"Google Chat Webhook\",\"Generic Webhook\"].includes(doc.channel_type)",
+   "description": "Stored encrypted. Webhook URLs carry their own access token, so treat them as secrets.",
+   "fieldname": "secret_url",
+   "fieldtype": "Password",
+   "label": "Webhook URL",
+   "length": 1000
+  },
+  {
+   "depends_on": "eval:doc.channel_type==\"Generic Webhook\"",
+   "description": "Optional. Requests are signed with X-H360-Timestamp and X-H360-Signature (hex HMAC-SHA256 of timestamp.body).",
+   "fieldname": "signing_secret",
+   "fieldtype": "Password",
+   "label": "Signing Secret"
+  },
+  {
+   "columns": 2,
+   "default": "Warning",
+   "fieldname": "min_severity",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Minimum Severity",
+   "options": "Info\nWarning\nCritical"
+  },
+  {
+   "columns": 1,
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-15 16:50:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Operations",
+ "name": "Ops Alert Channel",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

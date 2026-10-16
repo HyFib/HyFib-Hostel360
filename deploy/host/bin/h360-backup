@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# Hostel360 backup to OCI Object Storage, Mumbai (h360-backup.timer, daily 01:30 IST).
+#
+#   h360-backup                 nightly run: database + files, retention on Sundays
+#   h360-backup --db-only       database only (used before deployments)
+#   h360-backup --tag NAME      extra restic tag, e.g. pre-restore
+#   h360-backup --init          create the repository on first use
+#
+# Repository: restic (AES-256, compressed, deduplicated) through rclone's
+# oracleobjectstorage backend with instance principal authentication; no keys on disk.
+#
+#   database  mariadb-dump --single-transaction --routines of every site database, streamed
+#             into restic (--stdin-from-command: a failed dump never becomes a snapshot)
+#   files     sites (uploaded files, site_config.json), /etc/hostel360, MariaDB binary
+#             logs (point-in-time recovery), stack logs and the host security logs listed
+#             in H360_BACKUP_EXTRA_PATHS (180-day retention, CERT-In)
+#   tags      daily; weekly on Sundays; monthly on the 1st
+#   retention Sundays: forget --keep-daily 30 --keep-weekly 12 --keep-monthly 12 --prune,
+#             then check --read-data-subset 5%
+#
+# Result goes to Hostel360 as an Ops Backup Record (type "backup"); a failure also raises a
+# critical alert.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-backup
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_load_env "${H360_CONFIG_DIR}/backup.env"
+h360_require_cmd restic rclone docker jq
+
+db_only=0
+init=0
+extra_tags=()
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--db-only) db_only=1 ;;
+		--init) init=1 ;;
+		--tag)
+			extra_tags+=("${2:?--tag needs a value}")
+			shift
+			;;
+		-h | --help)
+			sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+			exit 0
+			;;
+		*) die "unknown option $1" ;;
+	esac
+	shift
+done
+
+# h360-deploy already holds the backup lock while it calls this for its pre-deploy dump.
+if [[ "${H360_BACKUP_LOCK_HELD:-0}" != 1 ]]; then
+	h360_lock backup 3600
+fi
+
+: "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is not set in backup.env}"
+: "${RESTIC_PASSWORD_FILE:?RESTIC_PASSWORD_FILE is not set in backup.env}"
+: "${H360_BACKUP_KEEP_DAILY:=30}"
+: "${H360_BACKUP_KEEP_WEEKLY:=12}"
+: "${H360_BACKUP_KEEP_MONTHLY:=12}"
+: "${H360_BACKUP_CHECK_SUBSET:=5%}"
+export RESTIC_CACHE_DIR="${RESTIC_CACHE_DIR:-/var/cache/restic}"
+
+data_dir="${H360_DATA_DIR:-/srv/hostel360}"
+host="$(h360_host)"
+started_at="$(h360_now_iso)"
+state="${H360_STATE_DIR}/backup"
+mkdir -p "${state}" "${RESTIC_CACHE_DIR}"
+
+# Snapshot type and tags from the calendar (IST). Extra runs (before a deployment or a
+# restore) are recorded as snapshots and carry only their own tag.
+if [[ "${#extra_tags[@]}" -gt 0 ]]; then
+	backup_type=Snapshot
+	tags=("${extra_tags[@]}")
+else
+	backup_type=Daily
+	tags=(daily)
+	if [[ "$(date +%u)" == 7 ]]; then
+		backup_type=Weekly
+		tags+=(weekly)
+	fi
+	if [[ "$(date +%d)" == 01 ]]; then
+		backup_type=Monthly
+		tags+=(monthly)
+	fi
+fi
+tag_args=()
+for tag in "${tags[@]}"; do
+	tag_args+=(--tag "${tag}")
+done
+
+repository_label() {
+	# Bucket and path only; never credentials
+	printf '%s' "${RESTIC_REPOSITORY#rclone:}" | sed 's/^[^:]*://'
+}
+
+report() {
+	# report <Success|Failed> <message> [snapshot] [bytes]
+	local status="$1" message="$2" snapshot="${3:-}" bytes="${4:-0}"
+	h360_report "$(jq -cn \
+		--arg backup_type "${backup_type}" --arg status "${status}" --arg message "${message}" \
+		--arg started_at "${started_at}" --arg finished_at "$(h360_now_iso)" \
+		--arg snapshot "${snapshot}" --argjson bytes "${bytes:-0}" \
+		--arg repository "$(repository_label)" --arg host "${host}" \
+		'{type: "backup", source: "Host Agent", backup_type: $backup_type, status: $status,
+		  started_at: $started_at, finished_at: $finished_at, size_bytes: $bytes,
+		  snapshot_id: $snapshot, repository: $repository, host: $host, message: $message}')"
+}
+
+fail() {
+	log_error "$1"
+	report Failed "$1"
+	h360_alert "host.backup.${host}" Critical Backup "Backup failed on ${host}" "$1"
+	exit 1
+}
+
+restic_errors() {
+	# restic_errors <json lines file>: the error messages restic reported, on one line
+	jq -r 'select(.message_type == "error" or .message_type == "exit_error")
+		| (.error.message // .message // empty)' "$1" 2>/dev/null | head -n 5 | tr '\n' ' '
+}
+
+summary_field() {
+	# summary_field <json lines file> <jq field>: field of restic's final summary message
+	jq -r "select(.message_type == \"summary\") | ${2}" "$1" | tail -n 1
+}
+
+# --------------------------------------------------------------------------- repository
+
+if ! restic cat config >/dev/null 2>&1; then
+	if [[ "${init}" == 1 ]]; then
+		log_notice "initialising repository $(repository_label)"
+		restic init || fail "could not initialise the restic repository $(repository_label)"
+	else
+		fail "restic repository $(repository_label) is not reachable or not initialised (run h360-backup --init once)"
+	fi
+fi
+
+# --------------------------------------------------------------------------- database
+
+mariadb="$(h360_container mariadb)"
+[[ -n "${mariadb}" ]] || fail "the mariadb container is not running"
+mapfile -t databases < <(h360_site_databases)
+[[ "${#databases[@]}" -gt 0 ]] || fail "no site database found under ${data_dir}/sites"
+
+db_log="$(mktemp)"
+files_log="$(mktemp)"
+trap 'rm -f -- "${db_log}" "${files_log}"' EXIT
+
+log_info "dumping ${#databases[@]} database(s): ${databases[*]}"
+# --master-data=2 records the binlog position as a comment: the starting point for a
+# point-in-time replay of the binary logs taken in the files backup. The single-quoted
+# command is expanded by the shell inside the container, where the secret is mounted.
+# shellcheck disable=SC2016
+if ! restic backup --json --host "${host}" --tag db "${tag_args[@]}" \
+	--stdin-filename hostel360-databases.sql \
+	--stdin-from-command -- \
+	docker exec "${mariadb}" sh -c 'MYSQL_PWD="$(cat /run/secrets/db_root_password)" exec mariadb-dump \
+		--user=root --single-transaction --quick --routines --triggers --events --hex-blob \
+		--master-data=2 --default-character-set=utf8mb4 --databases "$@"' sh "${databases[@]}" \
+	>"${db_log}"; then
+	fail "database backup failed: $(restic_errors "${db_log}")"
+fi
+db_snapshot="$(summary_field "${db_log}" '.snapshot_id')"
+db_bytes="$(summary_field "${db_log}" '.total_bytes_processed // 0')"
+log_info "database snapshot ${db_snapshot} (${db_bytes} bytes)"
+
+snapshot="${db_snapshot}"
+bytes="${db_bytes:-0}"
+
+# --------------------------------------------------------------------------- files
+
+if [[ "${db_only}" == 0 ]]; then
+	paths=("${data_dir}/sites" "${H360_CONFIG_DIR}" "${data_dir}/logs")
+	while IFS= read -r binlog; do
+		paths+=("${binlog}")
+	done < <(find "${data_dir}/mariadb" -maxdepth 1 -type f -name 'mariadb-bin.*' | sort)
+	# Host security logs (audit, auth, firewall) travel with the backup as well; patterns
+	# include rotated files, and paths that do not exist are skipped.
+	read -r -a extra_patterns <<<"${H360_BACKUP_EXTRA_PATHS:-}"
+	for pattern in "${extra_patterns[@]}"; do
+		while IFS= read -r match; do
+			[[ -e "${match}" ]] && paths+=("${match}")
+		done < <(compgen -G "${pattern}*" || true)
+	done
+
+	log_info "backing up files"
+	files_status=0
+	restic backup --json --host "${host}" --tag files "${tag_args[@]}" \
+		--exclude "${data_dir}/sites/assets" \
+		--exclude "${data_dir}/sites/*/locks" \
+		--exclude "${data_dir}/sites/*/private/backups" \
+		--exclude "${H360_CONFIG_DIR}/secrets/restic_password" \
+		--exclude '*.tmp' \
+		"${paths[@]}" >"${files_log}" || files_status=$?
+	files_snapshot="$(summary_field "${files_log}" '.snapshot_id')"
+	case "${files_status}" in
+		0) ;;
+		3)
+			# Snapshot written, but some files vanished or could not be read meanwhile
+			# (typically a log rotated during the run). Worth a look, not a 2 a.m. page.
+			unreadable="$(jq -r 'select(.message_type == "error") | .item' "${files_log}" | head -n 10 | tr '\n' ' ')"
+			[[ -n "${files_snapshot}" ]] || fail "file backup failed: no snapshot written"
+			log_warn "file backup incomplete: ${unreadable}"
+			h360_alert "host.backup.partial.${host}" Warning Backup "Backup on ${host} skipped some files" \
+				"Snapshot ${files_snapshot} was written without: ${unreadable}"
+			;;
+		*) fail "file backup failed (restic exit ${files_status}): $(restic_errors "${files_log}")" ;;
+	esac
+	files_bytes="$(summary_field "${files_log}" '.total_bytes_processed // 0')"
+	log_info "files snapshot ${files_snapshot} (${files_bytes} bytes)"
+	snapshot="${db_snapshot},${files_snapshot}"
+	bytes=$((${db_bytes:-0} + ${files_bytes:-0}))
+
+	# ------------------------------------------------------------------- retention and check
+	if [[ "$(date +%u)" == 7 && "${#extra_tags[@]}" -eq 0 ]]; then
+		log_info "applying retention"
+		restic forget --host "${host}" --group-by host,paths \
+			--keep-daily "${H360_BACKUP_KEEP_DAILY}" \
+			--keep-weekly "${H360_BACKUP_KEEP_WEEKLY}" \
+			--keep-monthly "${H360_BACKUP_KEEP_MONTHLY}" \
+			--prune || fail "restic forget/prune failed"
+		log_info "verifying ${H360_BACKUP_CHECK_SUBSET} of the repository data"
+		restic check --read-data-subset="${H360_BACKUP_CHECK_SUBSET}" || fail "restic check found problems in the repository"
+	fi
+fi
+
+date +%s >"${state}/last_success"
+message="Snapshot(s) ${snapshot} of ${#databases[@]} database(s)"
+[[ "${db_only}" == 0 ]] && message="${message} and site files"
+[[ "${#extra_tags[@]}" -gt 0 ]] && message="${message} (${extra_tags[*]})"
+report Success "${message}." "${snapshot}" "${bytes}"
+h360_resolve "host.backup.${host}" "Backup succeeded: ${snapshot}."
+log_notice "backup complete: ${snapshot}"

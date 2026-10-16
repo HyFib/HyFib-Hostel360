@@ -1,0 +1,21 @@
+- name: Install restic
+  ansible.builtin.shell: |
+    set -o pipefail
+    bunzip2 -c /var/cache/restic_{{ h360_restic_version }}.bz2 > /usr/local/bin/restic.new
+    install -m 0755 /usr/local/bin/restic.new /usr/local/bin/restic
+    rm -f /usr/local/bin/restic.new
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+# rclone >= 1.61 has the oracleobjectstorage backend with instance principal authentication
+- name: Install rclone
+  ansible.builtin.shell: |
+    set -o pipefail
+    tmp="$(mktemp -d)"
+    unzip -q -o /var/cache/rclone-v{{ h360_rclone_version }}.zip -d "${tmp}"
+    install -m 0755 "${tmp}"/rclone-v{{ h360_rclone_version }}-linux-{{ h360_bin_arch }}/rclone /usr/local/bin/rclone
+    rm -rf "${tmp}"
+  args:
+    executable: /bin/bash
+  changed_when: true

@@ -1,0 +1,193 @@
+{
+ "actions": [],
+ "autoname": "field:mess_name",
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "mess_name",
+  "mess_manager",
+  "column_break_main",
+  "is_active",
+  "billed_upto",
+  "hostels_section",
+  "hostels",
+  "description"
+ ],
+ "fields": [
+  {
+   "bold": 1,
+   "fieldname": "mess_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mess Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Receives low stock alerts and is the default contact for this mess.",
+   "fieldname": "mess_manager",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Mess Manager",
+   "options": "User"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Active"
+  },
+  {
+   "description": "Last day covered by a published mess bill run. Stock movements, expenses, extra charges and reductions dated on or before it can no longer be changed.",
+   "fieldname": "billed_upto",
+   "fieldtype": "Date",
+   "label": "Bills Published Up To",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "hostels_section",
+   "fieldtype": "Section Break",
+   "label": "Hostels Served"
+  },
+  {
+   "description": "Residents of these hostels dine at this mess and share its monthly cost.",
+   "fieldname": "hostels",
+   "fieldtype": "Table MultiSelect",
+   "label": "Hostels",
+   "options": "Hostel Mess Hostel",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "links": [
+  {
+   "group": "Stock",
+   "link_doctype": "Mess Stock Entry",
+   "link_fieldname": "mess"
+  },
+  {
+   "group": "Stock",
+   "link_doctype": "Mess Indent",
+   "link_fieldname": "mess"
+  },
+  {
+   "group": "Menu",
+   "link_doctype": "Mess Menu",
+   "link_fieldname": "mess"
+  },
+  {
+   "group": "Billing",
+   "link_doctype": "Mess Expense",
+   "link_fieldname": "mess"
+  },
+  {
+   "group": "Billing",
+   "link_doctype": "Mess Bill Run",
+   "link_fieldname": "mess"
+  },
+  {
+   "group": "Students",
+   "link_doctype": "Mess Reduction Application",
+   "link_fieldname": "mess"
+  },
+  {
+   "group": "Students",
+   "link_doctype": "Mess Extra Charge",
+   "link_fieldname": "mess"
+  }
+ ],
+ "modified": "2026-10-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Mess",
+ "name": "Hostel Mess",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Mess Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Mess Staff"
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Warden",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "read": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "mess_name",
+ "track_changes": 1
+}

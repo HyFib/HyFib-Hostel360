@@ -1,0 +1,206 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "staff_name",
+  "employee_id",
+  "designation",
+  "column_break_staff",
+  "mobile_number",
+  "email",
+  "photo",
+  "login_section",
+  "is_active",
+  "create_user",
+  "send_welcome_email",
+  "column_break_login",
+  "user",
+  "assignments_section",
+  "assignments"
+ ],
+ "fields": [
+  {
+   "default": "STF-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "no_copy": 1,
+   "options": "STF-.#####",
+   "print_hide": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "staff_name",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Staff Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "employee_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Employee ID",
+   "unique": 1
+  },
+  {
+   "description": "Security staff get a gate login for their assigned hostels, used only to record students leaving and returning on approved leave. Housekeeping and Other staff are recorded for contact purposes only and do not get a desk login.",
+   "fieldname": "designation",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Designation",
+   "options": "Hostel Administrator\nWarden\nDeputy Warden\nOffice Staff\nMess Manager\nMess Staff\nSecurity\nHousekeeping\nOther",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_staff",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mobile_number",
+   "fieldtype": "Data",
+   "label": "Mobile Number",
+   "options": "Phone"
+  },
+  {
+   "description": "Required to create a desk login.",
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "photo",
+   "fieldtype": "Attach Image",
+   "hidden": 1,
+   "label": "Photo"
+  },
+  {
+   "fieldname": "login_section",
+   "fieldtype": "Section Break",
+   "label": "Desk Login"
+  },
+  {
+   "default": "1",
+   "description": "Unticking disables the desk login.",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Is Active"
+  },
+  {
+   "description": "Creates a login with the roles for this designation. Two-factor authentication is mandatory. Not available for Housekeeping and Other staff.",
+   "fieldname": "create_user",
+   "fieldtype": "Check",
+   "label": "Create Desk Login"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.create_user && !doc.user",
+   "description": "Sends the password set-up link to the e-mail address.",
+   "fieldname": "send_welcome_email",
+   "fieldtype": "Check",
+   "label": "Send Welcome Email"
+  },
+  {
+   "fieldname": "column_break_login",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "Desk User",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Deputy wardens, office staff, mess staff and security staff only see records of the hostels listed here.",
+   "fieldname": "assignments_section",
+   "fieldtype": "Section Break",
+   "label": "Hostel Assignments"
+  },
+  {
+   "fieldname": "assignments",
+   "fieldtype": "Table",
+   "label": "Assignments",
+   "options": "Hostel Staff Assignment"
+  }
+ ],
+ "icon": "user",
+ "image_field": "photo",
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-15 21:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel People",
+ "name": "Hostel Staff",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Warden"
+  },
+  {
+   "read": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "read": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "staff_name,designation,employee_id",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "staff_name",
+ "track_changes": 1
+}

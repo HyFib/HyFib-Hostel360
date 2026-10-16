@@ -1,0 +1,52 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 16:30:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "fee_head",
+  "description",
+  "amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "fee_head",
+   "fieldtype": "Link",
+   "label": "Fee Head",
+   "options": "Hostel Fee Head",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "label": "Description",
+   "in_list_view": 1,
+   "columns": 5
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "options": "",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2,
+   "non_negative": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-15 16:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Fees",
+ "name": "Hostel Fee Invoice Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

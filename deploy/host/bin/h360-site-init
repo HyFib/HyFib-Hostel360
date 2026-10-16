@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# Create the Hostel360 site on a freshly provisioned server, or finish its wiring.
+#
+#   h360-site-init                       create the site if needed, then all wiring below
+#   h360-site-init --trusted-networks    only the trusted networks (Ansible runs this)
+#
+# Idempotent. On the first run it creates the site (bench new-site with hostel360), stores
+# the Administrator password in /etc/hostel360/secrets/site_admin_password and enables the
+# scheduler. On every run it makes sure the site's wiring matches this server:
+#   - Ops Alert Settings: ingest secret (same as agent.env), instance label, environment
+#   - an OCI notification token, and prints the endpoint for Terraform's alarm_https_endpoint
+#   - alert deliveries use the alerts job queue (hostel360_alert_queue), when bench defines it
+#   - Messaging Settings > Trusted Networks contains every campus egress address from
+#     CAMPUS_EGRESS_CIDRS in stack.env (Ansible: h360_campus_egress_cidrs), so the OTP
+#     per-address limit does not treat the campus gateway as one client. Addresses are only
+#     ever added: entries an administrator typed in stay, and an address dropped from the
+#     inventory is deleted by hand in Messaging Settings.
+# Secrets travel over standard input only, never on a command line.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-site-init
+h360_require_root
+
+mode=all
+case "${1:-}" in
+	"") ;;
+	--trusted-networks) mode=trusted-networks ;;
+	-h | --help)
+		sed -n '2,/^set -Eeuo/p' "$0" | sed '$d; s/^# \{0,1\}//'
+		exit 0
+		;;
+	*) die "unknown option: $1 (see $0 --help)" ;;
+esac
+
+h360_require_cmd docker jq openssl
+h360_lock site-init 300
+
+site="$(h360_stack_value SITE_NAME)"
+public_url="$(h360_stack_value PUBLIC_URL)"
+public_url="${public_url:-https://${site}}"
+campus_cidrs="$(h360_stack_value CAMPUS_EGRESS_CIDRS)"
+# The stack's own settings decide where its volumes are (as in h360_compose).
+data_dir="$(h360_stack_value H360_DATA_DIR)"
+data_dir="${data_dir:-/srv/hostel360}"
+secrets="${H360_CONFIG_DIR}/secrets"
+[[ -n "${site}" ]] || die "SITE_NAME is not set in the stack configuration"
+
+sync_trusted_networks() {
+	# Adds the campus egress addresses to Messaging Settings > Trusted Networks; prints
+	# "trusted networks updated: ..." or "trusted networks unchanged".
+	docker exec -i -w /home/frappe/frappe-bench/sites "${backend}" /home/frappe/frappe-bench/env/bin/python -c '
+import ipaddress
+import sys
+
+import frappe
+
+site, wanted = sys.argv[1], [entry.strip() for entry in sys.argv[2].split(",") if entry.strip()]
+
+
+def key(entry):
+	try:
+		return str(ipaddress.ip_network(entry, strict=False))
+	except ValueError:
+		return entry
+
+
+for entry in wanted:
+	try:
+		ipaddress.ip_network(entry, strict=False)
+	except ValueError:
+		# Refuse a malformed stack.env before touching the site.
+		print(f"CAMPUS_EGRESS_CIDRS in stack.env: {entry!r} is not an IP address or network")
+		sys.exit(2)
+
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+	frappe.set_user("Administrator")
+	settings = frappe.get_single("Messaging Settings")
+	current = [line.strip() for line in (settings.otp_trusted_networks or "").splitlines() if line.strip()]
+	present = {key(line) for line in current}
+	missing = [entry for entry in wanted if key(entry) not in present]
+	if missing:
+		settings.otp_trusted_networks = "\n".join(current + missing)
+		settings.flags.ignore_permissions = True
+		settings.save()
+		frappe.db.commit()
+		print("trusted networks updated: added " + ", ".join(missing))
+	else:
+		print("trusted networks unchanged")
+finally:
+	frappe.destroy()
+' "${site}" "${campus_cidrs}"
+}
+
+if [[ "${mode}" == trusted-networks ]]; then
+	if [[ ! -f "${data_dir}/sites/${site}/site_config.json" ]]; then
+		log_notice "site ${site} does not exist yet; its trusted networks are set when h360-site-init creates it"
+		echo "trusted networks unchanged"
+		exit 0
+	fi
+	if [[ -z "${campus_cidrs}" ]]; then
+		log_warn "CAMPUS_EGRESS_CIDRS is empty in stack.env; campus users share the OTP per-address limit"
+		echo "trusted networks unchanged"
+		exit 0
+	fi
+	backend="$(h360_container backend)"
+	[[ -n "${backend}" ]] || die "the backend container is not running (systemctl start hostel360-stack)"
+	result="$(sync_trusted_networks)" || die "${result:-could not update the trusted networks}"
+	log_notice "${result} (${site})"
+	printf '%s\n' "${result}"
+	exit 0
+fi
+
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+
+backend="$(h360_container backend)"
+[[ -n "${backend}" ]] || die "the backend container is not running (systemctl start hostel360-stack)"
+[[ -n "$(h360_container mariadb)" ]] || die "the mariadb container is not running"
+
+if [[ ! -f "${data_dir}/sites/${site}/site_config.json" ]]; then
+	log_notice "creating site ${site}"
+	password_file="${secrets}/site_admin_password"
+	if [[ ! -s "${password_file}" ]]; then
+		(umask 0077 && openssl rand -base64 24 | tr -d '\n' >"${password_file}")
+	fi
+	# Line 1: database root password, line 2: Administrator password
+	{
+		cat "${secrets}/db_root_password"
+		echo
+		cat "${password_file}"
+		echo
+	} | docker exec -i "${backend}" bash -c '
+		set -euo pipefail
+		IFS= read -r db_root
+		IFS= read -r admin
+		cd /home/frappe/frappe-bench
+		bench new-site "$1" --mariadb-user-host-login-scope=% \
+			--db-root-password "${db_root}" --admin-password "${admin}" --install-app hostel360
+	' bash "${site}"
+	h360_bench --site "${site}" enable-scheduler
+	log_notice "site created; the Administrator password is in ${password_file}"
+fi
+
+# Alert deliveries go to the dedicated queue once bench defines it (the configurator does,
+# on every start of the stack); a site created after the stack started gets it here.
+if [[ "$(jq -r '.workers.alerts // empty | type' "${data_dir}/sites/common_site_config.json" 2>/dev/null || true)" == object &&
+	"$(jq -r '.hostel360_alert_queue // ""' "${data_dir}/sites/${site}/site_config.json" 2>/dev/null || true)" != alerts ]]; then
+	h360_bench --site "${site}" set-config hostel360_alert_queue alerts >/dev/null
+	log_notice "alert deliveries use the alerts queue"
+fi
+
+# Operations wiring. The token for OCI notifications is created once and kept.
+token_file="${secrets}/oci_notification_token"
+if [[ ! -s "${token_file}" ]]; then
+	(umask 0077 && openssl rand -hex 32 | tr -d '\n' >"${token_file}")
+fi
+
+{
+	printf '%s\n' "${H360_INGEST_SECRET:?H360_INGEST_SECRET is not set in agent.env}"
+	cat "${token_file}"
+	echo
+} | docker exec -i -w /home/frappe/frappe-bench/sites "${backend}" /home/frappe/frappe-bench/env/bin/python -c '
+import sys
+
+import frappe
+from frappe.utils.password import set_encrypted_password
+
+site, label = sys.argv[1], sys.argv[2]
+ingest_secret = sys.stdin.readline().strip()
+oci_token = sys.stdin.readline().strip()
+
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+	doctype = "Ops Alert Settings"
+	set_encrypted_password(doctype, doctype, ingest_secret, "ingest_secret")
+	set_encrypted_password(doctype, doctype, oci_token, "oci_notification_token")
+	frappe.db.set_single_value(doctype, {"instance_label": label, "environment": "Production"})
+	frappe.db.commit()
+finally:
+	frappe.destroy()
+' "${site}" "$(h360_host)"
+
+if [[ -n "${campus_cidrs}" ]]; then
+	result="$(sync_trusted_networks)" || die "${result:-could not update the trusted networks}"
+	log_notice "${result} (${site})"
+else
+	log_warn "CAMPUS_EGRESS_CIDRS is empty in stack.env; set h360_campus_egress_cidrs (Ansible) so campus users do not share one OTP per-address limit"
+fi
+
+h360_bench --site "${site}" scheduler status >/dev/null 2>&1 || true
+log_notice "operations wiring done for ${site}"
+printf '\nOCI alarm endpoint for terraform.tfvars (alarm_https_endpoint), keep it secret:\n'
+printf '  %s/api/method/hostel360.api.ops.oci_notification?token=%s\n\n' "${public_url}" "$(cat "${token_file}")"

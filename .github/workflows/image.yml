@@ -1,0 +1,96 @@
+# Release image: linux/arm64 + linux/amd64, pushed to OCI Registry with SBOM and provenance.
+#
+# Runs on a version tag (vX.Y.Z, which must match __version__ in hostel360/__init__.py) or by
+# hand. The build itself is deploy/docker/build.sh, the same script used from a workstation:
+# it tags the image <version>-<12-character git sha> and <version>, refuses to push a tree
+# with uncommitted changes, and never uses "latest". The arm64 half is built under QEMU.
+#
+# Configuration (Settings > Secrets and variables > Actions):
+#   variables  OCIR_REGION     e.g. ap-hyderabad-1
+#              OCIR_NAMESPACE  tenancy Object Storage namespace
+#   secrets    OCIR_USERNAME   <namespace>/<user> of a CI user allowed to push to the hostel360 repository only
+#              OCIR_AUTH_TOKEN that user's auth token
+# See docs/DEPLOYMENT.md, section 3.
+
+name: Image
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and push
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      OCIR_REGION: ${{ vars.OCIR_REGION }}
+      OCIR_NAMESPACE: ${{ vars.OCIR_NAMESPACE }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Check the configuration and the version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ -z "${OCIR_REGION}" || -z "${OCIR_NAMESPACE}" ]]; then
+            echo "::error::Set the OCIR_REGION and OCIR_NAMESPACE repository variables."
+            exit 1
+          fi
+          version="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' hostel360/__init__.py)"
+          if [[ "${REF_TYPE}" == "tag" && "${REF_NAME}" != "v${version}" ]]; then
+            echo "::error::Tag ${REF_NAME} does not match __version__ ${version} in hostel360/__init__.py."
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "${GITHUB_ENV}"
+          echo "IMAGE_TAG=${version}-$(git rev-parse --short=12 HEAD)" >> "${GITHUB_ENV}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          driver: docker-container
+
+      - name: Log in to OCIR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ vars.OCIR_REGION }}.ocir.io
+          username: ${{ secrets.OCIR_USERNAME }}
+          password: ${{ secrets.OCIR_AUTH_TOKEN }}
+
+      - name: Build and push (arm64 + amd64, SBOM, provenance)
+        env:
+          H360_BUILDER: ${{ steps.buildx.outputs.name }}
+        run: deploy/docker/build.sh --push
+
+      - name: Summary
+        run: |
+          {
+            echo "### Image pushed"
+            echo
+            echo "\`${OCIR_REGION}.ocir.io/${OCIR_NAMESPACE}/hostel360:${IMAGE_TAG}\` (also \`${VERSION}\`)"
+            echo
+            echo "Deploy with the **Deploy** workflow (tag \`${IMAGE_TAG}\`), or on the server:"
+            echo "\`sudo h360-deploy ${IMAGE_TAG}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -1,0 +1,512 @@
+# HyFib Hostel360 production stack: one OCI VM (VM.Standard.A1.Flex, 8 OCPU / 16 GB,
+# Ubuntu 24.04 arm64) with the 400 GB block volume mounted at /srv/hostel360.
+#
+#   docker compose --env-file /etc/hostel360/stack.env -f /opt/hostel360/deploy/compose/compose.yml up -d
+#
+# The hostel360-stack systemd unit runs exactly this; h360-deploy switches the image tag
+# (H360_IMAGE_TAG) and runs migrations. Validate a change with:
+#   docker compose -f deploy/compose/compose.yml --env-file deploy/compose/.env.example config
+#
+# Request path:
+#   OCI Load Balancer (public TLS) -> waf :8443/:8080 (ModSecurity + OWASP CRS 4)
+#     -> frontend (nginx) -> backend (gunicorn) | websocket (socket.io)
+#     -> php-fpm for /integration/ (hostel website integration pages)
+#
+# Networks:
+#   edge      egress to the internet (SMS, WhatsApp, e-mail, Razorpay, PayU, ClamAV mirrors)
+#             and the published WAF ports; members: waf, backend, workers, clamav
+#   internal  no route off the host; application and data tier (MariaDB, Redis). The WAF is
+#             also reachable here under the portal host name (SITE_NAME), for print PDFs
+#   php       no route off the host; only the WAF and PHP-FPM
+#
+# Memory plan (limits; 16 GB host): MariaDB 7 GB, application 4 GB (backend 2 GB, two
+# short-queue workers 448 MB each, long-queue worker 640 MB, scheduler 256 MB, websocket
+# 256 MB), Redis 1.2 GB, ClamAV 1.75 GB, WAF 384 MB, frontend 192 MB, PHP-FPM 768 MB.
+# Limits are ceilings, not reservations; typical use is well below them.
+#
+# Job queues: "alerts" carries HyFib operations alert deliveries only, so a page never
+# waits behind thousands of fee or mess-bill notifications on "short". The configurator
+# defines it (workers.alerts in common_site_config.json, hostel360_alert_queue in the site
+# config) before any worker starts, and every worker lists it first.
+
+name: hostel360
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "10"
+    tag: "{{.Name}}"
+
+x-app-env: &app-env
+  SITE_NAME: ${SITE_NAME:?SITE_NAME must be set}
+  TZ: Asia/Kolkata
+
+x-app-depends: &app-depends
+  configurator:
+    condition: service_completed_successfully
+  mariadb:
+    condition: service_healthy
+  redis-cache:
+    condition: service_healthy
+  redis-queue:
+    condition: service_healthy
+
+x-app: &app
+  image: ${H360_IMAGE:?H360_IMAGE must be set}:${H360_IMAGE_TAG:?H360_IMAGE_TAG must be set}
+  pull_policy: missing
+  restart: unless-stopped
+  init: true
+  logging: *logging
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  environment:
+    <<: *app-env
+  volumes:
+    - ${H360_DATA_DIR:-/srv/hostel360}/sites:/home/frappe/frappe-bench/sites
+    - ${H360_DATA_DIR:-/srv/hostel360}/logs/frappe:/home/frappe/frappe-bench/logs
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  networks:
+    - internal
+  depends_on: *app-depends
+  healthcheck:
+    test: ["CMD", "h360-healthcheck"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 120s
+
+services:
+  # One-shot: writes common_site_config.json (database, Redis, scanner addresses) before
+  # any application container starts.
+  configurator:
+    <<: *app
+    command: ["configure"]
+    restart: on-failure:3
+    environment:
+      <<: *app-env
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      REDIS_CACHE: redis://redis-cache:6379
+      REDIS_QUEUE: redis://redis-queue:6379
+      SOCKETIO_PORT: "9000"
+      CLAMD_HOST: clamav
+      CLAMD_PORT: "3310"
+      MAX_FILE_SIZE: "10485760"
+      # Dedicated queue for operations alert deliveries (see "Job queues" above)
+      ALERT_QUEUE: alerts
+      ALERT_QUEUE_TIMEOUT: "300"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  backend:
+    <<: *app
+    command: ["backend"]
+    environment:
+      <<: *app-env
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-6}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-4}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+    networks:
+      - internal
+      - edge
+    stop_grace_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  websocket:
+    <<: *app
+    command: ["websocket"]
+    environment:
+      <<: *app-env
+      SOCKETIO_PORT: "9000"
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  queue-short:
+    <<: *app
+    command: ["worker", "alerts,short,default"]
+    networks:
+      - internal
+      - edge
+    stop_grace_period: 120s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 448m
+
+  queue-long:
+    <<: *app
+    command: ["worker", "alerts,long,default,short"]
+    networks:
+      - internal
+      - edge
+    stop_grace_period: 300s
+    deploy:
+      resources:
+        limits:
+          memory: 640m
+
+  scheduler:
+    <<: *app
+    command: ["scheduler"]
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  frontend:
+    <<: *app
+    command: ["frontend"]
+    environment:
+      <<: *app-env
+      BACKEND: backend:8000
+      SOCKETIO: websocket:9000
+      FRONTEND_PORT: "8080"
+      UPSTREAM_REAL_IP_ADDRESS: ${H360_INTERNAL_SUBNET:-172.30.10.0/24}
+      CLIENT_MAX_BODY_SIZE: 12m
+      PROXY_READ_TIMEOUT: "120"
+    read_only: true
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
+      websocket:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "h360-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 192m
+
+  waf:
+    image: owasp/modsecurity-crs:4.30.0-nginx-alpine-202610051210
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      TZ: Asia/Kolkata
+      SERVER_NAME: ${SITE_NAME:?SITE_NAME must be set}
+      PORT: "8080"
+      SSL_PORT: "8443"
+      SSL_CERT_FILE: /etc/nginx/h360-tls/server.crt
+      SSL_CERT_KEY_FILE: /etc/nginx/h360-tls/server.key
+      PROXY_TIMEOUT: 120s
+      KEEPALIVE_TIMEOUT: 75s
+      CLIENT_BODY_TIMEOUT: 30s
+      WORKER_CONNECTIONS: "4096"
+      METRICS_ALLOW_FROM: 127.0.0.1
+      NGINX_ALWAYS_TLS_REDIRECT: "off"
+      # Hostel360 template settings (deploy/waf/templates)
+      H360_LB_SUBNET: ${LB_SUBNET_CIDR:?LB_SUBNET_CIDR must be set}
+      H360_FRONTEND_UPSTREAM: frontend:8080
+      H360_PHP_UPSTREAM: php-fpm:9000
+      H360_AUTH_RATE: ${WAF_AUTH_RATE:-120r/m}
+      H360_AUTH_BURST: ${WAF_AUTH_BURST:-60}
+      H360_LOGIN_RATE: ${WAF_LOGIN_RATE:-30r/m}
+      H360_LOGIN_BURST: ${WAF_LOGIN_BURST:-20}
+      H360_SW_SCOPE: /hostel
+      # OWASP CRS: paranoia level 1, inbound anomaly threshold 5
+      BLOCKING_PARANOIA: "1"
+      DETECTION_PARANOIA: "1"
+      ANOMALY_INBOUND: "5"
+      ANOMALY_OUTBOUND: "4"
+      ALLOWED_METHODS: GET HEAD POST OPTIONS PUT PATCH DELETE
+      MAX_FILE_SIZE: "12582912"
+      COMBINED_FILE_SIZES: "12582912"
+      # ModSecurity engine; DetectionOnly while tuning a new rule exclusion
+      MODSEC_RULE_ENGINE: ${WAF_RULE_ENGINE:-On}
+      MODSEC_REQ_BODY_LIMIT: "13107200"
+      MODSEC_REQ_BODY_NOFILES_LIMIT: "2097152"
+      MODSEC_REQ_BODY_LIMIT_ACTION: Reject
+      # Audit log: timestamps, addresses and rule matches only (parts A, H, Z). Request
+      # headers and bodies are left out so passwords, OTPs and session cookies never land in it.
+      MODSEC_AUDIT_ENGINE: RelevantOnly
+      MODSEC_AUDIT_LOG: /var/log/nginx/modsec_audit.log
+      MODSEC_AUDIT_LOG_FORMAT: JSON
+      MODSEC_AUDIT_LOG_PARTS: AHZ
+      MODSEC_AUDIT_LOG_RELEVANT_STATUS: "^(?:5|4(?!04|21|29))"
+    ports:
+      - "${WAF_BIND_ADDRESS:-0.0.0.0}:${WAF_HTTPS_PORT:-8443}:8443"
+      - "${WAF_BIND_ADDRESS:-0.0.0.0}:${WAF_HTTP_PORT:-8080}:8080"
+    volumes:
+      - ../waf/templates/conf.d/00-hostel360.conf.template:/etc/nginx/templates/conf.d/00-hostel360.conf.template:ro
+      - ../waf/templates/conf.d/default.conf.template:/etc/nginx/templates/conf.d/default.conf.template:ro
+      - ../waf/templates/conf.d/logging.conf.template:/etc/nginx/templates/conf.d/logging.conf.template:ro
+      - ../waf/templates/includes/h360-proxy.conf.template:/etc/nginx/templates/includes/h360-proxy.conf.template:ro
+      - ../waf/templates/includes/h360-proxy-headers.conf.template:/etc/nginx/templates/includes/h360-proxy-headers.conf.template:ro
+      - ../waf/templates/includes/h360-security-headers.conf.template:/etc/nginx/templates/includes/h360-security-headers.conf.template:ro
+      - ../waf/modsecurity/hostel360-before.conf:/opt/owasp-crs/plugins/hostel360-before.conf:ro
+      - ../integration/website/public:/var/www/hostel360/public:ro
+      - ${H360_CONFIG_DIR:-/etc/hostel360}/waf/tls:/etc/nginx/h360-tls:ro
+      - ${H360_CONFIG_DIR:-/etc/hostel360}/waf/lists:/etc/nginx/h360:ro
+      - ${H360_DATA_DIR:-/srv/hostel360}/logs/waf:/var/log/nginx
+    # nginx runs as uid 101 and also listens on 443 and 80 for the stack's own containers
+    # (see networks below); this is Docker's default for a container network namespace,
+    # stated here because those listeners depend on it.
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    networks:
+      edge: {}
+      # The portal host name resolves to the WAF inside the stack. Frappe renders print PDFs
+      # with wkhtmltopdf, which loads the logo and other /files and /assets URLs from the
+      # site's public URL (host_name, https://SITE_NAME); with this alias the backend and
+      # workers reach them here on 443 instead of leaving the host for the load balancer.
+      internal:
+        aliases:
+          - ${SITE_NAME:?SITE_NAME must be set}
+      php: {}
+    depends_on:
+      frontend:
+        condition: service_started
+      php-fpm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/local/bin/healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+
+  php-fpm:
+    image: php:8.3.35-fpm-alpine3.23
+    restart: unless-stopped
+    user: "82:82"
+    read_only: true
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      TZ: Asia/Kolkata
+      H360_PORTAL_URL: ${PUBLIC_URL:-}
+      H360_INSTITUTION_NAME: ${INSTITUTION_NAME:-}
+      H360_INSTITUTION_SHORT_NAME: ${INSTITUTION_SHORT_NAME:-}
+      H360_SUPPORT_PHONE: ${SUPPORT_PHONE:-}
+      H360_SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      H360_WEBSITE_ORIGINS: ${HOSTEL_WEBSITE_ORIGINS:-}
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - ../php-fpm/pool.d/www.conf:/usr/local/etc/php-fpm.d/www.conf:ro
+      - ../php-fpm/conf.d/zz-hostel360.ini:/usr/local/etc/php/conf.d/zz-hostel360.ini:ro
+      - ../php-fpm/healthcheck.php:/usr/local/lib/h360/healthcheck.php:ro
+      - ../integration/website:/var/www/hostel360:ro
+    networks:
+      - php
+    healthcheck:
+      test: ["CMD", "php", "-n", "/usr/local/lib/h360/healthcheck.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+
+  mariadb:
+    image: mariadb:11.8.9-noble
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    environment:
+      TZ: Asia/Kolkata
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+      MARIADB_AUTO_UPGRADE: "1"
+    secrets:
+      - db_root_password
+    volumes:
+      - ${H360_DATA_DIR:-/srv/hostel360}/mariadb:/var/lib/mysql
+      - ../mariadb/hostel360.cnf:/etc/mysql/conf.d/hostel360.cnf:ro
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    networks:
+      - internal
+    stop_grace_period: 120s
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 7g
+
+  redis-cache:
+    image: redis:8.6.7-alpine3.23
+    restart: unless-stopped
+    user: "999:1000"
+    read_only: true
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /data:size=16m,mode=0700,uid=999,gid=1000
+    volumes:
+      - ../redis/redis-cache.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 576m
+
+  redis-queue:
+    image: redis:8.6.7-alpine3.23
+    restart: unless-stopped
+    user: "999:1000"
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ../redis/redis-queue.conf:/usr/local/etc/redis/redis.conf:ro
+      - ${H360_DATA_DIR:-/srv/hostel360}/redis-queue:/data
+    networks:
+      - internal
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 640m
+
+  clamav:
+    image: clamav/clamav-debian:1.4.6
+    restart: unless-stopped
+    # The socket directory is a bind mount from the host; clamd (user clamav) must own it.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - chown clamav:clamav /run/clamav /var/log/clamav && chmod 0750 /run/clamav && exec /init "$$@"
+      - clamav-init
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    environment:
+      TZ: Asia/Kolkata
+      CLAMAV_NO_MILTERD: "true"
+      FRESHCLAM_CHECKS: "12"
+    volumes:
+      - ${H360_DATA_DIR:-/srv/hostel360}/clamav:/var/lib/clamav
+      - ${H360_DATA_DIR:-/srv/hostel360}/logs/clamav:/var/log/clamav
+      - ../clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+      - ../clamav/freshclam.conf:/etc/clamav/freshclam.conf:ro
+      # clamd's unix socket, shared with Linux Malware Detect on the host
+      - type: bind
+        source: ${H360_RUNTIME_DIR:-/run/hostel360}/clamav
+        target: /run/clamav
+        bind:
+          create_host_path: true
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 600s
+    deploy:
+      resources:
+        limits:
+          memory: 1792m
+
+networks:
+  edge:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: h360-edge
+    ipam:
+      config:
+        - subnet: ${H360_EDGE_SUBNET:-172.30.20.0/24}
+  internal:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: h360-internal
+    ipam:
+      config:
+        - subnet: ${H360_INTERNAL_SUBNET:-172.30.10.0/24}
+  php:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: h360-php
+    ipam:
+      config:
+        - subnet: ${H360_PHP_SUBNET:-172.30.30.0/24}
+
+secrets:
+  db_root_password:
+    file: ${H360_CONFIG_DIR:-/etc/hostel360}/secrets/db_root_password

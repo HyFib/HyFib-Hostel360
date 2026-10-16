@@ -1,0 +1,10 @@
+[Unit]
+Description=Hostel360 uptime probe of the public portal URL
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/h360-uptime-probe
+SyslogIdentifier=h360-uptime-probe
+TimeoutStartSec=50s

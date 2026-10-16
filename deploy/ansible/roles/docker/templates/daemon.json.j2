@@ -1,0 +1,18 @@
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "{{ h360_docker_log_max_size }}",
+    "max-file": "{{ h360_docker_log_max_file }}"
+  },
+  "live-restore": true,
+  "no-new-privileges": true,
+  "icc": false,
+  "ip6tables": false,
+  "default-address-pools": [
+    { "base": "{{ h360_docker_address_pool }}", "size": 24 }
+  ],
+  "default-ulimits": {
+    "nofile": { "Name": "nofile", "Soft": 65536, "Hard": 65536 }
+  },
+  "log-level": "warn"
+}

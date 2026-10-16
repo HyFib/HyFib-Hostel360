@@ -1,0 +1,58 @@
+# pre-commit hooks for HyFib Hostel360.
+#
+#   pip install pre-commit && pre-commit install
+#   pre-commit run --all-files        # everything, e.g. after changing this file
+#
+# Python is linted and formatted by ruff with the settings in pyproject.toml (the same ruff
+# version as .github/workflows/ci.yml). The portal (frontend/) is formatted by Prettier with
+# tabs and a 120-character line, matching its existing style.
+
+default_stages: [pre-commit]
+fail_fast: false
+exclude: |
+  (?x)^(
+      .*/node_modules/.*|
+      hostel360/public/frontend/.*|
+      hostel360/public/dist/.*|
+      hostel360/www/hostel\.html
+  )$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: ^(hostel360/locale/.*|tests/load/results/.*)$
+      - id: end-of-file-fixer
+        exclude: ^(hostel360/locale/.*|tests/load/results/.*)$
+      - id: check-json
+      - id: check-yaml
+        # compose files use tags such as !reset; the cloud-init file is a Terraform template.
+        args: [--unsafe]
+        exclude: ^deploy/terraform/oci/templates/.*$
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: debug-statements
+      - id: detect-private-key
+        exclude: ^(deploy/tests/|hostel360/.*/tests/|hostel360/.*/test_[^/]+\.py$)
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff
+        name: ruff (lint, imports)
+        args: [--fix]
+      - id: ruff-format
+        name: ruff (format)
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.9.8
+    hooks:
+      - id: prettier
+        name: prettier (portal)
+        files: ^frontend/
+        types_or: [ts, vue, css, javascript]
+        args: [--use-tabs, --print-width=120]

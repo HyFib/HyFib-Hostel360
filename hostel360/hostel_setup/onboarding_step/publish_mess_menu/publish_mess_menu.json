@@ -1,0 +1,21 @@
+{
+ "action": "Create Entry",
+ "action_label": "Plan a Menu",
+ "creation": "2026-10-15 18:00:00.000000",
+ "description": "Plan the week's breakfast, lunch, snacks and dinner for each mess and publish it. Students and parents see the published menu in the portal.",
+ "docstatus": 0,
+ "doctype": "Onboarding Step",
+ "idx": 0,
+ "is_complete": 0,
+ "is_single": 0,
+ "is_skipped": 0,
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "Publish Mess Menu",
+ "owner": "Administrator",
+ "reference_document": "Mess Menu",
+ "show_form_tour": 0,
+ "show_full_form": 1,
+ "title": "Publish the mess menu",
+ "validate_action": 1
+}

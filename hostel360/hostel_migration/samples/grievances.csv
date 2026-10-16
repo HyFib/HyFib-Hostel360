@@ -1,0 +1,4 @@
+grv_id,stud_id,raised_on,category,subject,details,priority,status,resolution,resolved_on,confidential
+GR001,S001,05-08-2025 21:10,PLUMBING,Leaking tap in A block bathroom,The tap near the wash basin leaks all night.,MEDIUM,CLOSED,Washer replaced by the plumber.,07-08-2025 11:00,N
+GR002,S006,12-09-2025 13:40,MESS,Rice not cooked properly,Lunch rice was undercooked on two days this week.,LOW,RESOLVED,Discussed with the cook; the rice cooker was serviced.,14-09-2025 10:30,N
+GR003,S003,02-10-2026 19:05,ELECTRICAL,Fan regulator broken,The fan regulator in room A001 does not work.,HIGH,OPEN,,,N

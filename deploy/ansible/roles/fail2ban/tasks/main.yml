@@ -1,0 +1,54 @@
+- name: Install fail2ban
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+
+- name: Hostel360 filters
+  ansible.builtin.copy:
+    src: "filter.d/{{ item }}"
+    dest: "/etc/fail2ban/filter.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - h360-auth.conf
+    - h360-modsec.conf
+    - h360-ratelimit.conf
+  notify: Restart fail2ban
+
+- name: WAF deny-list action
+  ansible.builtin.copy:
+    src: action.d/h360-waf.conf
+    dest: /etc/fail2ban/action.d/h360-waf.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Jails
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Make sure the WAF log files exist before fail2ban watches them
+  ansible.builtin.file:
+    path: "{{ h360_data_dir }}/logs/waf/{{ item }}"
+    state: touch
+    owner: "101"
+    group: "101"
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve
+  loop:
+    - access.log
+    - error.log
+
+- name: Keep fail2ban running
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true

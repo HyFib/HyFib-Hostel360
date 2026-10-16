@@ -1,0 +1,327 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "institution_tab",
+  "institution_section",
+  "institution_name",
+  "institution_short_name",
+  "institution_address",
+  "column_break_institution",
+  "institution_logo",
+  "hostel_website_url",
+  "portal_url",
+  "office_section",
+  "office_phone",
+  "office_email",
+  "column_break_office",
+  "current_academic_year",
+  "portal_tab",
+  "portal_section",
+  "student_portal_enabled",
+  "column_break_portal",
+  "parent_portal_enabled",
+  "leave_section",
+  "leave_requires_parent_approval",
+  "column_break_leave",
+  "leave_return_grace_hours",
+  "grievance_section",
+  "grievance_escalation_hours",
+  "column_break_grievance",
+  "grievance_urgent_escalation_hours",
+  "certificates_tab",
+  "bonafide_section",
+  "bonafide_signatory_name",
+  "bonafide_signatory_designation",
+  "column_break_bonafide",
+  "bonafide_validity_days",
+  "support_tab",
+  "support_section",
+  "support_phone",
+  "column_break_support",
+  "support_email",
+  "privacy_section",
+  "privacy_notice_version",
+  "privacy_notice"
+ ],
+ "fields": [
+  {
+   "fieldname": "institution_tab",
+   "fieldtype": "Tab Break",
+   "label": "Institution"
+  },
+  {
+   "fieldname": "institution_section",
+   "fieldtype": "Section Break",
+   "label": "Institution"
+  },
+  {
+   "description": "Shown on receipts, certificates and the portal.",
+   "fieldname": "institution_name",
+   "fieldtype": "Data",
+   "label": "Institution Name",
+   "reqd": 1
+  },
+  {
+   "default": "ACGCET",
+   "fieldname": "institution_short_name",
+   "fieldtype": "Data",
+   "label": "Institution Short Name"
+  },
+  {
+   "fieldname": "institution_address",
+   "fieldtype": "Small Text",
+   "label": "Institution Address"
+  },
+  {
+   "fieldname": "column_break_institution",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "institution_logo",
+   "fieldtype": "Attach Image",
+   "label": "Institution Logo"
+  },
+  {
+   "fieldname": "hostel_website_url",
+   "fieldtype": "Data",
+   "label": "Hostel Website URL",
+   "options": "URL"
+  },
+  {
+   "description": "Public base address of the student and parent portal, e.g. https://hostel.accet.ac.in",
+   "fieldname": "portal_url",
+   "fieldtype": "Data",
+   "label": "Portal URL",
+   "options": "URL"
+  },
+  {
+   "fieldname": "office_section",
+   "fieldtype": "Section Break",
+   "label": "Hostel Office"
+  },
+  {
+   "fieldname": "office_phone",
+   "fieldtype": "Data",
+   "label": "Office Phone"
+  },
+  {
+   "fieldname": "office_email",
+   "fieldtype": "Data",
+   "label": "Office Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "column_break_office",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Used as the default for new students, allotments and fee structures.",
+   "fieldname": "current_academic_year",
+   "fieldtype": "Link",
+   "label": "Current Academic Year",
+   "options": "Hostel Academic Year"
+  },
+  {
+   "fieldname": "portal_tab",
+   "fieldtype": "Tab Break",
+   "label": "Portal and Workflow"
+  },
+  {
+   "fieldname": "portal_section",
+   "fieldtype": "Section Break",
+   "label": "Portal Access"
+  },
+  {
+   "default": "1",
+   "fieldname": "student_portal_enabled",
+   "fieldtype": "Check",
+   "label": "Student Portal Enabled"
+  },
+  {
+   "fieldname": "column_break_portal",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "parent_portal_enabled",
+   "fieldtype": "Check",
+   "label": "Parent Portal Enabled"
+  },
+  {
+   "fieldname": "leave_section",
+   "fieldtype": "Section Break",
+   "label": "Home Visit Leave"
+  },
+  {
+   "default": "1",
+   "description": "Leave applied by a student goes to the parent for approval before the warden.",
+   "fieldname": "leave_requires_parent_approval",
+   "fieldtype": "Check",
+   "label": "Leave Requires Parent Approval"
+  },
+  {
+   "fieldname": "column_break_leave",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "2",
+   "description": "Hours after the planned return before a leave is flagged as overdue.",
+   "fieldname": "leave_return_grace_hours",
+   "fieldtype": "Int",
+   "label": "Leave Return Grace Hours"
+  },
+  {
+   "fieldname": "grievance_section",
+   "fieldtype": "Section Break",
+   "label": "Grievances"
+  },
+  {
+   "default": "48",
+   "description": "Unresolved grievances escalate to the next level after these many hours.",
+   "fieldname": "grievance_escalation_hours",
+   "fieldtype": "Int",
+   "label": "Grievance Escalation Hours"
+  },
+  {
+   "fieldname": "column_break_grievance",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "4",
+   "description": "Escalation window for Urgent grievances.",
+   "fieldname": "grievance_urgent_escalation_hours",
+   "fieldtype": "Int",
+   "label": "Grievance Urgent Escalation Hours"
+  },
+  {
+   "fieldname": "certificates_tab",
+   "fieldtype": "Tab Break",
+   "label": "Certificates"
+  },
+  {
+   "fieldname": "bonafide_section",
+   "fieldtype": "Section Break",
+   "label": "Bonafide Certificate"
+  },
+  {
+   "fieldname": "bonafide_signatory_name",
+   "fieldtype": "Data",
+   "label": "Bonafide Signatory Name"
+  },
+  {
+   "fieldname": "bonafide_signatory_designation",
+   "fieldtype": "Data",
+   "label": "Bonafide Signatory Designation"
+  },
+  {
+   "fieldname": "column_break_bonafide",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "90",
+   "fieldname": "bonafide_validity_days",
+   "fieldtype": "Int",
+   "label": "Bonafide Validity Days"
+  },
+  {
+   "fieldname": "support_tab",
+   "fieldtype": "Tab Break",
+   "label": "Support and Privacy"
+  },
+  {
+   "description": "HyFib Solutions support desk shown to students, parents and staff.",
+   "fieldname": "support_section",
+   "fieldtype": "Section Break",
+   "label": "Support"
+  },
+  {
+   "default": "+91 96060 60596",
+   "fieldname": "support_phone",
+   "fieldtype": "Data",
+   "label": "Support Phone"
+  },
+  {
+   "fieldname": "column_break_support",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "support@hyfib.com",
+   "fieldname": "support_email",
+   "fieldtype": "Data",
+   "label": "Support Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "privacy_section",
+   "fieldtype": "Section Break",
+   "label": "Privacy Notice"
+  },
+  {
+   "default": "1.0",
+   "description": "Changing the version asks every portal user to accept the notice again.",
+   "fieldname": "privacy_notice_version",
+   "fieldtype": "Data",
+   "label": "Privacy Notice Version"
+  },
+  {
+   "fieldname": "privacy_notice",
+   "fieldtype": "Text Editor",
+   "label": "Privacy Notice"
+  }
+ ],
+ "icon": "settings",
+ "index_web_pages_for_search": 0,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Setup",
+ "name": "Hostel Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Hostel Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Hostel Warden"
+  },
+  {
+   "read": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "read": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "read": 1,
+   "role": "Mess Manager"
+  },
+  {
+   "read": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,341 @@
+{
+ "charts": [
+  {
+   "chart_name": "Mess Daily Rate per Month",
+   "label": "Mess Daily Rate per Month"
+  }
+ ],
+ "content": "[{\"id\":\"636fd3b3d1\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Pending Reductions\",\"col\":4}},{\"id\":\"a6c11236eb\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Indents Pending Approval\",\"col\":4}},{\"id\":\"19aaf3dbff\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Unbilled Mess Extras\",\"col\":4}},{\"id\":\"37d4d85e09\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Mess Daily Rate per Month\",\"col\":12}},{\"id\":\"595f7e41cc\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick access</b></span>\",\"col\":12}},{\"id\":\"b6e33bf1a7\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Entry\",\"col\":4}},{\"id\":\"1498a544ed\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Menu\",\"col\":4}},{\"id\":\"9dd75727d1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Reductions\",\"col\":4}},{\"id\":\"bf9896b7c4\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Records and reports</b></span>\",\"col\":12}},{\"id\":\"c31b178c68\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"cbc858198b\",\"type\":\"card\",\"data\":{\"card_name\":\"Menu and Students\",\"col\":4}},{\"id\":\"2765e10317\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing\",\"col\":4}},{\"id\":\"dfd169a177\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}},{\"id\":\"84fb629012\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "creation": "2026-10-15 18:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "utensils",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Mess",
+ "links": [
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Stock Entry",
+   "link_count": 0,
+   "link_to": "Mess Stock Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Indent",
+   "link_count": 0,
+   "link_to": "Mess Indent",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Item",
+   "link_count": 0,
+   "link_to": "Mess Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Supplier",
+   "link_count": 0,
+   "link_to": "Mess Supplier",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Ledger",
+   "link_count": 0,
+   "link_to": "Mess Stock Ledger Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Menu and Students",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Menu",
+   "link_count": 0,
+   "link_to": "Mess Menu",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Reduction Application",
+   "link_count": 0,
+   "link_to": "Mess Reduction Application",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Extra Charge",
+   "link_count": 0,
+   "link_to": "Mess Extra Charge",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Billing",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Expense",
+   "link_count": 0,
+   "link_to": "Mess Expense",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Bill Run",
+   "link_count": 0,
+   "link_to": "Mess Bill Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Bill",
+   "link_count": 0,
+   "link_to": "Mess Bill",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Setup",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Mess",
+   "link_count": 0,
+   "link_to": "Hostel Mess",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mess Settings",
+   "link_count": 0,
+   "link_to": "Mess Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Mess Stock Balance",
+   "link_count": 0,
+   "link_to": "Mess Stock Balance",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Mess Stock Ledger Entry",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Mess Consumption",
+   "link_count": 0,
+   "link_to": "Mess Consumption",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Mess Stock Ledger Entry",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Mess Cost Summary",
+   "link_count": 0,
+   "link_to": "Mess Cost Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Mess Bill Run",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Mess Reduction Register",
+   "link_count": 0,
+   "link_to": "Mess Reduction Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Mess Reduction Application",
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-15 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Mess",
+ "name": "Mess",
+ "number_cards": [
+  {
+   "label": "Pending Reductions",
+   "number_card_name": "Pending Mess Reductions"
+  },
+  {
+   "label": "Indents Pending Approval",
+   "number_card_name": "Indents Pending Approval"
+  },
+  {
+   "label": "Unbilled Mess Extras",
+   "number_card_name": "Unbilled Mess Extras"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "Hostel Warden"
+  },
+  {
+   "role": "Deputy Warden"
+  },
+  {
+   "role": "Mess Manager"
+  },
+  {
+   "role": "Mess Staff"
+  },
+  {
+   "role": "Institution Auditor"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 4.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "",
+   "label": "Stock Entry",
+   "link_to": "Mess Stock Entry",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "",
+   "label": "Menu",
+   "link_to": "Mess Menu",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "format": "{} pending",
+   "label": "Reductions",
+   "link_to": "Mess Reduction Application",
+   "stats_filter": "[[\"Mess Reduction Application\", \"status\", \"=\", \"Pending\"]]",
+   "type": "DocType"
+  }
+ ],
+ "standard": 1,
+ "title": "Mess",
+ "type": "Workspace"
+}

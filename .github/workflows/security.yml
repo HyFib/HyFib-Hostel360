@@ -1,0 +1,266 @@
+# Security scanning: code (CodeQL), secrets (gitleaks), dependencies (osv-scanner, yarn
+# audit, pip-audit), files and infrastructure configuration (Trivy, Checkov) and shell
+# scripts (ShellCheck).
+#
+# Tool versions are pinned; container images by digest. Reviewed exceptions live in
+# .github/security/ with the reason for each.
+#
+# CodeQL: the job below runs the security-extended queries on every pull request and fails on
+# high or critical findings (.github/security/codeql_gate.py). This repository also has GitHub's
+# default CodeQL setup on (Settings > Code security), which owns the Security tab and refuses a
+# second upload, so the job keeps its results in the run (job summary, annotations, SARIF
+# artifact). After switching default setup off, set the repository variable CODEQL_UPLOAD to
+# "true" to publish these results to the Security tab instead.
+
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Sundays 03:00 IST: new advisories are found even when nothing changes here.
+    - cron: "30 21 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+  NODE_VERSION: "24"
+  FRAPPE_BRANCH: v16.52.0
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  PIP_AUDIT_VERSION: "2.10.1"
+  CHECKOV_VERSION: "3.3.22"
+  TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+  SHELLCHECK_IMAGE: koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - "**/node_modules/**"
+              - hostel360/public/frontend
+              - hostel360/public/dist
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:${{ matrix.language }}
+          output: codeql-results
+          # "never" while GitHub's default setup owns the Security tab (it rejects a second upload).
+          upload: ${{ vars.CODEQL_UPLOAD == 'true' && 'always' || 'never' }}
+
+      - name: Keep the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codeql-${{ matrix.language }}
+          path: codeql-results
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Report findings (fails on high or critical)
+        run: python3 .github/security/codeql_gate.py codeql-results "${{ matrix.language }}"
+
+  secrets:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out (full history)
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "${RUNNER_TEMP}/${archive}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}" gitleaks
+
+      - name: Scan the history
+        run: |
+          "${RUNNER_TEMP}/gitleaks" git . \
+            --config .github/security/gitleaks.toml \
+            --redact --no-banner --verbose \
+            --report-format json --report-path "${RUNNER_TEMP}/gitleaks.json"
+
+      - name: Upload the report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gitleaks-report
+          path: ${{ runner.temp }}/gitleaks.json
+          retention-days: 7
+
+  dependencies:
+    name: Dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: osv-scanner (lockfiles)
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        with:
+          scan-args: |-
+            --recursive
+            ./
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: yarn audit (portal)
+        working-directory: frontend
+        run: |
+          # yarn 1 exits with a bitmask of the severities found: 8 = high, 16 = critical.
+          set +e
+          yarn audit --level high
+          status=$?
+          set -e
+          if (( status & 24 )); then
+            echo "::error::yarn audit found high or critical advisories in frontend/yarn.lock"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Prepare the Frappe dependency set
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libmariadb-dev pkg-config
+          python -m pip install --disable-pip-version-check "pip-audit==${PIP_AUDIT_VERSION}"
+          curl -sSfL -o "${RUNNER_TEMP}/frappe-pyproject.toml" \
+            "https://raw.githubusercontent.com/frappe/frappe/${FRAPPE_BRANCH}/pyproject.toml"
+          python - "${RUNNER_TEMP}/frappe-pyproject.toml" > "${RUNNER_TEMP}/frappe-requirements.txt" <<'PY'
+          import sys
+          import tomllib
+
+          with open(sys.argv[1], "rb") as fh:
+              for requirement in tomllib.load(fh)["project"].get("dependencies", []):
+                  print(requirement)
+          PY
+          wc -l "${RUNNER_TEMP}/frappe-requirements.txt"
+
+      # hostel360 adds no Python packages of its own; everything it runs on comes with the
+      # Frappe release pinned above (and in deploy/docker/build.sh). Advisories there are fixed
+      # by moving to a newer Frappe release, so this step reports rather than blocks: the
+      # summary is reviewed every week (docs/OPERATIONS-RUNBOOK.md, routine tasks).
+      - name: pip-audit (Frappe ${{ env.FRAPPE_BRANCH }} dependencies)
+        continue-on-error: true
+        run: |
+          {
+            echo "### pip-audit: Frappe ${FRAPPE_BRANCH} dependency set"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+          pip-audit --progress-spinner off --desc on --format markdown \
+            --requirement "${RUNNER_TEMP}/frappe-requirements.txt" | tee -a "${GITHUB_STEP_SUMMARY}"
+
+  trivy:
+    name: Trivy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Filesystem (vulnerabilities and secrets)
+        run: |
+          docker run --rm -v "${GITHUB_WORKSPACE}:/src:ro" "${TRIVY_IMAGE}" fs \
+            --skip-version-check --scanners vuln,secret --severity HIGH,CRITICAL \
+            --exit-code 1 /src
+
+      # deploy/tests/Containerfile is the tools image for the regression checks in deploy/tests;
+      # it runs Ansible and fail2ban as root inside a throwaway container and is never deployed.
+      - name: Configuration of deploy/ (Dockerfiles, Terraform)
+        if: ${{ !cancelled() }}
+        run: |
+          docker run --rm -v "${GITHUB_WORKSPACE}:/src:ro" "${TRIVY_IMAGE}" config \
+            --skip-version-check --severity HIGH,CRITICAL --exit-code 1 \
+            --skip-files tests/Containerfile /src/deploy
+
+  terraform:
+    name: Terraform (Checkov)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Checkov
+        run: |
+          python -m pip install --disable-pip-version-check "checkov==${CHECKOV_VERSION}"
+          checkov -d deploy/terraform/oci --config-file .github/security/checkov.yaml
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: ShellCheck the host, image and test scripts
+        run: |
+          docker run --rm -v "${GITHUB_WORKSPACE}:/mnt:ro" -w /mnt "${SHELLCHECK_IMAGE}" -x \
+            deploy/host/bin/h360-* \
+            deploy/docker/entrypoint.sh deploy/docker/build.sh deploy/docker/bin/* \
+            deploy/terraform/oci/exit-purge.sh \
+            deploy/tests/*/run.sh \
+            tests/load/run.sh

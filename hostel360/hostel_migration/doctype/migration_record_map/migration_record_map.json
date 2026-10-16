@@ -1,0 +1,167 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "Remembers which Hostel360 record each legacy row became, so a migration can be repeated safely.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "source_system",
+  "source_entity",
+  "source_id",
+  "map_key",
+  "column_break_source",
+  "target_doctype",
+  "target_name",
+  "section_sync",
+  "row_checksum",
+  "source_row",
+  "column_break_sync",
+  "migration_run",
+  "last_synced_on"
+ ],
+ "fields": [
+  {
+   "description": "Which legacy system the row came from (the mapping's source_system).",
+   "fieldname": "source_system",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Source System",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "source_entity",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Source Entity",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "source_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Source ID",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "description": "Source system, entity and ID together; unique.",
+   "fieldname": "map_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Map Key",
+   "length": 240,
+   "no_copy": 1,
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_source",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "target_doctype",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Target DocType",
+   "options": "DocType",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "target_name",
+   "fieldtype": "Dynamic Link",
+   "in_list_view": 1,
+   "label": "Target Record",
+   "options": "target_doctype",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_sync",
+   "fieldtype": "Section Break",
+   "label": "Last Sync"
+  },
+  {
+   "description": "SHA-256 of the mapped values; a different checksum on the next run means the legacy row changed.",
+   "fieldname": "row_checksum",
+   "fieldtype": "Data",
+   "label": "Row Checksum",
+   "length": 64,
+   "read_only": 1
+  },
+  {
+   "description": "Line of the source file (header is line 1).",
+   "fieldname": "source_row",
+   "fieldtype": "Int",
+   "label": "Source Line",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sync",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "migration_run",
+   "fieldtype": "Link",
+   "label": "Migration Run",
+   "options": "Migration Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_synced_on",
+   "fieldtype": "Datetime",
+   "label": "Last Synced On",
+   "read_only": 1
+  }
+ ],
+ "in_create": 1,
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-15 17:10:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Migration",
+ "name": "Migration Record Map",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "HyFib Operations"
+  }
+ ],
+ "read_only": 1,
+ "row_format": "Dynamic",
+ "search_fields": "source_system,source_entity,source_id,target_name",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "source_id",
+ "track_changes": 1
+}

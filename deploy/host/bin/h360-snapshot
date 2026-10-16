@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# OCI block volume backup of the Hostel360 data volume (/srv/hostel360).
+#
+#   h360-snapshot [--reason NAME] [--keep-days N] [--wait]
+#                                             create an incremental volume backup, kept
+#                                             H360_SNAPSHOT_KEEP_DAYS (default 14) or N days
+#                                             (e.g. 180 for incident evidence)
+#   h360-snapshot --prune                     delete this script's backups past their expiry
+#
+# A volume backup captures the volume at the moment it is requested, so the caller can
+# carry on (a deployment, a restore) while OCI copies the data in the background. The
+# volume's own backup policy (Terraform storage.tf) keeps the scheduled backups; this script
+# only manages the ad-hoc ones it creates, recognised by their freeform tags.
+#
+# Every backup is created with an explicit retention period of H360_SNAPSHOT_KEEP_DAYS, so
+# OCI deletes it by itself when that has passed, whether or not this server (and its weekly
+# prune timer) still exists: an ad-hoc backup can never outlive the installation. No
+# retention lock is set, so the exit runbook can still delete it earlier. The expiry date is
+# also written into the "expires-on" tag, which the prune honours. The prune remains for
+# backups made before retention periods were set; those without the tag are deleted once
+# they are older than H360_SNAPSHOT_KEEP_DAYS (OCI CLI 3.90.0 or later is needed for
+# retention periods; Ansible installs it).
+#
+# Authentication is the instance principal (dynamic group policy in iam.tf).
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-snapshot
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env"
+h360_load_env "${H360_CONFIG_DIR}/backup.env"
+h360_require_cmd oci jq curl
+
+reason=manual
+wait=0
+prune=0
+keep_days=""
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--reason)
+			reason="${2:?--reason needs a value}"
+			shift
+			;;
+		--keep-days)
+			keep_days="${2:?--keep-days needs a number of days}"
+			shift
+			;;
+		--wait) wait=1 ;;
+		--prune) prune=1 ;;
+		-h | --help)
+			sed -n '2,/^set -Eeuo/p' "$0" | sed '$d; s/^# \{0,1\}//'
+			exit 0
+			;;
+		*) die "unknown option $1" ;;
+	esac
+	shift
+done
+[[ "${reason}" =~ ^[a-z0-9-]{1,40}$ ]] || die "reason must be lowercase letters, digits and dashes"
+
+h360_lock snapshot 900
+
+export OCI_CLI_AUTH=instance_principal
+: "${H360_BLOCK_VOLUME_ID:?H360_BLOCK_VOLUME_ID is not set in backup.env}"
+: "${H360_SNAPSHOT_KEEP_DAYS:=14}"
+[[ "${H360_SNAPSHOT_KEEP_DAYS}" =~ ^[1-9][0-9]{0,2}$ ]] || die "H360_SNAPSHOT_KEEP_DAYS must be a number of days (1-999)"
+keep_days="${keep_days:-${H360_SNAPSHOT_KEEP_DAYS}}"
+[[ "${keep_days}" =~ ^[1-9][0-9]{0,2}$ ]] || die "--keep-days must be a number of days (1-999)"
+host="$(h360_host)"
+
+compartment_id() {
+	if [[ -n "${H360_COMPARTMENT_ID:-}" ]]; then
+		printf '%s' "${H360_COMPARTMENT_ID}"
+		return
+	fi
+	curl -fsS --max-time 5 -H 'Authorization: Bearer Oracle' \
+		http://169.254.169.254/opc/v2/instance/ | jq -r '.compartmentId'
+}
+
+prune_backups() {
+	local cutoff today compartment
+	cutoff="$(date -u -d "-${H360_SNAPSHOT_KEEP_DAYS} days" +%Y-%m-%dT%H:%M:%S)"
+	today="$(date -u +%Y-%m-%d)"
+	compartment="$(compartment_id)"
+	oci bv backup list --compartment-id "${compartment}" --volume-id "${H360_BLOCK_VOLUME_ID}" --all --output json |
+		jq -r --arg cutoff "${cutoff}" --arg today "${today}" '.data[]
+			| select(.["freeform-tags"]["created-by"] == "h360-snapshot")
+			| select(.["lifecycle-state"] == "AVAILABLE")
+			| (.["freeform-tags"]["expires-on"] // "") as $expires
+			| select(if $expires != "" then $expires < $today else .["time-created"][0:19] < $cutoff end)
+			| .id' |
+		while IFS= read -r backup; do
+			log_info "deleting volume backup ${backup}"
+			oci bv backup delete --volume-backup-id "${backup}" --force >/dev/null ||
+				log_warn "could not delete ${backup}"
+		done
+}
+
+if [[ "${prune}" == 1 ]]; then
+	prune_backups
+	exit 0
+fi
+
+name="hostel360-${reason}-$(date +%Y%m%d-%H%M%S)"
+expires_on="$(date -u -d "+${keep_days} days" +%Y-%m-%d)"
+tags="$(jq -cn --arg reason "${reason}" --arg host "${host}" --arg expires "${expires_on}" \
+	'{"application": "hostel360", "created-by": "h360-snapshot", "reason": $reason, "host": $host,
+	  "expires-on": $expires}')"
+retention="$(jq -cn --argjson days "${keep_days}" '{retentionTimeAmount: $days, retentionTimeUnit: "DAYS"}')"
+args=(bv backup create --volume-id "${H360_BLOCK_VOLUME_ID}" --type INCREMENTAL
+	--display-name "${name}" --freeform-tags "${tags}" --retention-period "${retention}" --output json)
+[[ "${wait}" == 1 ]] && args+=(--wait-for-state AVAILABLE --max-wait-seconds 7200)
+
+started_at="$(h360_now_iso)"
+log_info "requesting volume backup ${name}"
+if ! result="$(oci "${args[@]}" 2>&1)"; then
+	h360_report "$(jq -cn --arg message "Volume backup ${name} failed: ${result:0:500}" --arg started "${started_at}" \
+		--arg finished "$(h360_now_iso)" --arg host "${host}" \
+		'{type: "backup", source: "Host Agent", backup_type: "Snapshot", status: "Failed", started_at: $started,
+		  finished_at: $finished, repository: "oci-block-volume-backup", host: $host, message: $message}')"
+	die "volume backup request failed: ${result:0:500}"
+fi
+backup_id="$(jq -r '.data.id' <<<"${result}")"
+state="$(jq -r '.data["lifecycle-state"]' <<<"${result}")"
+h360_report "$(jq -cn --arg id "${backup_id}" \
+	--arg message "Volume backup ${name} (${reason}) ${state}; expires ${expires_on}." \
+	--arg started "${started_at}" --arg finished "$(h360_now_iso)" --arg host "${host}" \
+	'{type: "backup", source: "Host Agent", backup_type: "Snapshot", status: "Success", started_at: $started,
+	  finished_at: $finished, snapshot_id: $id, repository: "oci-block-volume-backup", host: $host, message: $message}')"
+log_notice "volume backup ${backup_id} ${state}, expires ${expires_on}"
+printf '%s\n' "${backup_id}"
+
+prune_backups || log_warn "pruning old volume backups failed"

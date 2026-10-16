@@ -1,0 +1,490 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "SMS, WhatsApp, e-mail and sign-in code settings for Hostel360 messaging.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sms_tab",
+  "sms_section",
+  "sms_enabled",
+  "sms_provider",
+  "sms_api_url",
+  "sms_auth_key",
+  "sms_column_break",
+  "sms_sender_id",
+  "dlt_entity_id",
+  "alert_sms_template_id",
+  "alert_dlt_template_id",
+  "generic_http_section",
+  "sms_http_method",
+  "sms_payload_format",
+  "sms_auth_header",
+  "sms_auth_param",
+  "sms_mobile_format",
+  "sms_success_keyword",
+  "generic_http_column_break",
+  "sms_param_mobile",
+  "sms_param_message",
+  "sms_param_sender",
+  "sms_param_template_id",
+  "sms_param_entity_id",
+  "sms_param_unicode",
+  "sms_unicode_value",
+  "sms_extra_params",
+  "whatsapp_tab",
+  "whatsapp_section",
+  "whatsapp_enabled",
+  "whatsapp_phone_number_id",
+  "whatsapp_business_account_id",
+  "whatsapp_api_version",
+  "whatsapp_column_break",
+  "whatsapp_access_token",
+  "alert_whatsapp_template",
+  "alert_whatsapp_language",
+  "email_tab",
+  "email_section",
+  "email_enabled",
+  "otp_tab",
+  "otp_section",
+  "otp_channels",
+  "otp_email_enabled",
+  "otp_length",
+  "otp_expiry_seconds",
+  "otp_max_attempts",
+  "otp_column_break",
+  "otp_resend_cooldown_seconds",
+  "otp_max_sends_per_hour",
+  "otp_max_sends_per_ip_per_hour",
+  "otp_trusted_networks",
+  "delivery_tab",
+  "delivery_section",
+  "test_mode",
+  "prefer_whatsapp",
+  "delivery_column_break",
+  "provider_timeout_seconds",
+  "failure_alert_threshold"
+ ],
+ "fields": [
+  {
+   "fieldname": "sms_tab",
+   "fieldtype": "Tab Break",
+   "label": "SMS"
+  },
+  {
+   "fieldname": "sms_section",
+   "fieldtype": "Section Break",
+   "label": "SMS Gateway",
+   "description": "Transactional SMS through a DLT-registered gateway. Every SMS template must be registered on the DLT portal with the same wording."
+  },
+  {
+   "fieldname": "sms_enabled",
+   "fieldtype": "Check",
+   "label": "Enable SMS",
+   "default": "0",
+   "bold": 1
+  },
+  {
+   "fieldname": "sms_provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "options": "MSG91\nGeneric HTTP",
+   "default": "MSG91",
+   "depends_on": "sms_enabled",
+   "mandatory_depends_on": "sms_enabled"
+  },
+  {
+   "fieldname": "sms_api_url",
+   "fieldtype": "Data",
+   "label": "API URL",
+   "options": "URL",
+   "depends_on": "sms_enabled",
+   "description": "MSG91: leave blank to use https://control.msg91.com/api/v5/flow. Generic HTTP: the vendor's HTTPS send endpoint."
+  },
+  {
+   "fieldname": "sms_auth_key",
+   "fieldtype": "Password",
+   "label": "Auth Key",
+   "depends_on": "sms_enabled",
+   "description": "MSG91 auth key or the vendor's API key. Stored encrypted."
+  },
+  {
+   "fieldname": "sms_column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sms_sender_id",
+   "fieldtype": "Data",
+   "label": "Sender ID (DLT Header)",
+   "depends_on": "sms_enabled",
+   "description": "Header approved on the DLT portal, usually six letters (for example ACGCET)."
+  },
+  {
+   "fieldname": "dlt_entity_id",
+   "fieldtype": "Data",
+   "label": "DLT Principal Entity ID",
+   "depends_on": "sms_enabled"
+  },
+  {
+   "fieldname": "alert_sms_template_id",
+   "fieldtype": "Data",
+   "label": "Operations Alert Template ID",
+   "depends_on": "sms_enabled",
+   "description": "MSG91 Flow template used for HyFib operations alerts. Variables sent: subject, message and VAR1 to VAR4 (30 characters each)."
+  },
+  {
+   "fieldname": "alert_dlt_template_id",
+   "fieldtype": "Data",
+   "label": "Operations Alert DLT Template ID",
+   "depends_on": "sms_enabled"
+  },
+  {
+   "fieldname": "generic_http_section",
+   "fieldtype": "Section Break",
+   "label": "Generic HTTP Provider",
+   "collapsible": 1,
+   "depends_on": "eval:doc.sms_enabled && doc.sms_provider=='Generic HTTP'",
+   "description": "For DLT vendors other than MSG91. The rendered message text, sender ID, DLT template ID and entity ID are sent as the parameters named below."
+  },
+  {
+   "fieldname": "sms_http_method",
+   "fieldtype": "Select",
+   "label": "HTTP Method",
+   "options": "POST\nGET",
+   "default": "POST"
+  },
+  {
+   "fieldname": "sms_payload_format",
+   "fieldtype": "Select",
+   "label": "Payload Format",
+   "options": "JSON\nForm",
+   "default": "JSON",
+   "depends_on": "eval:doc.sms_http_method=='POST'"
+  },
+  {
+   "fieldname": "sms_auth_header",
+   "fieldtype": "Data",
+   "label": "Auth Header Name",
+   "description": "Header that carries the API key, for example Authorization or apikey. Leave blank to send the key as a parameter."
+  },
+  {
+   "fieldname": "sms_auth_param",
+   "fieldtype": "Data",
+   "label": "Auth Parameter Name",
+   "default": "apikey",
+   "depends_on": "eval:!doc.sms_auth_header"
+  },
+  {
+   "fieldname": "sms_mobile_format",
+   "fieldtype": "Select",
+   "label": "Mobile Number Format",
+   "options": "91XXXXXXXXXX\n+91XXXXXXXXXX\nXXXXXXXXXX",
+   "default": "91XXXXXXXXXX"
+  },
+  {
+   "fieldname": "sms_success_keyword",
+   "fieldtype": "Data",
+   "label": "Success Keyword",
+   "description": "Optional text that must appear in the response for the message to count as sent."
+  },
+  {
+   "fieldname": "generic_http_column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sms_param_mobile",
+   "fieldtype": "Data",
+   "label": "Mobile Parameter",
+   "default": "mobile"
+  },
+  {
+   "fieldname": "sms_param_message",
+   "fieldtype": "Data",
+   "label": "Message Parameter",
+   "default": "message"
+  },
+  {
+   "fieldname": "sms_param_sender",
+   "fieldtype": "Data",
+   "label": "Sender ID Parameter",
+   "default": "sender"
+  },
+  {
+   "fieldname": "sms_param_template_id",
+   "fieldtype": "Data",
+   "label": "DLT Template ID Parameter",
+   "default": "template_id"
+  },
+  {
+   "fieldname": "sms_param_entity_id",
+   "fieldtype": "Data",
+   "label": "Entity ID Parameter",
+   "default": "entity_id"
+  },
+  {
+   "fieldname": "sms_param_unicode",
+   "fieldtype": "Data",
+   "label": "Unicode Parameter",
+   "description": "Parameter that marks a Unicode (for example Tamil) message, if your gateway needs one. Leave blank if it detects Unicode itself."
+  },
+  {
+   "fieldname": "sms_unicode_value",
+   "fieldtype": "Data",
+   "label": "Unicode Parameter Value",
+   "default": "1",
+   "depends_on": "eval:doc.sms_param_unicode",
+   "description": "Value sent in the Unicode parameter, only with messages that contain Unicode characters."
+  },
+  {
+   "fieldname": "sms_extra_params",
+   "fieldtype": "Code",
+   "label": "Additional Parameters",
+   "options": "JSON",
+   "description": "Fixed parameters sent with every request, as a JSON object. Example: {\"route\": \"transactional\"}"
+  },
+  {
+   "fieldname": "whatsapp_tab",
+   "fieldtype": "Tab Break",
+   "label": "WhatsApp"
+  },
+  {
+   "fieldname": "whatsapp_section",
+   "fieldtype": "Section Break",
+   "label": "WhatsApp Business (Meta Cloud API)",
+   "description": "Business-initiated messages use templates approved in WhatsApp Manager. Template names and parameters are set on each Message Template."
+  },
+  {
+   "fieldname": "whatsapp_enabled",
+   "fieldtype": "Check",
+   "label": "Enable WhatsApp",
+   "default": "0",
+   "bold": 1
+  },
+  {
+   "fieldname": "whatsapp_phone_number_id",
+   "fieldtype": "Data",
+   "label": "Phone Number ID",
+   "depends_on": "whatsapp_enabled",
+   "mandatory_depends_on": "whatsapp_enabled"
+  },
+  {
+   "fieldname": "whatsapp_business_account_id",
+   "fieldtype": "Data",
+   "label": "WhatsApp Business Account ID",
+   "depends_on": "whatsapp_enabled"
+  },
+  {
+   "fieldname": "whatsapp_api_version",
+   "fieldtype": "Data",
+   "label": "Graph API Version",
+   "default": "v21.0",
+   "depends_on": "whatsapp_enabled"
+  },
+  {
+   "fieldname": "whatsapp_column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "whatsapp_access_token",
+   "fieldtype": "Password",
+   "label": "Access Token",
+   "depends_on": "whatsapp_enabled",
+   "description": "Permanent system-user token with whatsapp_business_messaging permission. Stored encrypted."
+  },
+  {
+   "fieldname": "alert_whatsapp_template",
+   "fieldtype": "Data",
+   "label": "Operations Alert Template Name",
+   "depends_on": "whatsapp_enabled",
+   "description": "Utility template with one body parameter, used for HyFib operations alerts."
+  },
+  {
+   "fieldname": "alert_whatsapp_language",
+   "fieldtype": "Select",
+   "label": "Operations Alert Template Language",
+   "options": "en\nen_US\nen_GB\nta",
+   "default": "en",
+   "depends_on": "whatsapp_enabled"
+  },
+  {
+   "fieldname": "email_tab",
+   "fieldtype": "Tab Break",
+   "label": "Email"
+  },
+  {
+   "fieldname": "email_section",
+   "fieldtype": "Section Break",
+   "label": "Email"
+  },
+  {
+   "fieldname": "email_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Email",
+   "default": "1",
+   "bold": 1,
+   "description": "Messages are queued through the default outgoing Email Account. Placeholder addresses ending in .invalid are never e-mailed."
+  },
+  {
+   "fieldname": "otp_tab",
+   "fieldtype": "Tab Break",
+   "label": "Sign-in Codes"
+  },
+  {
+   "fieldname": "otp_section",
+   "fieldtype": "Section Break",
+   "label": "One-Time Passwords",
+   "description": "Students and parents sign in to the portal with their registered mobile number and a one-time code sent to that number or, if allowed below, to their registered e-mail address."
+  },
+  {
+   "fieldname": "otp_channels",
+   "fieldtype": "Select",
+   "label": "Send Codes By",
+   "options": "SMS\nWhatsApp\nSMS and WhatsApp",
+   "default": "SMS",
+   "reqd": 1,
+   "description": "Codes sent to the registered mobile number."
+  },
+  {
+   "fieldname": "otp_email_enabled",
+   "fieldtype": "Check",
+   "label": "Allow E-mail Sign-in Codes",
+   "default": "0",
+   "description": "Students and parents may choose to get the code by e-mail instead. They still sign in with their mobile number; the code goes to the e-mail address the hostel office has on their student or guardian record (never to a portal placeholder address), straight through the default outgoing Email Account, which must send by SMTP. Needs Enable Email on the Email tab."
+  },
+  {
+   "fieldname": "otp_length",
+   "fieldtype": "Int",
+   "label": "Code Length",
+   "default": "6",
+   "non_negative": 1,
+   "description": "Between 4 and 8 digits."
+  },
+  {
+   "fieldname": "otp_expiry_seconds",
+   "fieldtype": "Int",
+   "label": "Code Valid For (Seconds)",
+   "default": "300",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "otp_max_attempts",
+   "fieldtype": "Int",
+   "label": "Wrong Attempts Allowed per Code",
+   "default": "5",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "otp_column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "otp_resend_cooldown_seconds",
+   "fieldtype": "Int",
+   "label": "Resend Cooldown (Seconds)",
+   "default": "60",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "otp_max_sends_per_hour",
+   "fieldtype": "Int",
+   "label": "Codes per Number per Hour",
+   "default": "5",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "otp_max_sends_per_ip_per_hour",
+   "fieldtype": "Int",
+   "label": "Codes per IP Address per Hour",
+   "default": "20",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "otp_trusted_networks",
+   "fieldtype": "Small Text",
+   "label": "Trusted Networks",
+   "description": "One IP address or CIDR range per line, for example the campus Wi-Fi gateway. These networks are exempt from the per-IP code limit and get a far higher sign-in flood ceiling (100,000 requests an hour instead of 3,000); per-number limits still apply."
+  },
+  {
+   "fieldname": "delivery_tab",
+   "fieldtype": "Tab Break",
+   "label": "Delivery"
+  },
+  {
+   "fieldname": "delivery_section",
+   "fieldtype": "Section Break",
+   "label": "Delivery"
+  },
+  {
+   "fieldname": "test_mode",
+   "fieldtype": "Check",
+   "label": "Test Mode",
+   "default": "0",
+   "bold": 1,
+   "description": "Write messages to the Message Log without sending them. Use while templates are being approved."
+  },
+  {
+   "fieldname": "prefer_whatsapp",
+   "fieldtype": "Check",
+   "label": "Prefer WhatsApp over SMS",
+   "default": "0",
+   "description": "When an event has both SMS and WhatsApp templates, send WhatsApp first and fall back to SMS only if WhatsApp fails."
+  },
+  {
+   "fieldname": "delivery_column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "provider_timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Provider Timeout (Seconds)",
+   "default": "10",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "failure_alert_threshold",
+   "fieldtype": "Int",
+   "label": "Alert After Consecutive Failures",
+   "default": "5",
+   "non_negative": 1,
+   "description": "Raise a HyFib operations alert when a provider fails this many times in a row."
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-16 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Communication",
+ "name": "Messaging Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "role": "Hostel Administrator",
+   "print": 1,
+   "email": 1
+  },
+  {
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "role": "HyFib Operations",
+   "print": 1,
+   "email": 1
+  },
+  {
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "role": "System Manager",
+   "print": 1,
+   "email": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

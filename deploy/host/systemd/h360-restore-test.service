@@ -1,0 +1,14 @@
+[Unit]
+Description=Hostel360 monthly restore test
+Documentation=file:///opt/hostel360/deploy/README.md
+After=hostel360-stack.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/h360-restore-test
+SyslogIdentifier=h360-restore-test
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=4h

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Maintain the WAF deny list and reload the WAF (used by the fail2ban "h360-waf" action).
+#
+#   h360-waf-ban ban <address>     add an IPv4/IPv6 address or CIDR
+#   h360-waf-ban unban <address>   remove it
+#   h360-waf-ban flush             empty the list
+#   h360-waf-ban list              show the list
+#
+# Clients reach the server through the OCI load balancer, so banning them in the host
+# firewall would only ever ban the load balancer. The WAF knows the real client address
+# (X-Forwarded-For from the LB subnet) and refuses listed addresses with 403; the list is
+# /etc/hostel360/waf/lists/denylist.conf, included by an nginx "geo" block.
+set -Eeuo pipefail
+
+# shellcheck source=deploy/host/bin/h360-lib.sh
+source /usr/local/lib/hostel360/h360-lib.sh
+h360_init h360-waf-ban
+h360_require_root
+h360_load_env "${H360_CONFIG_DIR}/agent.env" optional
+h360_lock waf-ban 30
+
+list="${H360_CONFIG_DIR}/waf/lists/denylist.conf"
+action="${1:-}"
+address="${2:-}"
+
+valid_address() {
+	python3 -c 'import ipaddress, sys; ipaddress.ip_network(sys.argv[1], strict=False)' "$1" 2>/dev/null
+}
+
+reload_waf() {
+	local waf
+	waf="$(h360_container waf)"
+	if [[ -z "${waf}" ]]; then
+		log_warn "WAF container not running; the list applies when it starts"
+		return 0
+	fi
+	if docker exec "${waf}" nginx -t -q; then
+		docker exec "${waf}" nginx -s reload
+	else
+		die "nginx rejected the configuration; the deny list was not applied"
+	fi
+}
+
+write_list() {
+	# write_list <file>: install atomically, readable by the WAF container's nginx user
+	chmod 0644 "$1"
+	mv -f -- "$1" "${list}"
+}
+
+touch "${list}"
+case "${action}" in
+	ban | unban)
+		[[ -n "${address}" ]] || die "usage: h360-waf-ban ${action} <address>"
+		valid_address "${address}" || die "not an IP address or network: ${address}"
+		tmp="$(mktemp "${list}.XXXXXX")"
+		grep -v -F -x "${address} 1;" "${list}" >"${tmp}" || true
+		if [[ "${action}" == ban ]]; then
+			printf '%s 1;\n' "${address}" >>"${tmp}"
+		fi
+		write_list "${tmp}"
+		reload_waf
+		log_notice "${action} ${address}"
+		;;
+	flush)
+		tmp="$(mktemp "${list}.XXXXXX")"
+		write_list "${tmp}"
+		reload_waf
+		log_notice "deny list flushed"
+		;;
+	list)
+		cat "${list}"
+		;;
+	*)
+		sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+		exit 1
+		;;
+esac

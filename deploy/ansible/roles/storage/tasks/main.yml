@@ -1,0 +1,51 @@
+- name: Wait for the data volume to be attached
+  ansible.builtin.wait_for:
+    path: "{{ h360_data_device }}"
+    timeout: 300
+
+- name: Create the filesystem on a blank data volume (never reformats)
+  community.general.filesystem:
+    dev: "{{ h360_data_device }}"
+    fstype: ext4
+    opts: "-L {{ h360_data_label }} -i 16384 -m 1"
+
+- name: Mount the data volume
+  ansible.posix.mount:
+    src: "LABEL={{ h360_data_label }}"
+    path: "{{ h360_data_dir }}"
+    fstype: ext4
+    opts: defaults,noatime,nofail,x-systemd.device-timeout=300
+    state: mounted
+
+- name: Read the inode count
+  ansible.builtin.command: "df --output=itotal {{ h360_data_dir }}"
+  register: h360_inodes
+  changed_when: false
+
+- name: Check the inode count (tender clause 6.4)
+  ansible.builtin.assert:
+    that:
+      - (h360_inodes.stdout_lines | last | trim | int) >= h360_min_inodes
+    fail_msg: "{{ h360_data_dir }} has {{ h360_inodes.stdout_lines | last | trim }} inodes; at least {{ h360_min_inodes }} are required"
+    quiet: true
+
+- name: Data directories
+  ansible.builtin.file:
+    path: "{{ h360_data_dir }}/{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: sites, owner: "{{ h360_uid_frappe }}", group: "0", mode: "0750" }
+    - { path: logs, owner: "0", group: "0", mode: "0755" }
+    - { path: logs/frappe, owner: "{{ h360_uid_frappe }}", group: "0", mode: "0750" }
+    - { path: logs/waf, owner: "{{ h360_uid_nginx }}", group: "{{ h360_uid_nginx }}", mode: "0750" }
+    - { path: logs/clamav, owner: "{{ h360_uid_clamav }}", group: "{{ h360_uid_clamav }}", mode: "0750" }
+    - { path: mariadb, owner: "{{ h360_uid_mysql }}", group: "{{ h360_uid_mysql }}", mode: "0750" }
+    - { path: redis-queue, owner: "{{ h360_uid_redis }}", group: "{{ h360_gid_redis }}", mode: "0750" }
+    - { path: clamav, owner: "{{ h360_uid_clamav }}", group: "{{ h360_uid_clamav }}", mode: "0755" }
+    - { path: backups, owner: "0", group: "0", mode: "0700" }
+    - { path: restore-test, owner: "0", group: "0", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"

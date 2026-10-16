@@ -1,0 +1,97 @@
+/**
+ * Where a visitor may go, as a pure function of the route and the session.
+ *
+ * Order matters: sign-in first (or, when the server has just closed the session, the page
+ * that says why), then the privacy notice (consent must come before any personal data is
+ * shown), then first-run profile confirmation for students, then role and verification checks.
+ */
+import type { RouteLocationNormalized, RouteLocationRaw } from "vue-router";
+import type { PortalKind } from "@/api/types";
+
+declare module "vue-router" {
+	interface RouteMeta {
+		/** Reachable without signing in. */
+		public?: boolean;
+		/** Only for visitors who are not signed in (the sign-in page). */
+		guestOnly?: boolean;
+		/** Only for this kind of portal user. */
+		kind?: PortalKind;
+		/** Needs a registration the hostel office has verified (and, unless `dues`, an Active resident). */
+		requiresValidated?: boolean;
+		/** Fees and receipts: open to a validated student who is not Active (Applied, Suspended…). */
+		dues?: boolean;
+		/** Allowed while the privacy notice or profile confirmation is still pending. */
+		firstRun?: boolean;
+		/** Page title key. */
+		title?: string;
+		/** Render without the app header and navigation. */
+		bare?: boolean;
+		/** The page explaining why the server closed the session; only while there is a reason to show. */
+		accessClosed?: boolean;
+	}
+}
+
+export interface GuardState {
+	loggedIn: boolean;
+	kind: PortalKind | null;
+	consentRequired: boolean;
+	profileConfirmed: boolean;
+	/** Validation of the student being viewed (for a parent: the selected ward). */
+	validationStatus: string;
+	/** Hostel Student status of the student being viewed; empty when not known. */
+	studentStatus?: string;
+	/** Why the server closed the last session (not validated, closed, portal switched off). */
+	closedReason?: string;
+}
+
+/** Only same-app paths are accepted as a post-login destination (no open redirects). */
+export function safeRedirect(value: unknown): string | null {
+	if (typeof value !== "string") return null;
+	if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+	if (value.startsWith("/login")) return null;
+	return value;
+}
+
+function redirectQuery(to: RouteLocationNormalized): Record<string, string> {
+	return to.fullPath && to.fullPath !== "/" ? { redirect: to.fullPath } : {};
+}
+
+export function decideNavigation(to: RouteLocationNormalized, state: GuardState): true | RouteLocationRaw {
+	const meta = to.meta;
+
+	if (!state.loggedIn) {
+		if (meta.accessClosed) return state.closedReason ? true : { name: "login" };
+		if (meta.public) return true;
+		// The server ended the session for a reason the person must act on (usually by
+		// contacting the hostel office); an empty sign-in form would only invite a retry.
+		if (state.closedReason) return { name: "access-closed" };
+		return { name: "login", query: redirectQuery(to) };
+	}
+
+	if (meta.guestOnly) {
+		const target = safeRedirect(to.query.redirect);
+		return target ?? { name: "home" };
+	}
+
+	if (state.consentRequired && to.name !== "privacy" && !meta.public) {
+		return { name: "privacy", query: redirectQuery(to) };
+	}
+
+	if (state.kind === "student" && !state.profileConfirmed && !meta.firstRun && !meta.public) {
+		return { name: "confirm-details", query: redirectQuery(to) };
+	}
+
+	if (meta.kind && meta.kind !== state.kind) {
+		return { name: "home" };
+	}
+
+	if (meta.requiresValidated && state.validationStatus !== "Validated") {
+		return { name: "home", query: { notice: "verification" } };
+	}
+
+	if (meta.requiresValidated && !meta.dues && state.studentStatus && state.studentStatus !== "Active") {
+		return { name: "home", query: { notice: "restricted" } };
+	}
+
+	return true;
+}

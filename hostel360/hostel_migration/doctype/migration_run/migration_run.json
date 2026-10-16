@@ -1,0 +1,382 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "One pass of loading legacy hostel data into Hostel360, with its counts, reconciliation and report.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "title",
+  "status",
+  "dry_run",
+  "column_break_main",
+  "started_by",
+  "started_on",
+  "finished_on",
+  "source_tab",
+  "source_section",
+  "source_path",
+  "entity_filter",
+  "column_break_source",
+  "mapping_name",
+  "source_system",
+  "mapping_checksum",
+  "mapping_section",
+  "mapping",
+  "results_tab",
+  "totals_section",
+  "total_source_rows",
+  "total_created",
+  "column_break_totals",
+  "total_updated",
+  "total_skipped",
+  "column_break_totals_2",
+  "total_failed",
+  "attachments_verified",
+  "entities_section",
+  "entities",
+  "reconciliation_tab",
+  "reconciliation_section",
+  "reconciliation_status",
+  "column_break_reconciliation",
+  "report_file",
+  "report_markdown",
+  "report_json",
+  "reconciliation_data_section",
+  "reconciliation",
+  "log_tab",
+  "log_section",
+  "log"
+ ],
+ "fields": [
+  {
+   "default": "MIG-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "no_copy": 1,
+   "options": "MIG-.YYYY.-.#####",
+   "print_hide": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "description": "A short note for the run list, e.g. \"Rehearsal 2 with June extract\".",
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Draft\nRunning\nCompleted\nCompleted with Errors\nFailed",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "default": "1",
+   "description": "Check every row and produce the full report, then roll everything back. Nothing is kept except this run's report.",
+   "fieldname": "dry_run",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Dry Run"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "started_by",
+   "fieldtype": "Link",
+   "label": "Started By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "started_on",
+   "fieldtype": "Datetime",
+   "label": "Started On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "finished_on",
+   "fieldtype": "Datetime",
+   "label": "Finished On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_tab",
+   "fieldtype": "Tab Break",
+   "label": "Source"
+  },
+  {
+   "fieldname": "source_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Folder on the server with one CSV or XLSX file per entity and an attachments folder. Relative paths are read from the site's private/migration folder.",
+   "fieldname": "source_path",
+   "fieldtype": "Data",
+   "label": "Source Folder",
+   "reqd": 1
+  },
+  {
+   "description": "Optional: entity names to load, one per line or comma separated. Leave empty to load every entity in the mapping's load order.",
+   "fieldname": "entity_filter",
+   "fieldtype": "Small Text",
+   "label": "Only These Entities"
+  },
+  {
+   "fieldname": "column_break_source",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mapping_name",
+   "fieldtype": "Data",
+   "label": "Mapping",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_system",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Source System",
+   "read_only": 1
+  },
+  {
+   "fieldname": "mapping_checksum",
+   "fieldtype": "Data",
+   "label": "Mapping Checksum",
+   "length": 64,
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "mapping_section",
+   "fieldtype": "Section Break",
+   "label": "Mapping"
+  },
+  {
+   "description": "How legacy columns become Hostel360 fields. The format is described in the Hostel Migration README.",
+   "fieldname": "mapping",
+   "fieldtype": "Code",
+   "label": "Mapping (JSON)",
+   "options": "JSON",
+   "reqd": 1
+  },
+  {
+   "fieldname": "results_tab",
+   "fieldtype": "Tab Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_source_rows",
+   "fieldtype": "Int",
+   "label": "Source Rows",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_created",
+   "fieldtype": "Int",
+   "label": "Created",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_totals",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_updated",
+   "fieldtype": "Int",
+   "label": "Updated",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_skipped",
+   "fieldtype": "Int",
+   "label": "Unchanged",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_totals_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "bold": 1,
+   "default": "0",
+   "fieldname": "total_failed",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Failed",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "attachments_verified",
+   "fieldtype": "Int",
+   "label": "Attachments Verified",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "entities_section",
+   "fieldtype": "Section Break",
+   "label": "Entities"
+  },
+  {
+   "fieldname": "entities",
+   "fieldtype": "Table",
+   "label": "Entities",
+   "no_copy": 1,
+   "options": "Migration Run Entity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_tab",
+   "fieldtype": "Tab Break",
+   "label": "Reconciliation"
+  },
+  {
+   "fieldname": "reconciliation_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "reconciliation_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Reconciliation",
+   "no_copy": 1,
+   "options": "Not Run\nMatched\nMismatched",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_reconciliation",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "report_file",
+   "fieldtype": "Attach",
+   "label": "Report (Excel)",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "report_markdown",
+   "fieldtype": "Attach",
+   "label": "Report (Markdown)",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "report_json",
+   "fieldtype": "Attach",
+   "label": "Report (JSON)",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "reconciliation_data_section",
+   "fieldtype": "Section Break",
+   "label": "Reconciliation Data"
+  },
+  {
+   "fieldname": "reconciliation",
+   "fieldtype": "Code",
+   "label": "Reconciliation (JSON)",
+   "no_copy": 1,
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "log_tab",
+   "fieldtype": "Tab Break",
+   "label": "Log"
+  },
+  {
+   "fieldname": "log_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "log",
+   "fieldtype": "Code",
+   "label": "Log",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "icon": "upload",
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-15 17:10:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Migration",
+ "name": "Migration Run",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "HyFib Operations"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

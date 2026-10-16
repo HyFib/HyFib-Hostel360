@@ -1,0 +1,248 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "file_section",
+  "import_file",
+  "academic_year",
+  "column_break_file",
+  "status",
+  "update_existing",
+  "allot_rooms",
+  "create_portal_users",
+  "summary_section",
+  "total_rows",
+  "imported_rows",
+  "column_break_summary",
+  "skipped_rows",
+  "failed_rows",
+  "column_break_timing",
+  "started_on",
+  "finished_on",
+  "preview_section",
+  "preview_html",
+  "log_section",
+  "log",
+  "validation_json",
+  "errors_json"
+ ],
+ "fields": [
+  {
+   "default": "IMP-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "no_copy": 1,
+   "options": "IMP-.YYYY.-.#####",
+   "print_hide": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "description": "Download the template, fill one student per row and attach it here. XLSX and CSV files are accepted.",
+   "fieldname": "file_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "import_file",
+   "fieldtype": "Attach",
+   "label": "Import File",
+   "reqd": 1
+  },
+  {
+   "description": "Used for rows that leave the academic year column blank.",
+   "fieldname": "academic_year",
+   "fieldtype": "Link",
+   "label": "Academic Year",
+   "options": "Hostel Academic Year"
+  },
+  {
+   "fieldname": "column_break_file",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Draft\nValidated\nImporting\nCompleted\nCompleted with Errors\nFailed",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "description": "Rows whose register number already exists update that student; otherwise they are skipped.",
+   "fieldname": "update_existing",
+   "fieldtype": "Check",
+   "label": "Update Existing Students"
+  },
+  {
+   "default": "1",
+   "description": "Create room allotments for rows that fill the hostel and room columns.",
+   "fieldname": "allot_rooms",
+   "fieldtype": "Check",
+   "label": "Allot Rooms"
+  },
+  {
+   "description": "Create portal accounts for imported students and guardians. No messages are sent.",
+   "fieldname": "create_portal_users",
+   "fieldtype": "Check",
+   "label": "Create Portal Users"
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "total_rows",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Total Rows",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "imported_rows",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Imported Rows",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_summary",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "skipped_rows",
+   "fieldtype": "Int",
+   "label": "Skipped Rows",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "failed_rows",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Failed Rows",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_timing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "started_on",
+   "fieldtype": "Datetime",
+   "label": "Started on",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "finished_on",
+   "fieldtype": "Datetime",
+   "label": "Finished on",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "preview_section",
+   "fieldtype": "Section Break",
+   "label": "Preview"
+  },
+  {
+   "fieldname": "preview_html",
+   "fieldtype": "HTML",
+   "label": "Preview"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "log_section",
+   "fieldtype": "Section Break",
+   "label": "Log"
+  },
+  {
+   "fieldname": "log",
+   "fieldtype": "Code",
+   "label": "Log",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "validation_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Validation Result",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "errors_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Failed Rows",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "hide_toolbar": 0,
+ "icon": "upload",
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-15 19:20:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel People",
+ "name": "Student Bulk Import",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "Hostel Administrator",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "Hostel Warden",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "read": 1,
+   "role": "Deputy Warden",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "read": 1,
+   "role": "Hostel Office Staff",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

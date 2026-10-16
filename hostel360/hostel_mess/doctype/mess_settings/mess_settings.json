@@ -1,0 +1,164 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "reduction_section",
+  "reduction_min_days",
+  "reduction_advance_notice_days",
+  "column_break_reduction",
+  "reduction_approver",
+  "max_reduction_days_per_month",
+  "billing_section",
+  "bill_due_days",
+  "column_break_billing",
+  "bill_rounding",
+  "stock_section",
+  "low_stock_alert",
+  "column_break_stock",
+  "require_indent_for_receipts",
+  "indent_warden_approval_above"
+ ],
+ "fields": [
+  {
+   "fieldname": "reduction_section",
+   "fieldtype": "Section Break",
+   "label": "Mess Reduction"
+  },
+  {
+   "default": "3",
+   "description": "An application must cover at least this many days (both dates included).",
+   "fieldname": "reduction_min_days",
+   "fieldtype": "Int",
+   "label": "Minimum Days per Application",
+   "non_negative": 1
+  },
+  {
+   "default": "1",
+   "description": "Students must apply this many days before the first day of absence. Approvers may still record late applications.",
+   "fieldname": "reduction_advance_notice_days",
+   "fieldtype": "Int",
+   "label": "Advance Notice (Days)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_reduction",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Deputy Warden",
+   "description": "Role that approves mess reduction applications. Hostel Wardens and Hostel Administrators can always approve.",
+   "fieldname": "reduction_approver",
+   "fieldtype": "Select",
+   "label": "Approved By",
+   "options": "Deputy Warden\nMess Manager",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "Total pending and approved reduction days allowed for a student in a calendar month. 0 means no limit.",
+   "fieldname": "max_reduction_days_per_month",
+   "fieldtype": "Int",
+   "label": "Maximum Reduction Days per Month",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "billing_section",
+   "fieldtype": "Section Break",
+   "label": "Mess Billing"
+  },
+  {
+   "default": "10",
+   "description": "Due date of the fee invoice raised for each mess bill, counted from the day the bills are published.",
+   "fieldname": "bill_due_days",
+   "fieldtype": "Int",
+   "label": "Bill Due In (Days)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_billing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Nearest Rupee",
+   "description": "Each student's bill total is rounded; the difference is recorded as a rounding adjustment.",
+   "fieldname": "bill_rounding",
+   "fieldtype": "Select",
+   "label": "Bill Rounding",
+   "options": "Nearest Rupee\nNone"
+  },
+  {
+   "fieldname": "stock_section",
+   "fieldtype": "Section Break",
+   "label": "Stock"
+  },
+  {
+   "default": "1",
+   "description": "Mess managers receive a weekly list of items at or below their reorder level.",
+   "fieldname": "low_stock_alert",
+   "fieldtype": "Check",
+   "label": "Send Weekly Low Stock Alert"
+  },
+  {
+   "fieldname": "column_break_stock",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Goods that are not perishable can be received only against an approved indent, and no more than the approved quantity. Perishables (milk, vegetables, eggs…) can still be bought without one.",
+   "fieldname": "require_indent_for_receipts",
+   "fieldtype": "Check",
+   "label": "Receive Stock Only Against Approved Indents"
+  },
+  {
+   "default": "0",
+   "description": "Indents estimated above this amount must be approved by a Hostel Warden or Hostel Administrator. 0 means a Mess Manager may approve any indent raised by someone else.",
+   "fieldname": "indent_warden_approval_above",
+   "fieldtype": "Currency",
+   "label": "Warden Approval for Indents Above",
+   "non_negative": 1,
+   "options": ""
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-15 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Mess",
+ "name": "Mess Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "Hostel Administrator",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Mess Manager"
+  },
+  {
+   "read": 1,
+   "role": "Hostel Warden"
+  },
+  {
+   "read": 1,
+   "role": "Deputy Warden"
+  },
+  {
+   "read": 1,
+   "role": "Institution Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

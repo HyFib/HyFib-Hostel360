@@ -1,0 +1,325 @@
+{
+ "version": 1,
+ "name": "Legacy hostel register (sample)",
+ "source_system": "sample-legacy-register",
+ "description": "Maps the sample export in this folder. Copy it and change file and column names for a real extract.",
+ "defaults": {
+  "date_formats": ["%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d"],
+  "datetime_formats": ["%d-%m-%Y %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M:%S"],
+  "null_values": ["NULL", "N/A", "NA", "-", "NIL"]
+ },
+ "attachments_dir": "attachments",
+ "load_order": [
+  "academic_years",
+  "departments",
+  "programs",
+  "hostels",
+  "blocks",
+  "floors",
+  "rooms",
+  "students",
+  "guardians",
+  "student_guardians",
+  "allotments",
+  "fee_invoices",
+  "mess_bills",
+  "payments",
+  "leaves",
+  "grievances"
+ ],
+ "entities": {
+  "academic_years": {
+   "file": "academic_years.csv",
+   "doctype": "Hostel Academic Year",
+   "key": "year_code",
+   "match_on": ["academic_year"],
+   "fields": {
+    "academic_year": {"column": "year", "transforms": ["strip"], "required": true},
+    "start_date": {"column": "start", "transforms": ["date"], "required": true},
+    "end_date": {"column": "end", "transforms": ["date"], "required": true}
+   }
+  },
+  "departments": {
+   "file": "departments.csv",
+   "doctype": "Academic Department",
+   "key": "dept_id",
+   "match_on": ["department_name"],
+   "fields": {
+    "department_name": {"column": "dept_name", "transforms": ["collapse_spaces"], "required": true},
+    "department_code": {"column": "short", "transforms": ["upper"]}
+   }
+  },
+  "programs": {
+   "file": "programs.csv",
+   "doctype": "Academic Program",
+   "key": "prog_id",
+   "match_on": ["program_name"],
+   "fields": {
+    "program_name": {"column": "prog_name", "transforms": ["collapse_spaces"], "required": true},
+    "department": {"column": "dept_id", "lookup": "departments", "required": true},
+    "degree_level": {"column": "level", "transforms": ["upper"], "value_map": {"UG": "UG", "PG": "PG", "PHD": "Doctoral", "DIPLOMA": "Diploma"}, "strict": true},
+    "duration_years": {"column": "years", "transforms": ["integer"]}
+   }
+  },
+  "hostels": {
+   "file": "hostels.csv",
+   "doctype": "Hostel",
+   "key": "hostel_id",
+   "match_on": ["hostel_code"],
+   "fields": {
+    "hostel_code": {"column": "code", "transforms": ["strip", "upper"], "required": true},
+    "hostel_name": {"column": "name", "transforms": ["title"], "required": true},
+    "gender": {"column": "type", "value_map": {"BOYS": "Male", "GIRLS": "Female", "CO-ED": "Mixed"}, "strict": true, "required": true},
+    "address": {"column": "address", "transforms": ["strip"]},
+    "is_active": {"column": "active", "transforms": ["boolean"], "default": 1}
+   }
+  },
+  "blocks": {
+   "file": "blocks.csv",
+   "doctype": "Hostel Block",
+   "key": "block_id",
+   "match_on": ["hostel", "block_code"],
+   "fields": {
+    "hostel": {"column": "hostel_id", "lookup": "hostels", "required": true},
+    "block_code": {"column": "block_code", "transforms": ["strip", "upper"], "required": true},
+    "block_name": {"column": "block_name", "transforms": ["collapse_spaces"], "required": true}
+   }
+  },
+  "floors": {
+   "file": "floors.csv",
+   "doctype": "Hostel Floor",
+   "key": "floor_id",
+   "match_on": ["block", "floor_number"],
+   "fields": {
+    "block": {"column": "block_id", "lookup": "blocks", "required": true},
+    "floor_number": {"column": "floor_no", "transforms": ["integer"], "required": true},
+    "floor_label": {"column": "label", "transforms": ["collapse_spaces"]}
+   }
+  },
+  "rooms": {
+   "file": "rooms.csv",
+   "doctype": "Hostel Room",
+   "key": "room_id",
+   "match_on": ["hostel", "room_number"],
+   "fields": {
+    "hostel": {"column": "hostel_id", "lookup": "hostels", "required": true},
+    "block": {"column": "block_id", "lookup": "blocks"},
+    "floor": {"column": "floor_id", "lookup": "floors"},
+    "room_number": {"column": "room_no", "transforms": ["strip", "upper"], "required": true},
+    "room_type": {
+     "column": "sharing",
+     "transforms": ["collapse_spaces", "upper"],
+     "value_map": {"SINGLE": "Single", "2 SHARING": "Double", "3 SHARING": "Triple", "4 SHARING": "Four Sharing", "DORMITORY": "Dormitory"},
+     "strict": true,
+     "required": true
+    },
+    "capacity": {"column": "beds", "transforms": ["integer"], "required": true},
+    "remarks": {"column": "remarks", "transforms": ["strip"]}
+   },
+   "children": {
+    "facilities": [
+     {"facility": {"value": "Cot"}},
+     {"facility": {"value": "Study Table"}},
+     {"facility": {"value": "Cupboard"}},
+     {"$when": "fan", "facility": {"value": "Ceiling Fan"}},
+     {"$when": "attached_bath", "facility": {"value": "Attached Bathroom"}}
+    ]
+   }
+  },
+  "students": {
+   "file": "students.csv",
+   "doctype": "Hostel Student",
+   "key": "stud_id",
+   "match_on": ["register_number"],
+   "filter": {"column": "deleted", "not_in": ["Y", "YES", "1"]},
+   "fields": {
+    "register_number": {"column": "reg_no", "transforms": ["strip", "upper"], "required": true},
+    "first_name": {"column": "student_name", "transforms": ["title", {"name": "split_name", "part": "first"}], "required": true},
+    "last_name": {"column": "student_name", "transforms": ["title", {"name": "split_name", "part": "last"}]},
+    "gender": {"column": "sex", "transforms": ["upper"], "value_map": {"M": "Male", "F": "Female", "T": "Other"}, "strict": true, "required": true},
+    "date_of_birth": {"column": "dob", "transforms": ["date"]},
+    "blood_group": {"column": "blood", "transforms": ["upper", {"name": "replace", "old": " ", "new": ""}]},
+    "program": {"column": "prog_id", "lookup": "programs"},
+    "year_of_study": {"column": "year", "transforms": ["strip"]},
+    "admission_year": {"column": "adm_year", "transforms": ["integer"]},
+    "mobile_number": {"column": "mobile", "transforms": ["mobile"], "required": true},
+    "email": {"column": "email", "transforms": ["email"]},
+    "address_line1": {"column": "address", "transforms": ["collapse_spaces"]},
+    "city": {"column": "city", "transforms": ["title"]},
+    "district": {"column": "district", "transforms": ["title"]},
+    "state": {"value": "Tamil Nadu"},
+    "pincode": {"column": "pincode", "transforms": ["pincode"]},
+    "emergency_contact_name": {"column": "emergency_name", "transforms": ["title"]},
+    "emergency_contact_phone": {"column": "emergency_phone", "transforms": ["mobile"]},
+    "status": {"column": "status", "transforms": ["collapse_spaces", "upper"], "value_map": {"STAYING": "Active", "LEFT": "Vacated", "PASSED OUT": "Alumni", "SUSPENDED": "Suspended"}, "strict": true, "default": "Active"},
+    "validation_status": {"value": "Validated"},
+    "mess_enrolled": {"column": "mess", "transforms": ["boolean"], "default": 1},
+    "photo": {"column": "photo", "attachment": true}
+   }
+  },
+  "guardians": {
+   "file": "guardians.csv",
+   "doctype": "Hostel Guardian",
+   "key": "guardian_id",
+   "match_on": ["mobile_number"],
+   "fields": {
+    "guardian_name": {"column": "name", "transforms": ["title"], "required": true},
+    "relation": {"column": "relation", "transforms": ["upper"], "value_map": {"FATHER": "Father", "MOTHER": "Mother", "GUARDIAN": "Guardian", "BROTHER": "Brother", "SISTER": "Sister"}, "strict": true},
+    "mobile_number": {"column": "mobile", "transforms": ["mobile"], "required": true},
+    "occupation": {"column": "occupation", "transforms": ["collapse_spaces"]},
+    "email": {"column": "email", "transforms": ["email"]},
+    "validation_status": {"value": "Validated"}
+   }
+  },
+  "student_guardians": {
+   "file": "student_guardians.csv",
+   "doctype": "Hostel Student",
+   "mode": "child",
+   "table": "guardians",
+   "key": "link_id",
+   "parent": {"entity": "students", "column": "stud_id"},
+   "match_field": "guardian",
+   "fields": {
+    "guardian": {"column": "guardian_id", "lookup": "guardians", "required": true},
+    "relation": {"column": "relation", "transforms": ["upper"], "value_map": {"FATHER": "Father", "MOTHER": "Mother", "GUARDIAN": "Guardian", "BROTHER": "Brother", "SISTER": "Sister"}, "strict": true, "default": "Guardian"},
+    "is_primary": {"column": "primary", "transforms": ["boolean"], "default": 0},
+    "can_approve_leave": {"column": "can_approve", "transforms": ["boolean"], "default": 1}
+   }
+  },
+  "allotments": {
+   "file": "allotments.csv",
+   "doctype": "Room Allotment",
+   "key": "allot_id",
+   "submit": true,
+   "fields": {
+    "student": {"column": "stud_id", "lookup": "students", "required": true},
+    "room": {"column": "room_id", "lookup": "rooms", "required": true},
+    "bed": {"template": "{room}-{bed_no}", "transforms": ["upper"], "required": true},
+    "allotment_type": {"value": "New"},
+    "from_date": {"column": "from", "transforms": ["date"], "required": true},
+    "to_date": {"column": "to", "transforms": ["date"]},
+    "status": {"column": "status", "transforms": ["upper"], "value_map": {"CURRENT": "", "VACATED": "Vacated", "TRANSFERRED": "Transferred", "CANCELLED": "Cancelled"}, "strict": true},
+    "vacated_on": {"column": "vacated_on", "transforms": ["date"]},
+    "vacate_reason": {"column": "reason", "transforms": ["collapse_spaces"]},
+    "remarks": {"template": "Legacy allotment {allot_id}"}
+   }
+  },
+  "fee_invoices": {
+   "file": "fee_invoices.csv",
+   "doctype": "Hostel Fee Invoice",
+   "key": "inv_no",
+   "submit": true,
+   "fields": {
+    "student": {"column": "stud_id", "lookup": "students", "required": true},
+    "invoice_type": {"value": "Hostel Fee"},
+    "academic_year": {"column": "ay", "lookup": "academic_years"},
+    "posting_date": {"column": "inv_date", "transforms": ["date"], "required": true},
+    "due_date": {"column": "due", "transforms": ["date"], "required": true},
+    "migrated_paid_amount": {"value": 0},
+    "remarks": {"template": "Legacy invoice {inv_no}"}
+   },
+   "children": {
+    "items": [
+     {"$when": "rent", "fee_head": {"value": "Hostel Rent"}, "amount": {"column": "rent", "transforms": ["decimal"]}},
+     {"$when": "establishment", "fee_head": {"value": "Establishment Charges"}, "amount": {"column": "establishment", "transforms": ["decimal"]}},
+     {"$when": "electricity", "fee_head": {"value": "Electricity Charges"}, "amount": {"column": "electricity", "transforms": ["decimal"]}},
+     {"$when": "deposit", "fee_head": {"value": "Caution Deposit"}, "amount": {"column": "deposit", "transforms": ["decimal"]}}
+    ]
+   },
+   "reconcile": [
+    {"label": "Fee invoices total", "source_column": "total", "target_field": "total_amount"},
+    {"label": "Fee invoices outstanding", "source_column": "balance", "target_field": "outstanding_amount"}
+   ]
+  },
+  "mess_bills": {
+   "file": "mess_bills.csv",
+   "doctype": "Hostel Fee Invoice",
+   "key": "bill_no",
+   "submit": true,
+   "fields": {
+    "student": {"column": "stud_id", "lookup": "students", "required": true},
+    "invoice_type": {"value": "Mess Bill"},
+    "posting_date": {"column": "bill_date", "transforms": ["date"], "required": true},
+    "due_date": {"column": "due", "transforms": ["date"], "required": true},
+    "migrated_paid_amount": {"value": 0},
+    "remarks": {"template": "Legacy mess bill {bill_no} ({month})"}
+   },
+   "children": {
+    "items": [
+     {"$when": "mess_amount", "fee_head": {"value": "Mess Charges"}, "description": {"template": "Mess charges, {month}"}, "amount": {"column": "mess_amount", "transforms": ["decimal"]}},
+     {"$when": "extras", "fee_head": {"value": "Mess Extras"}, "description": {"template": "Mess extras, {month}"}, "amount": {"column": "extras", "transforms": ["decimal"]}}
+    ]
+   },
+   "reconcile": [
+    {"label": "Mess bills total", "source_column": "total", "target_field": "total_amount"},
+    {"label": "Mess bills outstanding", "source_column": "balance", "target_field": "outstanding_amount"}
+   ]
+  },
+  "payments": {
+   "file": "payments.csv",
+   "doctype": "Hostel Payment",
+   "key": "receipt_no",
+   "submit": true,
+   "fields": {
+    "student": {"column": "stud_id", "lookup": "students", "required": true},
+    "payment_date": {"column": "date", "transforms": ["date"], "required": true},
+    "mode_of_payment": {"column": "mode", "transforms": ["upper"], "value_map": {"CASH": "Cash", "DD": "Demand Draft", "UPI": "UPI", "NEFT": "Bank Transfer", "RTGS": "Bank Transfer", "IMPS": "Bank Transfer", "CHQ": "Cheque", "CHEQUE": "Cheque", "ONLINE": "Online"}, "strict": true, "required": true},
+    "amount": {"column": "amount", "transforms": [{"name": "decimal", "non_negative": true}], "required": true},
+    "reference_no": {"column": "ref_no", "transforms": ["collapse_spaces"]},
+    "remarks": {"template": "Legacy receipt {receipt_no}"}
+   },
+   "children": {
+    "allocations": [
+     {"$when": "inv_no", "invoice": {"column": "inv_no", "lookup": "fee_invoices"}, "allocated_amount": {"column": "amount", "transforms": ["decimal"]}},
+     {"$when": "bill_no", "invoice": {"column": "bill_no", "lookup": "mess_bills"}, "allocated_amount": {"column": "amount", "transforms": ["decimal"]}}
+    ]
+   },
+   "reconcile": [
+    {"label": "Receipts total", "source_column": "amount", "target_field": "amount"}
+   ]
+  },
+  "leaves": {
+   "file": "leaves.csv",
+   "doctype": "Home Visit Leave",
+   "key": "leave_id",
+   "fields": {
+    "student": {"column": "stud_id", "lookup": "students", "required": true},
+    "creation": {"column": "applied_on", "transforms": ["datetime"]},
+    "from_datetime": {"column": "from", "transforms": ["datetime"], "required": true},
+    "to_datetime": {"column": "to", "transforms": ["datetime"], "required": true},
+    "destination": {"column": "place", "transforms": ["collapse_spaces"], "required": true},
+    "reason": {"column": "reason", "transforms": ["collapse_spaces"], "required": true},
+    "applied_by": {"value": "Student"},
+    "status": {"column": "status", "transforms": ["upper"], "value_map": {"RETURNED": "Returned", "APPROVED": "Approved", "REJECTED": "Rejected", "CANCELLED": "Cancelled"}, "strict": true, "required": true},
+    "parent_approval_status": {"value": "Approved"},
+    "warden_approval_status": {"column": "status", "transforms": ["upper"], "value_map": {"RETURNED": "Approved", "APPROVED": "Approved", "REJECTED": "Rejected", "CANCELLED": "Approved"}, "strict": true},
+    "contact_during_leave": {"column": "contact", "transforms": ["mobile"]},
+    "checked_out_on": {"column": "out_time", "transforms": ["datetime"]},
+    "returned_on": {"column": "in_time", "transforms": ["datetime"]}
+   }
+  },
+  "grievances": {
+   "file": "grievances.csv",
+   "doctype": "Hostel Grievance",
+   "key": "grv_id",
+   "fields": {
+    "student": {"column": "stud_id", "lookup": "students", "required": true},
+    "creation": {"column": "raised_on", "transforms": ["datetime"]},
+    "category": {
+     "column": "category",
+     "transforms": ["upper"],
+     "value_map": {"PLUMBING": "Plumbing", "ELECTRICAL": "Electrical", "MESS": "Mess and Food", "ROOM": "Room and Furniture", "CLEANING": "Cleanliness", "WATER": "Water", "INTERNET": "Internet", "SECURITY": "Security", "HEALTH": "Health", "OTHERS": "Other"},
+     "strict": true,
+     "required": true
+    },
+    "subject": {"column": "subject", "transforms": ["collapse_spaces", {"name": "truncate", "length": 140}], "required": true},
+    "description": {"column": "details", "transforms": ["strip"], "required": true},
+    "priority": {"column": "priority", "transforms": ["upper"], "value_map": {"LOW": "Low", "MEDIUM": "Medium", "HIGH": "High", "URGENT": "Urgent"}, "strict": true, "default": "Medium"},
+    "status": {"column": "status", "transforms": ["upper"], "value_map": {"OPEN": "Open", "IN PROGRESS": "In Progress", "ESCALATED": "Escalated", "RESOLVED": "Resolved", "CLOSED": "Closed"}, "strict": true, "required": true},
+    "resolution": {"column": "resolution", "transforms": ["strip"]},
+    "resolved_on": {"column": "resolved_on", "transforms": ["datetime"]},
+    "is_confidential": {"column": "confidential", "transforms": ["boolean"], "default": 0}
+   }
+  }
+ }
+}

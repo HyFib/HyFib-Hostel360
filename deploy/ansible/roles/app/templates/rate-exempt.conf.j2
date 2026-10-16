@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+# Addresses exempt from the WAF's per-address sign-in rate limits (nginx geo format): the
+# campus egress addresses (h360_campus_egress_cidrs) and any extra ranges
+# (h360_waf_rate_exempt_cidrs).
+{% for cidr in ((h360_campus_egress_cidrs | default([])) + h360_waf_rate_exempt_cidrs) | map('string') | unique %}
+{{ cidr }} 1;
+{% endfor %}

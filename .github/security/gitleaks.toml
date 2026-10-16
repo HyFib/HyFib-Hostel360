@@ -1,0 +1,19 @@
+# gitleaks configuration for the Security workflow (.github/workflows/security.yml).
+# The built-in rules apply everywhere except test code, whose fixtures carry fake keys and
+# secrets on purpose (for example the ingest HMAC tests and the exit decommission checks).
+# Keep this list to test paths only: a real secret anywhere else must fail the scan.
+
+title = "HyFib Hostel360"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test fixtures: fake keys that only exist inside tests"
+paths = [
+  '''(^|/)deploy/tests/''',
+  '''(^|/)tests/load/''',
+  '''(^|/)hostel360/.+/tests/''',
+  '''(^|/)hostel360/.+/test_[^/]+\.py$''',
+  '''(^|/)frontend/tests/''',
+]

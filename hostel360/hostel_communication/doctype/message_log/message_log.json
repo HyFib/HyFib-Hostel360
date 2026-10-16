@@ -1,0 +1,233 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "One row per message sent (or attempted) on any channel. OTP codes are never stored.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "channel",
+  "event",
+  "status",
+  "recipient",
+  "recipient_user",
+  "column_break_main",
+  "reference_doctype",
+  "reference_name",
+  "template",
+  "provider",
+  "delivery_section",
+  "provider_message_id",
+  "attempts",
+  "sent_on",
+  "next_retry_on",
+  "column_break_delivery",
+  "error",
+  "content_section",
+  "subject",
+  "message",
+  "payload"
+ ],
+ "fields": [
+  {
+   "fieldname": "channel",
+   "fieldtype": "Select",
+   "label": "Channel",
+   "options": "SMS\nWhatsApp\nEmail\nIn-App",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "event",
+   "fieldtype": "Select",
+   "label": "Event",
+   "options": "\notp_login\nstudent_validated\nroom_allotted\nfee_due_published\nfee_reminder\npayment_received\nmess_bill_published\nmenu_published\nmess_reduction_submitted\nmess_reduction_decided\nleave_submitted\nleave_parent_approval_required\nleave_warden_approval_required\nleave_decided\nleave_overdue\nleave_checked_out\nleave_returned\ngrievance_received\ngrievance_assigned\ngrievance_updated\ngrievance_escalated\ngrievance_resolved\nbonafide_requested\nbonafide_decided\nsupport_ticket_update\nmess_low_stock\ndirect_message",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Queued\nSent\nFailed\nSkipped",
+   "default": "Queued",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1,
+   "search_index": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "recipient",
+   "fieldtype": "Data",
+   "label": "Recipient",
+   "in_list_view": 1,
+   "read_only": 1,
+   "description": "Masked for privacy."
+  },
+  {
+   "fieldname": "recipient_user",
+   "fieldtype": "Link",
+   "label": "Recipient User",
+   "options": "User",
+   "in_standard_filter": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference Document Type",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Document",
+   "options": "reference_doctype",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "template",
+   "fieldtype": "Link",
+   "label": "Message Template",
+   "options": "Message Template",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider",
+   "read_only": 1
+  },
+  {
+   "fieldname": "delivery_section",
+   "fieldtype": "Section Break",
+   "label": "Delivery"
+  },
+  {
+   "fieldname": "provider_message_id",
+   "fieldtype": "Data",
+   "label": "Provider Message ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "attempts",
+   "fieldtype": "Int",
+   "label": "Attempts",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sent_on",
+   "fieldtype": "Datetime",
+   "label": "Sent On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_retry_on",
+   "fieldtype": "Datetime",
+   "label": "Next Retry On",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_delivery",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "content_section",
+   "fieldtype": "Section Break",
+   "label": "Content",
+   "collapsible": 1,
+   "description": "Visible to Hostel Administrators and System Managers only."
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "label": "Subject",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Text",
+   "label": "Message",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "payload",
+   "fieldtype": "Code",
+   "label": "Delivery Payload",
+   "options": "JSON",
+   "read_only": 1,
+   "hidden": 1,
+   "permlevel": 1,
+   "print_hide": 1,
+   "no_copy": 1
+  }
+ ],
+ "in_create": 1,
+ "links": [],
+ "modified": "2026-10-15 21:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Communication",
+ "name": "Message Log",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "Hostel Administrator"
+  },
+  {
+   "read": 1,
+   "role": "Hostel Office Staff"
+  },
+  {
+   "read": 1,
+   "role": "Institution Auditor"
+  },
+  {
+   "read": 1,
+   "role": "HyFib Operations"
+  },
+  {
+   "read": 1,
+   "delete": 1,
+   "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "permlevel": 1,
+   "role": "Hostel Administrator"
+  },
+  {
+   "read": 1,
+   "permlevel": 1,
+   "role": "System Manager"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "recipient",
+ "track_changes": 1
+}

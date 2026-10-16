@@ -1,0 +1,416 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "HyFib operations alerting: channels, escalation matrix, health thresholds and integrations.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "alerting_tab",
+  "enabled",
+  "environment",
+  "column_break_general",
+  "instance_label",
+  "critical_renotify_minutes",
+  "channels_section",
+  "channels",
+  "escalation_section",
+  "escalation_levels",
+  "report_section",
+  "report_recipients",
+  "defaults_installed",
+  "thresholds_tab",
+  "capacity_section",
+  "disk_warning_percent",
+  "disk_critical_percent",
+  "db_latency_warning_ms",
+  "column_break_capacity",
+  "queue_backlog_threshold",
+  "failed_job_threshold",
+  "scheduler_stale_minutes",
+  "application_section",
+  "error_spike_threshold",
+  "failed_login_threshold",
+  "ssl_expiry_warning_days",
+  "column_break_application",
+  "payment_failure_threshold",
+  "pending_payment_minutes",
+  "message_failure_percent",
+  "backup_section",
+  "backup_max_age_hours",
+  "restore_test_max_age_days",
+  "column_break_backup",
+  "agent_silence_minutes",
+  "sla_section",
+  "ticket_response_hours",
+  "column_break_sla",
+  "ticket_resolution_hours",
+  "integrations_tab",
+  "ingest_section",
+  "ingest_secret",
+  "integration_help",
+  "oci_section",
+  "oci_notification_token",
+  "heartbeat_section",
+  "heartbeat_url",
+  "status_section",
+  "last_health_check_on",
+  "last_escalation_run_on",
+  "column_break_status",
+  "last_heartbeat_sent_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "alerting_tab",
+   "fieldtype": "Tab Break",
+   "label": "Alerting"
+  },
+  {
+   "default": "1",
+   "description": "When off, alerts are still recorded but nobody is notified and nothing is escalated.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Send Notifications"
+  },
+  {
+   "default": "Production",
+   "fieldname": "environment",
+   "fieldtype": "Select",
+   "label": "Environment",
+   "options": "Production\nStaging\nDevelopment",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_general",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "ACGCET Hostel360",
+   "description": "Starts every alert so recipients know which installation is speaking.",
+   "fieldname": "instance_label",
+   "fieldtype": "Data",
+   "label": "Instance Label"
+  },
+  {
+   "default": "60",
+   "fieldname": "critical_renotify_minutes",
+   "fieldtype": "Int",
+   "label": "Repeat Unacknowledged Critical Alerts Every (Minutes)",
+   "non_negative": 1
+  },
+  {
+   "description": "Every enabled channel receives each notification for alerts at or above its minimum severity.",
+   "fieldname": "channels_section",
+   "fieldtype": "Section Break",
+   "label": "Notification Channels"
+  },
+  {
+   "fieldname": "channels",
+   "fieldtype": "Table",
+   "label": "Channels",
+   "options": "Ops Alert Channel"
+  },
+  {
+   "description": "Level 1 hears about every alert it accepts. Later levels are added once an alert has been unresolved for their minutes, or straight away for outages when ticked.",
+   "fieldname": "escalation_section",
+   "fieldtype": "Section Break",
+   "label": "Escalation Matrix"
+  },
+  {
+   "fieldname": "escalation_levels",
+   "fieldtype": "Table",
+   "label": "Escalation Levels",
+   "options": "Ops Escalation Level"
+  },
+  {
+   "fieldname": "report_section",
+   "fieldtype": "Section Break",
+   "label": "Monthly Performance Report"
+  },
+  {
+   "description": "E-mail addresses of institution officials, one per line or comma separated. Level 1 e-mail addresses always receive a copy.",
+   "fieldname": "report_recipients",
+   "fieldtype": "Small Text",
+   "label": "Report Recipients"
+  },
+  {
+   "default": "0",
+   "fieldname": "defaults_installed",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Defaults Installed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "thresholds_tab",
+   "fieldtype": "Tab Break",
+   "label": "Health Thresholds"
+  },
+  {
+   "fieldname": "capacity_section",
+   "fieldtype": "Section Break",
+   "label": "Capacity and Jobs"
+  },
+  {
+   "default": "80",
+   "fieldname": "disk_warning_percent",
+   "fieldtype": "Int",
+   "label": "Disk Warning (%)",
+   "non_negative": 1
+  },
+  {
+   "default": "90",
+   "fieldname": "disk_critical_percent",
+   "fieldtype": "Int",
+   "label": "Disk Critical (%)",
+   "non_negative": 1
+  },
+  {
+   "default": "500",
+   "fieldname": "db_latency_warning_ms",
+   "fieldtype": "Int",
+   "label": "Database Latency Warning (ms)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_capacity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "500",
+   "fieldname": "queue_backlog_threshold",
+   "fieldtype": "Int",
+   "label": "Background Job Backlog",
+   "non_negative": 1
+  },
+  {
+   "default": "10",
+   "fieldname": "failed_job_threshold",
+   "fieldtype": "Int",
+   "label": "Failed Jobs Between Checks",
+   "non_negative": 1
+  },
+  {
+   "default": "10",
+   "fieldname": "scheduler_stale_minutes",
+   "fieldtype": "Int",
+   "label": "Scheduler Silent For (Minutes)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "application_section",
+   "fieldtype": "Section Break",
+   "label": "Application and Security"
+  },
+  {
+   "default": "25",
+   "fieldname": "error_spike_threshold",
+   "fieldtype": "Int",
+   "label": "Errors per 15 Minutes",
+   "non_negative": 1
+  },
+  {
+   "default": "30",
+   "fieldname": "failed_login_threshold",
+   "fieldtype": "Int",
+   "label": "Failed Logins per 15 Minutes",
+   "non_negative": 1
+  },
+  {
+   "default": "21",
+   "description": "Checked hourly against the portal URL in Hostel Settings.",
+   "fieldname": "ssl_expiry_warning_days",
+   "fieldtype": "Int",
+   "label": "Warn Before Certificate Expiry (Days)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_application",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "10",
+   "fieldname": "payment_failure_threshold",
+   "fieldtype": "Int",
+   "label": "Failed Payments per Hour",
+   "non_negative": 1
+  },
+  {
+   "default": "30",
+   "fieldname": "pending_payment_minutes",
+   "fieldtype": "Int",
+   "label": "Payment Pending Longer Than (Minutes)",
+   "non_negative": 1
+  },
+  {
+   "default": "20",
+   "description": "Over the last hour, once at least 10 messages were attempted.",
+   "fieldname": "message_failure_percent",
+   "fieldtype": "Int",
+   "label": "Message Failure Rate (%)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "backup_section",
+   "fieldtype": "Section Break",
+   "label": "Backups and Agents"
+  },
+  {
+   "default": "26",
+   "fieldname": "backup_max_age_hours",
+   "fieldtype": "Int",
+   "label": "Latest Backup Older Than (Hours)",
+   "non_negative": 1
+  },
+  {
+   "default": "35",
+   "fieldname": "restore_test_max_age_days",
+   "fieldtype": "Int",
+   "label": "Restore Test Older Than (Days)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_backup",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "10",
+   "fieldname": "agent_silence_minutes",
+   "fieldtype": "Int",
+   "label": "Host Agent Silent For (Minutes)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "sla_section",
+   "fieldtype": "Section Break",
+   "label": "Support SLA"
+  },
+  {
+   "default": "1",
+   "fieldname": "ticket_response_hours",
+   "fieldtype": "Float",
+   "label": "First Response Within (Hours)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_sla",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "4",
+   "fieldname": "ticket_resolution_hours",
+   "fieldtype": "Float",
+   "label": "Resolution Within (Hours)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "integrations_tab",
+   "fieldtype": "Tab Break",
+   "label": "Integrations"
+  },
+  {
+   "description": "The host agent signs each request with this secret. Keep it in the agent's environment file only.",
+   "fieldname": "ingest_section",
+   "fieldtype": "Section Break",
+   "label": "Host Agent"
+  },
+  {
+   "fieldname": "ingest_secret",
+   "fieldtype": "Password",
+   "label": "Ingest Secret",
+   "length": 255
+  },
+  {
+   "fieldname": "integration_help",
+   "fieldtype": "HTML",
+   "label": "Integration Help"
+  },
+  {
+   "fieldname": "oci_section",
+   "fieldtype": "Section Break",
+   "label": "OCI Monitoring"
+  },
+  {
+   "description": "Shared token in the OCI Notifications HTTPS subscription URL.",
+   "fieldname": "oci_notification_token",
+   "fieldtype": "Password",
+   "label": "OCI Notification Token",
+   "length": 255
+  },
+  {
+   "fieldname": "heartbeat_section",
+   "fieldtype": "Section Break",
+   "label": "Dead-man Switch"
+  },
+  {
+   "description": "Called after every five-minute health check in which the core checks pass. Configure the external monitor to alert when calls stop.",
+   "fieldname": "heartbeat_url",
+   "fieldtype": "Data",
+   "label": "Heartbeat URL",
+   "options": "URL"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "fieldname": "last_health_check_on",
+   "fieldtype": "Datetime",
+   "label": "Last Health Check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_escalation_run_on",
+   "fieldtype": "Datetime",
+   "label": "Last Escalation Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_heartbeat_sent_on",
+   "fieldtype": "Datetime",
+   "label": "Last Heartbeat Sent",
+   "read_only": 1
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-15 16:50:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Operations",
+ "name": "Ops Alert Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "HyFib Operations",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Hostel Administrator"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,57 @@
+# {{ ansible_managed }}
+[DEFAULT]
+bantime = {{ h360_fail2ban_bantime }}
+findtime = {{ h360_fail2ban_findtime }}
+maxretry = 5
+backend = auto
+banaction = ufw
+# Never banned: the host itself, the stack's internal container network (print PDFs load
+# images through the WAF from there), and the campus egress addresses that hundreds of
+# residents share.
+ignoreip = {{ (['127.0.0.1/8', '::1', h360_internal_subnet | default('172.30.10.0/24')] + (h360_campus_egress_cidrs | default([])) + h360_fail2ban_ignoreip) | map('string') | unique | join(' ') }}
+
+
+# SSH arrives only through the OCI Bastion endpoint; bans are short so an administrator's
+# typo never locks out the Bastion address for long.
+[sshd]
+enabled = true
+mode = aggressive
+backend = systemd
+bantime = 10m
+maxretry = 5
+
+[h360-auth]
+enabled = true
+filter = h360-auth
+logpath = {{ h360_data_dir }}/logs/waf/access.log
+action = h360-waf
+maxretry = 20
+findtime = 10m
+bantime = 1h
+
+[h360-modsec]
+enabled = true
+filter = h360-modsec
+logpath = {{ h360_data_dir }}/logs/waf/error.log
+action = h360-waf
+maxretry = 10
+findtime = 10m
+bantime = 2h
+
+[h360-ratelimit]
+enabled = true
+filter = h360-ratelimit
+logpath = {{ h360_data_dir }}/logs/waf/error.log
+action = h360-waf
+maxretry = 30
+findtime = 5m
+bantime = 30m
+
+# Repeat offenders across the WAF jails: one week
+[recidive]
+enabled = true
+logpath = /var/log/fail2ban.log
+action = h360-waf
+bantime = 1w
+findtime = 1d
+maxretry = 3

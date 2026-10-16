@@ -1,0 +1,49 @@
+# HyFib Hostel360 application server (Ubuntu 24.04 arm64 on OCI).
+#
+#   ansible-galaxy collection install -r requirements.yml -p collections
+#   ansible-playbook site.yml --ask-vault-pass          (inventory: inventory.ini)
+#   ansible-playbook site.yml --tags app,monitoring     (one area at a time)
+#
+# Order matters: the data volume is mounted before Docker starts the stack, the firewall
+# is in place before any port is published, and fail2ban/maldet come last because they
+# use scripts and directories the app role installs.
+
+- name: Configure the Hostel360 application server
+  hosts: hostel360
+  become: true
+
+  pre_tasks:
+    - name: Check the operating system
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version is version("24.04", ">=")
+        fail_msg: "Hostel360 is supported on Ubuntu 24.04 LTS"
+      tags: [always]
+
+  roles:
+    # Go-live checks on the inventory (campus egress addresses); nothing is changed yet.
+    - role: preflight
+      tags: [always]
+    - role: common
+      tags: [common]
+    - role: ssh
+      tags: [ssh]
+    - role: storage
+      tags: [storage]
+    - role: firewall
+      tags: [firewall]
+    - role: docker
+      tags: [docker]
+    - role: auditd
+      tags: [auditd]
+    - role: app
+      tags: [app]
+    - role: backup
+      tags: [backup]
+    - role: monitoring
+      tags: [monitoring]
+    - role: fail2ban
+      tags: [fail2ban]
+    - role: malware
+      tags: [malware]

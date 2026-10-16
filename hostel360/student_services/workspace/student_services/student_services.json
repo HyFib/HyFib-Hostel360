@@ -1,0 +1,261 @@
+{
+ "charts": [
+  {
+   "chart_name": "Leave Applications per Week",
+   "label": "Leave Applications per Week"
+  },
+  {
+   "chart_name": "Grievances by Category",
+   "label": "Grievances by Category"
+  }
+ ],
+ "content": "[{\"id\":\"2483e71bd6\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Students on Leave Now\",\"col\":3}},{\"id\":\"8ad2d9794e\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Pending Leave Approvals\",\"col\":3}},{\"id\":\"127159ab4b\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Open Grievances\",\"col\":3}},{\"id\":\"655c23e5b3\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Escalated Grievances\",\"col\":3}},{\"id\":\"e84df34ff1\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Leave Applications per Week\",\"col\":6}},{\"id\":\"f22d5406d4\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Grievances by Category\",\"col\":6}},{\"id\":\"257c113ada\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick access</b></span>\",\"col\":12}},{\"id\":\"a3ad991198\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Approvals\",\"col\":3}},{\"id\":\"7db654384d\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Gate Pass\",\"col\":3}},{\"id\":\"dcca4317ff\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Leave\",\"col\":3}},{\"id\":\"5590dcfc65\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Grievances\",\"col\":3}},{\"id\":\"57c1640f4e\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Records and reports</b></span>\",\"col\":12}},{\"id\":\"fe2856c421\",\"type\":\"card\",\"data\":{\"card_name\":\"Leave\",\"col\":4}},{\"id\":\"facbd5ac7c\",\"type\":\"card\",\"data\":{\"card_name\":\"Grievances\",\"col\":4}},{\"id\":\"e7aff3d51e\",\"type\":\"card\",\"data\":{\"card_name\":\"Certificates\",\"col\":4}},{\"id\":\"a3a39505ca\",\"type\":\"card\",\"data\":{\"card_name\":\"Feedback\",\"col\":4}}]",
+ "creation": "2026-10-15 18:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "heart-handshake",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Student Services",
+ "links": [
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Leave",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Home Visit Leave",
+   "link_count": 0,
+   "link_to": "Home Visit Leave",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Students On Leave",
+   "link_count": 0,
+   "link_to": "Students On Leave",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Home Visit Leave",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Leave Register",
+   "link_count": 0,
+   "link_to": "Leave Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Home Visit Leave",
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Grievances",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Grievance",
+   "link_count": 0,
+   "link_to": "Hostel Grievance",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Grievance Summary",
+   "link_count": 0,
+   "link_to": "Grievance Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Grievance",
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Certificates",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Bonafide Certificate Request",
+   "link_count": 0,
+   "link_to": "Bonafide Certificate Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Bonafide Register",
+   "link_count": 0,
+   "link_to": "Bonafide Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Bonafide Certificate Request",
+   "type": "Link"
+  },
+  {
+   "description": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Feedback",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hostel Feedback",
+   "link_count": 0,
+   "link_to": "Hostel Feedback",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Feedback Summary",
+   "link_count": 0,
+   "link_to": "Feedback Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Hostel Feedback",
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-15 21:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Student Services",
+ "name": "Student Services",
+ "number_cards": [
+  {
+   "label": "Students on Leave Now",
+   "number_card_name": "Students on Leave Now"
+  },
+  {
+   "label": "Pending Leave Approvals",
+   "number_card_name": "Pending Leave Approvals"
+  },
+  {
+   "label": "Open Grievances",
+   "number_card_name": "Open Grievances"
+  },
+  {
+   "label": "Escalated Grievances",
+   "number_card_name": "Escalated Grievances"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "Hostel Administrator"
+  },
+  {
+   "role": "Hostel Warden"
+  },
+  {
+   "role": "Deputy Warden"
+  },
+  {
+   "role": "Hostel Office Staff"
+  },
+  {
+   "role": "Mess Manager"
+  },
+  {
+   "role": "Institution Auditor"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 5.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "format": "",
+   "label": "Approvals",
+   "link_to": "approvals",
+   "stats_filter": "",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "format": "",
+   "label": "Gate Pass",
+   "link_to": "gate-pass",
+   "stats_filter": "",
+   "type": "Page"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "format": "{} to approve",
+   "label": "Leave",
+   "link_to": "Home Visit Leave",
+   "stats_filter": "[[\"Home Visit Leave\", \"status\", \"=\", \"Pending Warden Approval\"]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "format": "{} escalated",
+   "label": "Grievances",
+   "link_to": "Hostel Grievance",
+   "stats_filter": "[[\"Hostel Grievance\", \"status\", \"=\", \"Escalated\"]]",
+   "type": "DocType"
+  }
+ ],
+ "standard": 1,
+ "title": "Student Services",
+ "type": "Workspace"
+}

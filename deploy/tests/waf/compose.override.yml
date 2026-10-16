@@ -1,0 +1,36 @@
+# Overrides for deploy/tests/waf/run.sh: the waf service stays exactly as in
+# deploy/compose/compose.yml; frontend and php-fpm become a small nginx stub (stub.conf) run
+# from the WAF image, so no application image, database or Redis is needed.
+services:
+  frontend:
+    image: ${H360_TEST_WAF_IMAGE:?H360_TEST_WAF_IMAGE must be set}
+    pull_policy: never
+    entrypoint: ["nginx", "-c", "/stub/stub.conf", "-g", "daemon off;"]
+    command: !reset []
+    environment: !reset {}
+    volumes: !override
+      - ${H360_TEST_DIR:?H360_TEST_DIR must be set}/stub.conf:/stub/stub.conf:ro
+    depends_on: !reset {}
+    healthcheck:
+      disable: true
+
+  php-fpm:
+    image: ${H360_TEST_WAF_IMAGE:?H360_TEST_WAF_IMAGE must be set}
+    pull_policy: never
+    user: "101:101"
+    entrypoint: ["nginx", "-c", "/stub/stub.conf", "-g", "daemon off;"]
+    command: !reset []
+    environment: !reset {}
+    volumes: !override
+      - ${H360_TEST_DIR:?H360_TEST_DIR must be set}/stub.conf:/stub/stub.conf:ro
+    healthcheck:
+      disable: true
+
+# Several stacks can exist on one machine during tests; let Docker name the bridges.
+networks:
+  edge:
+    driver_opts: !reset {}
+  internal:
+    driver_opts: !reset {}
+  php:
+    driver_opts: !reset {}

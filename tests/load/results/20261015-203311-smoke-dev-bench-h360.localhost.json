@@ -1,0 +1,303 @@
+{
+    "metrics": {
+        "http_req_waiting": {
+            "p(99)": 30.608125,
+            "max": 47.362666,
+            "avg": 15.893516055776884,
+            "med": 15.206334,
+            "p(90)": 27.687708,
+            "p(95)": 29.3945415
+        },
+        "http_req_duration{flow:portal}": {
+            "p(99)": 30.44238755,
+            "max": 31.120458,
+            "avg": 17.177150301075276,
+            "med": 16.44775,
+            "p(90)": 28.191208500000002,
+            "p(95)": 29.7047495,
+            "thresholds": {
+                "p(95)<800": false
+            }
+        },
+        "http_req_duration{flow:sign_in}": {
+            "avg": 15.213663360000004,
+            "med": 13.492333,
+            "p(90)": 29.1161252,
+            "p(95)": 30.6292592,
+            "p(99)": 43.50604524,
+            "max": 47.482875,
+            "thresholds": {
+                "p(95)<800": false
+            }
+        },
+        "vus_max": {
+            "min": 6,
+            "max": 6,
+            "value": 6
+        },
+        "data_sent": {
+            "count": 155820,
+            "rate": 1706.3592037781198
+        },
+        "vus": {
+            "value": 1,
+            "min": 1,
+            "max": 6
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 16.123462474103583,
+            "med": 15.467584,
+            "p(90)": 28.053959,
+            "p(95)": 29.676833,
+            "p(99)": 30.788459,
+            "max": 47.482875
+        },
+        "http_req_blocked": {
+            "avg": 0.6163252151394423,
+            "med": 0.359208,
+            "p(90)": 1.172542,
+            "p(95)": 1.4204789999999998,
+            "p(99)": 2.3708954999999996,
+            "max": 7.233125
+        },
+        "http_req_receiving": {
+            "avg": 0.14851081673306757,
+            "med": 0.128125,
+            "p(90)": 0.234125,
+            "p(95)": 0.25802099999999994,
+            "p(99)": 0.4371874999999998,
+            "max": 1.402458
+        },
+        "iterations": {
+            "count": 191,
+            "rate": 2.09160960031845
+        },
+        "http_req_sending": {
+            "p(95)": 0.20252099999999998,
+            "p(99)": 0.30208349999999984,
+            "max": 0.448458,
+            "avg": 0.0814356015936255,
+            "med": 0.059875,
+            "p(90)": 0.146792
+        },
+        "http_req_duration{flow:desk}": {
+            "p(90)": 17.535975,
+            "p(95)": 18.282854399999998,
+            "p(99)": 20.087843499999998,
+            "max": 20.106416,
+            "avg": 11.327604692307697,
+            "med": 10.856209,
+            "thresholds": {
+                "p(95)<800": false
+            }
+        },
+        "portal_sign_in_failures": {
+            "count": 0,
+            "rate": 0,
+            "thresholds": {
+                "count<1": false
+            }
+        },
+        "data_received": {
+            "count": 366992,
+            "rate": 4018.8690598956473
+        },
+        "http_req_duration": {
+            "med": 15.467584,
+            "p(90)": 28.053959,
+            "p(95)": 29.676833,
+            "p(99)": 30.788459,
+            "max": 47.482875,
+            "avg": 16.123462474103583,
+            "thresholds": {
+                "p(95)<800": false
+            }
+        },
+        "http_req_failed{flow:desk}": {
+            "passes": 0,
+            "fails": 39,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "checks": {
+            "passes": 250,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.99": false
+            },
+            "value": 1
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 251,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_reqs": {
+            "count": 251,
+            "rate": 2.748659736544141
+        },
+        "portal_sign_ins": {
+            "count": 5,
+            "rate": 0.054754178018807595
+        },
+        "http_req_failed{flow:portal}": {
+            "passes": 0,
+            "fails": 186,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "iteration_duration": {
+            "avg": 2379.400989518324,
+            "med": 2119.991084,
+            "p(90)": 3005.963751,
+            "p(95)": 5205.216794499999,
+            "p(99)": 7912.2489367,
+            "max": 8022.236963
+        },
+        "http_req_failed{flow:sign_in}": {
+            "passes": 0,
+            "fails": 25,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_req_connecting": {
+            "med": 0.232792,
+            "p(90)": 0.796959,
+            "p(95)": 0.9255834999999991,
+            "p(99)": 1.7064369999999993,
+            "max": 6.961375,
+            "avg": 0.41493709561752956
+        },
+        "http_req_tls_handshaking": {
+            "med": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0,
+            "max": 0,
+            "avg": 0
+        }
+    },
+    "setup_data": {},
+    "root_group": {
+            "name": "",
+            "path": "",
+            "id": "d41d8cd98f00b204e9800998ecf8427e",
+            "groups": {},
+            "checks": {
+                    "desk list loaded": {
+                        "name": "desk list loaded",
+                        "path": "::desk list loaded",
+                        "id": "f3d331f917ff23caf1c2ff160023fff6",
+                        "passes": 16,
+                        "fails": 0
+                    },
+                    "desk list counted": {
+                        "passes": 16,
+                        "fails": 0,
+                        "name": "desk list counted",
+                        "path": "::desk list counted",
+                        "id": "87e5d42fbb8b85bf07577d0aba9363a1"
+                    },
+                    "student number found": {
+                        "name": "student number found",
+                        "path": "::student number found",
+                        "id": "09c09e64fe8d37ebf62f0e56665c73cb",
+                        "passes": 5,
+                        "fails": 0
+                    },
+                    "sign-in code requested": {
+                        "id": "37c8554d4e7e3cdf8ac4c044e7cd8f48",
+                        "passes": 5,
+                        "fails": 0,
+                        "name": "sign-in code requested",
+                        "path": "::sign-in code requested"
+                    },
+                    "sign-in code accepted": {
+                        "passes": 5,
+                        "fails": 0,
+                        "name": "sign-in code accepted",
+                        "path": "::sign-in code accepted",
+                        "id": "e068cd747437733b3674fc71c1b9b3e9"
+                    },
+                    "CSRF token issued": {
+                        "name": "CSRF token issued",
+                        "path": "::CSRF token issued",
+                        "id": "b6f9c929ce9270bd048af8f30e796002",
+                        "passes": 5,
+                        "fails": 0
+                    },
+                    "portal session loaded": {
+                        "name": "portal session loaded",
+                        "path": "::portal session loaded",
+                        "id": "7f17b24dd6283716407a38f3adaba430",
+                        "passes": 5,
+                        "fails": 0
+                    },
+                    "menu answered 200": {
+                        "name": "menu answered 200",
+                        "path": "::menu answered 200",
+                        "id": "4d3233625168b417cfb3c45dbcd1ee23",
+                        "passes": 32,
+                        "fails": 0
+                    },
+                    "dashboard answered 200": {
+                        "passes": 69,
+                        "fails": 0,
+                        "name": "dashboard answered 200",
+                        "path": "::dashboard answered 200",
+                        "id": "d803b398177f136bf9dd789fe05077d4"
+                    },
+                    "fees answered 200": {
+                        "passes": 29,
+                        "fails": 0,
+                        "name": "fees answered 200",
+                        "path": "::fees answered 200",
+                        "id": "3beab80f89f4541078977e1a12a93a0f"
+                    },
+                    "desk form opened": {
+                        "name": "desk form opened",
+                        "path": "::desk form opened",
+                        "id": "a0f69179628d6eb40fec3f4f5c6caf4c",
+                        "passes": 7,
+                        "fails": 0
+                    },
+                    "notifications answered 200": {
+                        "name": "notifications answered 200",
+                        "path": "::notifications answered 200",
+                        "id": "bf4cf5c3ed50327800f7ebf37680ee7b",
+                        "passes": 18,
+                        "fails": 0
+                    },
+                    "portal page loaded": {
+                        "name": "portal page loaded",
+                        "path": "::portal page loaded",
+                        "id": "e8df96b9411593b67db7b441dab6594f",
+                        "passes": 11,
+                        "fails": 0
+                    },
+                    "session answered 200": {
+                        "name": "session answered 200",
+                        "path": "::session answered 200",
+                        "id": "1206e4825981c6c53f097fdeacbfa964",
+                        "passes": 11,
+                        "fails": 0
+                    },
+                    "leave list answered 200": {
+                        "name": "leave list answered 200",
+                        "path": "::leave list answered 200",
+                        "id": "be2f848c84d7f104eb999ac0a3994e82",
+                        "passes": 16,
+                        "fails": 0
+                    }
+                }
+        }
+}

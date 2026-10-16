@@ -1,0 +1,112 @@
+# External uptime monitor for HyFib Hostel360, on a separate small VM in OCI Mumbai
+# (ap-mumbai-1), so an outage of the Hyderabad region or of the application VM itself is
+# still seen and notified. See deploy/monitoring/README.md for the monitors to create.
+#
+#   cp .env.example .env && chmod 0600 .env      then set MONITOR_HOSTNAME and H360_INGEST_URL
+#   docker compose -f compose.yml up -d
+#   ssh -L 3001:127.0.0.1:3001 <monitor-vm>     then open http://localhost:3001
+#
+# Only the push endpoint (/api/push/...) is public, over HTTPS with an automatic
+# certificate: the Hostel360 application calls it every 5 minutes as a dead-man switch.
+#
+# ingest-relay sends the "Portal readiness" results to Hostel360 as uptime_external samples
+# (relay/h360-kuma-relay.py), so the monthly availability figure also counts outages of the
+# application VM or of the whole Hyderabad region. Its settings are in .env; it needs two
+# secret files, readable by root only:
+#   secrets/h360_ingest_secret   the Ingest Secret of Hostel360 > Ops Alert Settings
+#   secrets/kuma_api_key         an Uptime Kuma API key (Settings > API Keys)
+name: hostel360-uptime
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:2.5.6
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Kolkata
+    # Admin interface on loopback only: reach it through an SSH tunnel.
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    environment:
+      MONITOR_HOSTNAME: ${MONITOR_HOSTNAME:?set MONITOR_HOSTNAME to the monitor's DNS name}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    depends_on:
+      - uptime-kuma
+
+  ingest-relay:
+    image: python:3.13.16-slim
+    restart: unless-stopped
+    command: ["python3", "-I", "/opt/h360/h360-kuma-relay.py"]
+    environment:
+      TZ: Asia/Kolkata
+      H360_INGEST_URL: ${H360_INGEST_URL:?set H360_INGEST_URL in .env (https://<portal>/api/method/hostel360.api.ops.ingest)}
+      H360_INGEST_SECRET_FILE: /run/secrets/h360_ingest_secret
+      H360_RELAY_HOST: ${H360_RELAY_HOST:-uptime-kuma-mumbai}
+      KUMA_METRICS_URL: http://uptime-kuma:3001/metrics
+      KUMA_API_KEY_FILE: /run/secrets/kuma_api_key
+      KUMA_MONITOR: ${KUMA_MONITOR:-Portal readiness}
+      RELAY_INTERVAL_SECONDS: ${RELAY_INTERVAL_SECONDS:-60}
+      RELAY_BATCH: ${RELAY_BATCH:-5}
+      RELAY_SPOOL_DIR: /var/spool/h360-relay
+      RELAY_SPOOL_KEEP_DAYS: ${RELAY_SPOOL_KEEP_DAYS:-35}
+      RELAY_SPOOL_MAX_FILES: ${RELAY_SPOOL_MAX_FILES:-12000}
+    secrets:
+      - h360_ingest_secret
+      - kuma_api_key
+    volumes:
+      - ./relay/h360-kuma-relay.py:/opt/h360/h360-kuma-relay.py:ro
+      # Readings taken while the portal cannot be reached wait here (up to 35 days).
+      - relay-spool:/var/spool/h360-relay
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    depends_on:
+      - uptime-kuma
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+secrets:
+  h360_ingest_secret:
+    file: ./secrets/h360_ingest_secret
+  kuma_api_key:
+    file: ./secrets/kuma_api_key
+
+volumes:
+  uptime-kuma-data:
+  caddy-data:
+  caddy-config:
+  relay-spool:

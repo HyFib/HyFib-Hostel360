@@ -1,0 +1,185 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-15 12:00:00.000000",
+ "description": "Result of a backup run or a restore test, reported by the host agent.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "backup_type",
+  "status",
+  "host",
+  "column_break_main",
+  "started_at",
+  "finished_at",
+  "duration_seconds",
+  "repository_section",
+  "size_bytes",
+  "size_display",
+  "snapshot_id",
+  "column_break_repository",
+  "repository",
+  "source",
+  "message_section",
+  "message"
+ ],
+ "fields": [
+  {
+   "default": "BKP-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "no_copy": 1,
+   "options": "BKP-.YYYY.-.#####",
+   "print_hide": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "backup_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Backup Type",
+   "options": "Daily\nWeekly\nMonthly\nRestore Test\nSnapshot",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Success\nFailed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "host",
+   "fieldtype": "Data",
+   "label": "Host"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At"
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Finished At",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "duration_seconds",
+   "fieldtype": "Int",
+   "label": "Duration (Seconds)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "repository_section",
+   "fieldtype": "Section Break",
+   "label": "Repository"
+  },
+  {
+   "fieldname": "size_bytes",
+   "fieldtype": "Float",
+   "label": "Size (Bytes)",
+   "non_negative": 1,
+   "precision": "0"
+  },
+  {
+   "fieldname": "size_display",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Size",
+   "read_only": 1
+  },
+  {
+   "fieldname": "snapshot_id",
+   "fieldtype": "Data",
+   "label": "Snapshot ID"
+  },
+  {
+   "fieldname": "column_break_repository",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Where the backup is stored, e.g. the restic repository in OCI Object Storage (Mumbai).",
+   "fieldname": "repository",
+   "fieldtype": "Data",
+   "label": "Repository"
+  },
+  {
+   "default": "Host Agent",
+   "fieldname": "source",
+   "fieldtype": "Data",
+   "label": "Reported By"
+  },
+  {
+   "fieldname": "message_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Small Text",
+   "label": "Message"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-15 16:50:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hostel Operations",
+ "name": "Ops Backup Record",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HyFib Operations",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Hostel Administrator"
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Institution Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "backup_type",
+ "track_changes": 1
+}

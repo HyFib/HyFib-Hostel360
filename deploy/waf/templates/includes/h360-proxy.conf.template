@@ -1,0 +1,6 @@
+# Proxy to the Frappe frontend, for the portal host name only.
+if ($h360_host_ok = 0) {
+	return 421;
+}
+include includes/h360-proxy-headers.conf;
+proxy_pass http://h360_frontend;

@@ -1,0 +1,10 @@
+[Unit]
+Description=Delete Hostel360 ad-hoc volume backups past their retention
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/h360-snapshot --prune
+SyslogIdentifier=h360-snapshot
+TimeoutStartSec=30min
