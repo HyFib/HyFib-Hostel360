@@ -42,6 +42,10 @@ server {
 		return 403;
 	}
 
+	if ($h360_plain_http) {
+		return 301 https://$host$request_uri;
+	}
+
 	include includes/h360-security-headers.conf;
 
 	# Container health check (/healthz) and nginx status for the host agent

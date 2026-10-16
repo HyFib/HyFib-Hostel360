@@ -9,6 +9,7 @@
 # 403 seen here comes from the WAF. Checks:
 #
 #   - the portal's Content Security Policy lets the fees page post to PayU's checkout
+#   - visitors the edge received over plain HTTP are redirected to HTTPS
 #   - PayU's return post (the payer's browser) and webhook pass ModSecurity, including bank
 #     text the CRS would otherwise take for an attack (payu-return-failure.txt carries an
 #     issuer message as an HTML fragment, which the CRS blocks without the exclusion)
@@ -257,6 +258,19 @@ if [[ "${published}" == "8080/tcp 8443/tcp " ]]; then
 	pass "only 8080 and 8443 are published on the host"
 else
 	fail "only 8080 and 8443 are published on the host" "published: ${published}"
+fi
+
+response="$(client "${edge}" "${lb[@]}" -H "X-Forwarded-Proto: http" "http://waf:8080/hostel/fees?x=1")"
+if [[ "$(status_of "${response}")" == 301 && "$(header_of "${response}" Location)" == "https://${site}/hostel/fees?x=1" ]]; then
+	pass "visitors who came over plain HTTP are redirected to HTTPS"
+else
+	fail "visitors who came over plain HTTP are redirected to HTTPS" "status $(status_of "${response}"), Location: $(header_of "${response}" Location)"
+fi
+response="$(client "${edge}" "${lb[@]}" -H "X-Forwarded-Proto: https" "http://waf:8080/api/method/hostel360.api.health.liveness")"
+if [[ "$(status_of "${response}")" == 200 ]]; then
+	pass "HTTPS visitors and internal requests are served without a redirect"
+else
+	fail "HTTPS visitors and internal requests are served without a redirect" "status $(status_of "${response}")"
 fi
 
 response="$(client "${edge}" -H "Host: 203.0.113.10" "http://waf:8080/hostel")"

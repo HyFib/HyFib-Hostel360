@@ -21,6 +21,14 @@ access_log /var/log/nginx/access.log h360;
 error_log /var/log/nginx/error.log warn;
 
 # WebSocket upgrades pass through; other requests reuse keepalive connections upstream.
+# Visitors who reached the edge (the load balancer, or the demo's Cloudflare tunnel) over plain
+# HTTP are sent to HTTPS: the session cookies are Secure and would be dropped otherwise. Only the
+# trusted edge sets X-Forwarded-Proto; internal requests and health checks carry none.
+map $http_x_forwarded_proto $h360_plain_http {
+	default 0;
+	http 1;
+}
+
 map $http_upgrade $connection_upgrade {
 	default upgrade;
 	"" "";
