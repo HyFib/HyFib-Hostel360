@@ -47,11 +47,17 @@ sudo h360-restore restore --files <id> --files-only
 ```
 
 The tool shows the plan and asks for the site name; takes safety copies of the current state
-(local dump, `pre-restore` restic snapshot, volume backup); puts the site in maintenance
-mode and stops the application containers; loads the databases and synchronises the sites
-directory; recreates database users from `site_config.json`; starts the containers; runs
-`bench migrate` (the snapshot may predate the running release); turns maintenance off and
-runs a smoke check. A `restore.<host>` alert records that a restore happened.
+(local dump, `pre-restore` restic snapshot, volume backup); downloads the chosen snapshot(s) to
+a staging folder and checks them (the database dump must end with mariadb-dump's completion
+line) while the site is still running, so a damaged snapshot or an Object Storage failure stops
+the restore with nothing changed; then puts the site in maintenance mode and stops the
+application containers; loads the databases from the staged dump (if that load fails, the
+pre-restore copy is loaded back and the site stays in maintenance mode for checking) and only
+then synchronises the sites directory; recreates database users from `site_config.json`;
+starts the containers; runs `bench migrate` (the snapshot may predate the running release);
+turns maintenance off and runs a smoke check. A `restore.<host>` alert records that a restore
+happened. Every safety dump (pre-deploy and pre-restore) is accepted only when mariadb-dump
+finished and the archive is intact; `deploy/tests/host/backup-safety.sh` checks this behaviour.
 
 ### 3.2 Disaster recovery on a new server (VM or region lost)
 

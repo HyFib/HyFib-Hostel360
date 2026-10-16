@@ -229,8 +229,23 @@ h360_db_exec() {
 	docker exec -i "${mariadb}" sh -c 'MYSQL_PWD="$(cat /run/secrets/db_root_password)" exec mariadb --user=root "$@"' sh "$@"
 }
 
+h360_dump_is_complete() {
+	# h360_dump_is_complete <file.sql.gz>: the archive is intact and mariadb-dump finished.
+	# gzip happily closes a valid archive around truncated SQL, so the archive check alone
+	# proves nothing; mariadb-dump writes its "-- Dump completed" trailer only after the
+	# last object of the last database.
+	local file="$1" last
+	[[ -s "${file}" ]] || return 1
+	gzip -t "${file}" 2>/dev/null || return 1
+	last="$(gzip -dc "${file}" | tail -n 1)" || return 1
+	[[ "${last}" == "-- Dump completed"* ]]
+}
+
 h360_dump_databases() {
-	# h360_dump_databases <file.sql.gz>: consistent dump of every site database
+	# h360_dump_databases <file.sql.gz>: consistent dump of every site database.
+	# Callers run this inside a condition, which suspends errexit for the whole function,
+	# so every step is checked explicitly: a failed or cut-off dump is removed and reported,
+	# never accepted as a rollback point.
 	local file="$1" mariadb
 	local -a databases
 	mariadb="$(h360_container mariadb)"
@@ -238,17 +253,25 @@ h360_dump_databases() {
 	mapfile -t databases < <(h360_site_databases)
 	[[ "${#databases[@]}" -gt 0 ]] || return 1
 	# shellcheck disable=SC2016 # expanded by the shell inside the container
-	docker exec "${mariadb}" sh -c 'MYSQL_PWD="$(cat /run/secrets/db_root_password)" exec mariadb-dump --user=root \
+	if ! docker exec "${mariadb}" sh -c 'MYSQL_PWD="$(cat /run/secrets/db_root_password)" exec mariadb-dump --user=root \
 		--single-transaction --quick --routines --triggers --events --hex-blob --default-character-set=utf8mb4 \
-		--databases "$@"' sh "${databases[@]}" | gzip -6 >"${file}"
-	gzip -t "${file}"
+		--databases "$@"' sh "${databases[@]}" | gzip -6 >"${file}"; then
+		rm -f -- "${file}"
+		return 1
+	fi
+	if ! h360_dump_is_complete "${file}"; then
+		rm -f -- "${file}"
+		return 1
+	fi
 }
 
 h360_drop_site_databases() {
 	local db
 	while IFS= read -r db; do
 		[[ "${db}" =~ ^[A-Za-z0-9_]+$ ]] || continue
-		h360_db_exec -e "DROP DATABASE IF EXISTS \`${db}\`"
+		# docker exec -i would otherwise read the rest of this loop's input (the other
+		# database names) as SQL, and those databases would never be dropped.
+		h360_db_exec -e "DROP DATABASE IF EXISTS \`${db}\`" </dev/null
 	done < <(h360_site_databases)
 }
 

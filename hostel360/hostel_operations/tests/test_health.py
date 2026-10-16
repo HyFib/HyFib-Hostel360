@@ -140,6 +140,8 @@ class TestHealthChecks(IntegrationTestCase):
 
 	def test_failed_login_check(self):
 		configure_settings(failed_login_threshold=3)
+		# Activity Log copies the address of the web request; tests have none unless they set one.
+		frappe.local.request_ip = "127.0.0.1"
 		for _ in range(4):
 			log = frappe.get_doc(
 				{

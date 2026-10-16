@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Host script checks: h360-ingest (message_id, which answers are retried, spool limits and
 # the probe-sample exemption, lock contention), h360-uptime-probe (one alert per outage),
-# the worker queue guard of the image entrypoint, the Uptime Kuma ingest relay, and
-# h360-decommission against a stand-in server (decommission.sh).
+# the worker queue guard of the image entrypoint, the Uptime Kuma ingest relay,
+# h360-decommission against a stand-in server (decommission.sh), and the safety of the
+# database dump and of h360-restore (backup-safety.sh).
 #
 #   deploy/tests/host/run.sh        Docker with the image built from deploy/tests/Containerfile
 #
@@ -18,4 +19,5 @@ status=0
 docker run --rm -v "${deploy}:/work/deploy:ro" "${image}" bash /work/deploy/tests/host/checks.sh || status=1
 # h360-decommission deletes the server's files: a container of its own.
 docker run --rm -v "${deploy}:/work/deploy:ro" "${image}" bash /work/deploy/tests/host/decommission.sh || status=1
+docker run --rm -v "${deploy}:/work/deploy:ro" "${image}" bash /work/deploy/tests/host/backup-safety.sh || status=1
 exit "${status}"

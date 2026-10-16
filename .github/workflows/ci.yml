@@ -215,6 +215,10 @@ jobs:
           bench --site test_site set-config clamd_host ""
           bench --site test_site set-config host_name "http://test_site:8000"
           bench use test_site
+          # Print views and e-mails load the built asset manifest, and wkhtmltopdf fetches their
+          # stylesheets from host_name, so assets are built and the site name must resolve.
+          echo "127.0.0.1 test_site" | sudo tee -a /etc/hosts
+          bench build
 
       - name: Start background workers
         working-directory: ${{ env.BENCH_DIR }}

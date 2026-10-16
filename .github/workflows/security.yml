@@ -3,9 +3,13 @@
 # scripts (ShellCheck).
 #
 # Tool versions are pinned; container images by digest. Reviewed exceptions live in
-# .github/security/ with the reason for each. CodeQL needs GitHub code scanning (GitHub Code
-# Security on a private repository); set the repository variable ENABLE_CODEQL to "false"
-# where it is not available.
+# .github/security/ with the reason for each.
+#
+# CodeQL: this repository uses GitHub's default CodeQL setup (Settings > Code security), which
+# scans Python and JavaScript/TypeScript on every pull request. GitHub refuses results from a
+# second, workflow-based CodeQL analysis while default setup is on, so the job below only runs
+# when the repository variable ENABLE_CODEQL is "true" - set it after switching default setup
+# off if the pinned queries and path filters here are wanted instead.
 
 name: Security
 
@@ -43,7 +47,7 @@ env:
 jobs:
   codeql:
     name: CodeQL (${{ matrix.language }})
-    if: ${{ vars.ENABLE_CODEQL != 'false' }}
+    if: ${{ vars.ENABLE_CODEQL == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

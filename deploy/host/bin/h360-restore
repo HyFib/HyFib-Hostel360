@@ -13,10 +13,14 @@
 #   1. the plan is shown and must be confirmed by typing the site name
 #   2. safety copies of the CURRENT state: local dump, offsite restic snapshot tagged
 #      pre-restore and an OCI volume backup
-#   3. maintenance mode, application containers stopped (MariaDB and Redis keep running)
-#   4. site databases dropped and loaded from the snapshot; sites directory synchronised
-#      from the snapshot (uploaded files, site_config.json)
-#   5. database users re-created from site_config.json, containers started, bench migrate
+#   3. the snapshot(s) are downloaded to a staging folder and checked (the database dump
+#      must be complete) while the site keeps running: a damaged snapshot or an Object
+#      Storage failure stops here with nothing changed
+#   4. maintenance mode, application containers stopped (MariaDB and Redis keep running)
+#   5. site databases dropped and loaded from the staged dump (if loading fails, the
+#      pre-restore copy is loaded back and the site stays in maintenance mode); then the
+#      sites directory is synchronised from the staged files (uploads, site_config.json)
+#   6. database users re-created from site_config.json, containers started, bench migrate
 #      (the snapshot may predate the running release), maintenance off, smoke check
 set -Eeuo pipefail
 
@@ -34,7 +38,7 @@ snapshot_host="${host}"
 export RESTIC_CACHE_DIR="${RESTIC_CACHE_DIR:-/var/cache/restic}"
 
 usage() {
-	sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 latest_snapshot() {
@@ -138,11 +142,13 @@ confirm "${site}"
 
 ts="$(date +%Y%m%d-%H%M%S)"
 safety_dir="${data_dir}/backups/pre-restore"
+safety_dump=""
 mkdir -p "${safety_dir}"
 chmod 0700 "${safety_dir}"
 if [[ -n "$(h360_site_databases)" && -n "$(h360_container mariadb)" ]]; then
-	log_info "saving the current database to ${safety_dir}/${ts}.sql.gz"
-	h360_dump_databases "${safety_dir}/${ts}.sql.gz" || die "could not save the current database; nothing was changed"
+	safety_dump="${safety_dir}/${ts}.sql.gz"
+	log_info "saving the current database to ${safety_dump}"
+	h360_dump_databases "${safety_dump}" || die "could not save the current database; nothing was changed"
 	H360_BACKUP_LOCK_HELD=1 /usr/local/sbin/h360-backup --db-only --tag pre-restore ||
 		log_warn "offsite pre-restore backup failed; the local copy is in ${safety_dir}"
 fi
@@ -150,32 +156,74 @@ if [[ -n "${H360_BLOCK_VOLUME_ID:-}" ]]; then
 	/usr/local/sbin/h360-snapshot --reason pre-restore >/dev/null || log_warn "volume backup failed"
 fi
 
-# --------------------------------------------------------------------------- 3. stop the application
+# --------------------------------------------------------------------------- 3. stage the snapshot
+# Everything is read from the repository and checked before anything live is touched.
+
+staging="${data_dir}/restore-staging/${ts}"
+mkdir -p "${staging}"
+chmod 0700 "${staging}"
+
+abort_staging() {
+	rm -rf -- "${staging}"
+	die "$1; nothing was changed"
+}
+
+staged_sql=""
+if [[ "${restore_db}" == 1 ]]; then
+	staged_sql="${staging}/hostel360-databases.sql.gz"
+	log_info "downloading database snapshot ${db_snapshot}"
+	if ! restic dump "${db_snapshot}" /hostel360-databases.sql | gzip -1 >"${staged_sql}"; then
+		abort_staging "could not read database snapshot ${db_snapshot}"
+	fi
+	h360_dump_is_complete "${staged_sql}" ||
+		abort_staging "database snapshot ${db_snapshot} is incomplete or damaged"
+fi
+
+staged_sites=""
+if [[ "${restore_files}" == 1 ]]; then
+	log_info "downloading files of snapshot ${files_snapshot}"
+	restic restore "${files_snapshot}" --target "${staging}/files" --include "${data_dir}/sites" ||
+		abort_staging "could not read file snapshot ${files_snapshot}"
+	staged_sites="${staging}/files${data_dir}/sites"
+	[[ -d "${staged_sites}" ]] || abort_staging "snapshot ${files_snapshot} contains no sites directory"
+fi
+
+# --------------------------------------------------------------------------- 4. stop the application
 
 h360_maintenance "${site}" on
 log_info "stopping application containers"
 h360_compose stop waf frontend backend websocket scheduler queue-short queue-long >/dev/null
 
-# --------------------------------------------------------------------------- 4. restore
+# --------------------------------------------------------------------------- 5. restore
+# The database goes first: if it cannot be loaded, the previous database is put back and the
+# sites directory has not been touched, so the server is left in its pre-restore state.
+
+if [[ "${restore_db}" == 1 ]]; then
+	log_info "loading databases of snapshot ${db_snapshot}"
+	h360_drop_site_databases
+	if ! gzip -dc "${staged_sql}" | h360_db_exec; then
+		log_error "loading database snapshot ${db_snapshot} failed; the staged dump is kept in ${staged_sql}"
+		if [[ -n "${safety_dump}" ]]; then
+			log_info "loading the pre-restore copy ${safety_dump} back"
+			h360_drop_site_databases
+			gzip -dc "${safety_dump}" | h360_db_exec ||
+				die "loading the pre-restore copy also failed; load ${safety_dump} by hand; the site stays in maintenance mode"
+			h360_compose up -d --remove-orphans >/dev/null || true
+			die "restore failed; the previous database is back and the site stays in maintenance mode until it has been checked"
+		fi
+		die "restore failed and there was no previous database to put back; the site stays in maintenance mode"
+	fi
+fi
 
 if [[ "${restore_files}" == 1 ]]; then
-	staging="${data_dir}/restore-staging/${ts}"
-	mkdir -p "${staging}"
-	log_info "restoring files of snapshot ${files_snapshot}"
-	restic restore "${files_snapshot}" --target "${staging}" --include "${data_dir}/sites"
-	[[ -d "${staging}${data_dir}/sites" ]] || die "snapshot ${files_snapshot} contains no sites directory"
-	rsync -a --delete --exclude /assets "${staging}${data_dir}/sites/" "${data_dir}/sites/"
-	rm -rf -- "${staging}"
+	log_info "synchronising the sites directory from snapshot ${files_snapshot}"
+	rsync -a --delete --exclude /assets "${staged_sites}/" "${data_dir}/sites/"
 	log_notice "sites directory restored; /etc/hostel360 from the snapshot is not applied automatically (restic restore ${files_snapshot} --include ${H360_CONFIG_DIR})"
 fi
 
-if [[ "${restore_db}" == 1 ]]; then
-	log_info "restoring databases of snapshot ${db_snapshot}"
-	h360_drop_site_databases
-	restic dump "${db_snapshot}" /hostel360-databases.sql | h360_db_exec
-fi
+rm -rf -- "${staging}"
 
-# --------------------------------------------------------------------------- 5. users, start, migrate
+# --------------------------------------------------------------------------- 6. users, start, migrate
 
 for config in "${data_dir}"/sites/*/site_config.json; do
 	[[ -f "${config}" ]] || continue
@@ -207,5 +255,5 @@ summary="Restored ${site} from"
 [[ "${restore_db}" == 1 ]] && summary="${summary} database ${db_snapshot}"
 [[ "${restore_files}" == 1 ]] && summary="${summary} files ${files_snapshot}"
 h360_alert "restore.${host}" Warning Backup "Data restored on ${host}" \
-	"${summary}. Previous state saved in ${safety_dir}/${ts}.sql.gz and tagged pre-restore."
+	"${summary}. Previous state saved in ${safety_dump:-${safety_dir}} and tagged pre-restore."
 h360_resolve "restore.${host}" "${summary}."

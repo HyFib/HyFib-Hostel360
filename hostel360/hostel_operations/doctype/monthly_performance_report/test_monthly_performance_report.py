@@ -171,6 +171,8 @@ class TestMonthlyPerformanceReport(IntegrationTestCase):
 					"roles": [{"role": "Hostel Student"}],
 				}
 			).insert(ignore_permissions=True)
+		# Activity Log copies the address of the web request; tests have none unless they set one.
+		frappe.local.request_ip = "127.0.0.1"
 		for user in (PORTAL_USER, "Administrator"):
 			log = frappe.get_doc(
 				{
