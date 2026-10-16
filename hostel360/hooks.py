@@ -140,6 +140,11 @@ override_whitelisted_methods = {
 # Portal users may only upload through hostel360.api.portal.upload_attachment
 before_request = ["hostel360.security.files.block_portal_generic_upload"]
 
+# Job Events
+# ----------
+# A demonstration site's jobs wait while its nightly reset loads the snapshot (demo mode only)
+before_job = ["hostel360.demo.refuse_jobs_while_restoring"]
+
 # Document Events
 # ---------------
 

@@ -6,14 +6,25 @@ versions and the demo keys of site_config.json. ``restore_snapshot`` puts all of
 the dump is loaded with the site's own database user (every table is dropped and created
 again), uploaded files are replaced by the snapshot's, and nothing a visitor added survives.
 
-The folder sits outside ``private/files``, so it is never served and never included in
-the snapshot itself. Files are written next to their final names and renamed into place,
-so a snapshot that fails half-way leaves the previous one intact.
+Each snapshot is a generation: a folder ``g-<time>-<random>`` holding the dump, the two file
+archives and the manifest, and the file ``current`` names the generation in use. A new
+generation is written and flushed to disk completely before ``current`` is switched to it
+with one rename, and older generations are removed only after that, so a snapshot that fails
+or is killed at any point leaves the previous one whole. A ``current`` that names nothing
+usable is refused, never read as "no snapshot": h360-demo-site would then snapshot whatever
+visitors left on the site. Snapshots from earlier releases (the same four files directly in
+the folder) are still read and restored; the first generation written replaces them.
+
+The folder sits outside ``private/files``, so it is never served and never included in the
+snapshot itself.
 """
 
+import contextlib
 import hashlib
 import json
 import os
+import re
+import secrets
 import shutil
 import tarfile
 
@@ -24,7 +35,11 @@ from frappe.utils import cstr, now_datetime
 MANIFEST = "manifest.json"
 DATABASE = "database.sql.gz"
 FILE_ARCHIVES = {"public": "public-files.tar.gz", "private": "private-files.tar.gz"}
-MANIFEST_VERSION = 1
+SNAPSHOT_FILES = (DATABASE, *FILE_ARCHIVES.values())
+MANIFEST_VERSION = 2
+POINTER = "current"
+# Shell-safe on purpose: Frappe puts the dump's path into shell commands without quoting it.
+GENERATION = re.compile(r"g-\d{8}T\d{6}-[0-9a-f]{8}")
 
 
 class SnapshotError(frappe.ValidationError):
@@ -35,22 +50,98 @@ def snapshot_dir() -> str:
 	return os.path.abspath(frappe.get_site_path("private", "demo"))
 
 
-def read_manifest() -> dict | None:
-	path = os.path.join(snapshot_dir(), MANIFEST)
-	if not os.path.isfile(path):
+def damaged(root: str) -> SnapshotError:
+	return SnapshotError(
+		_(
+			"The demonstration snapshot in {0} is damaged or incomplete, so nothing was restored and the "
+			"site was left as it is. Put the folder back from a backup of the demo host, or start the "
+			"demonstration over on a new site (deploy/demo/README.md, Start over)."
+		).format(root)
+	)
+
+
+def _pointer_name(root: str) -> str | None:
+	"""The generation ``current`` names, as written (None when there is no pointer)."""
+	try:
+		with open(os.path.join(root, POINTER), encoding="utf-8") as f:
+			return f.read().strip()
+	except FileNotFoundError:
 		return None
-	with open(path, encoding="utf-8") as f:
-		manifest = json.load(f)
-	return manifest if isinstance(manifest, dict) and manifest.get("taken_at") else None
+	except (OSError, ValueError) as e:
+		raise damaged(root) from e
+
+
+def generation_folder(root: str, name: str | None) -> str:
+	"""The folder of generation ``name``, which must exist and hold a manifest."""
+	folder = os.path.join(root, name or "")
+	if not GENERATION.fullmatch(name or "") or not os.path.isfile(os.path.join(folder, MANIFEST)):
+		raise damaged(root)
+	return folder
+
+
+def current_folder() -> str | None:
+	"""The folder of the snapshot in use, or None when the site has never had one."""
+	root = snapshot_dir()
+	name = _pointer_name(root)
+	if name is None:
+		# A snapshot from an earlier release keeps its files in the folder itself.
+		return root if os.path.isfile(os.path.join(root, MANIFEST)) else None
+	return generation_folder(root, name)
+
+
+def read_manifest() -> dict | None:
+	"""The manifest of the snapshot in use; None only when there is no snapshot at all."""
+	folder = current_folder()
+	if folder is None:
+		return None
+	root = snapshot_dir()
+	try:
+		with open(os.path.join(folder, MANIFEST), encoding="utf-8") as f:
+			manifest = json.load(f)
+	except ValueError as e:
+		raise damaged(root) from e
+	if not isinstance(manifest, dict) or not manifest.get("taken_at"):
+		raise damaged(root)
+	# Which folder the restore reads, decided once: a snapshot taken meanwhile cannot change it.
+	manifest["generation"] = None if folder == root else os.path.basename(folder)
+	return manifest
+
+
+def manifest_folder(manifest: dict) -> str:
+	root = snapshot_dir()
+	name = manifest.get("generation")
+	if not name:
+		if not os.path.isfile(os.path.join(root, MANIFEST)):
+			raise damaged(root)
+		return root
+	return generation_folder(root, name)
+
+
+def verify_snapshot(manifest: dict) -> str:
+	"""Check every file of the snapshot against its manifest; returns the snapshot's folder."""
+	folder = manifest_folder(manifest)
+	files = manifest.get("files") or {}
+	for name in SNAPSHOT_FILES:
+		path = os.path.join(folder, name)
+		info = files.get(name) or {}
+		if not info.get("sha256") or not os.path.isfile(path) or _sha256(path) != info["sha256"]:
+			raise SnapshotError(
+				_(
+					"The demonstration snapshot file {0} in {1} is missing or damaged; nothing was restored. "
+					"Put the folder back from a backup of the demo host, or start the demonstration over on "
+					"a new site (deploy/demo/README.md, Start over)."
+				).format(name, folder)
+			)
+	return folder
 
 
 def app_versions() -> dict:
-	"""Installed apps with their version and a fingerprint of their schema and patches.
+	"""Installed apps with their version and a fingerprint of what ``bench migrate`` applies.
 
-	A restore into code whose schema differs from the snapshot's needs a migrate. The
-	version alone does not tell (production images drop git metadata, and a release can
-	change a DocType without changing the version), so the fingerprint covers every DocType
-	definition's ``modified`` stamp and the patch list.
+	A restore into code that differs from the snapshot's needs a migrate. The version alone
+	does not tell (production images drop git metadata, and a release can change a DocType or
+	a workspace without changing the version), so the fingerprint covers the files a migrate
+	reads (see ``sync_fingerprint``).
 	"""
 	versions = {}
 	for app in frappe.get_installed_apps():
@@ -58,28 +149,37 @@ def app_versions() -> dict:
 			version = cstr(frappe.get_attr(f"{app}.__version__"))
 		except Exception:
 			version = ""
-		versions[app] = f"{version} {schema_fingerprint(app)}".strip()
+		versions[app] = f"{version} {sync_fingerprint(app)}".strip()
 	return versions
 
 
-def schema_fingerprint(app: str) -> str:
+# Besides every JSON record, the files whose changes a migrate applies to the database:
+# modules (Module Def rows), patches, and hooks (scheduled jobs, fixtures, roles).
+SYNCED_FILES = ("modules.txt", "patches.txt", "hooks.py")
+SKIPPED_FOLDERS = ("node_modules", "public", "__pycache__", "locale")
+
+
+def sync_fingerprint(app: str) -> str:
+	"""A digest of every file whose change ``bench migrate`` would carry into the database.
+
+	Migrate imports far more than DocTypes: workspaces, sidebars, the dock, desktop icons,
+	number cards, charts, reports, pages, print formats and onboarding are all JSON records
+	in the app, and modules come from modules.txt. Restoring a snapshot taken before such a
+	change brings the old records back, so a change to any of them must be seen here, or the
+	demonstration keeps showing the old desk after every reset. The content is hashed, not
+	the ``modified`` stamps, so an edit that forgot to touch its stamp still counts.
+	"""
 	digest = hashlib.sha256()
 	root = frappe.get_app_path(app)
 	for folder, subfolders, files in os.walk(root):
-		subfolders[:] = sorted(d for d in subfolders if d not in ("node_modules", "public", "__pycache__"))
+		subfolders[:] = sorted(d for d in subfolders if d not in SKIPPED_FOLDERS)
 		for name in sorted(files):
+			if not (name.endswith(".json") or name in SYNCED_FILES):
+				continue
 			path = os.path.join(folder, name)
-			if name == "patches.txt":
-				with open(path, "rb") as f:
-					digest.update(f.read())
-			elif name.endswith(".json") and os.path.basename(folder) + ".json" == name and "doctype" in path:
-				try:
-					with open(path, encoding="utf-8") as f:
-						definition = json.load(f)
-				except ValueError:
-					continue
-				if isinstance(definition, dict) and definition.get("doctype") == "DocType":
-					digest.update(f"{definition.get('name')}|{definition.get('modified')}\n".encode())
+			digest.update(os.path.relpath(path, root).encode() + b"\0")
+			with open(path, "rb") as f:
+				digest.update(hashlib.sha256(f.read()).digest())
 	return digest.hexdigest()[:16]
 
 
@@ -87,15 +187,20 @@ def take_snapshot(config: dict) -> dict:
 	"""Snapshot the site as it is now. ``config`` is the demo keys to re-apply after a restore."""
 	from frappe.utils.backups import BackupGenerator
 
-	folder = snapshot_dir()
-	os.makedirs(folder, mode=0o700, exist_ok=True)
-	os.chmod(folder, 0o700)
+	root = snapshot_dir()
+	os.makedirs(root, mode=0o700, exist_ok=True)
+	os.chmod(root, 0o700)
+	# Refuses a damaged pointer before anything is deleted; then clears what a failed or
+	# killed snapshot left behind.
+	in_use = current_folder()
+	_remove_unused(root, keep=in_use, legacy=False)
 	frappe.db.commit()  # nosemgrep: the dump must see everything prepared so far
 
-	partial = {name: os.path.join(folder, f".{name}.partial") for name in (DATABASE, *FILE_ARCHIVES.values())}
-	for path in partial.values():
-		if os.path.exists(path):
-			os.remove(path)
+	name = f"g-{now_datetime():%Y%m%dT%H%M%S}-{secrets.token_hex(4)}"
+	folder = os.path.join(root, name)
+	os.mkdir(folder, 0o700)
+	paths = {file_name: os.path.join(folder, file_name) for file_name in SNAPSHOT_FILES}
+	switched = False
 	try:
 		dump = BackupGenerator(
 			frappe.conf.db_name,
@@ -105,33 +210,46 @@ def take_snapshot(config: dict) -> dict:
 			db_host=frappe.conf.db_host,
 			db_port=frappe.conf.db_port,
 			db_type=frappe.conf.db_type,
-			backup_path_db=partial[DATABASE],
+			backup_path_db=paths[DATABASE],
 			ignore_conf=True,
 		)
 		dump.take_dump()
 		for folder_name, archive in FILE_ARCHIVES.items():
-			_archive_files(folder_name, partial[archive])
+			_archive_files(folder_name, paths[archive])
+		for path in paths.values():
+			# The dump holds password hashes and the demo keys: for the site's own user only.
+			os.chmod(path, 0o600)
+			_flush(path)
 
 		manifest = {
 			"version": MANIFEST_VERSION,
 			"site": frappe.local.site,
+			"generation": name,
 			"taken_at": str(now_datetime()),
 			"apps": app_versions(),
 			"config": config,
 			"files": {
-				name: {"bytes": os.path.getsize(partial[name]), "sha256": _sha256(partial[name])}
-				for name in partial
+				file_name: {"bytes": os.path.getsize(path), "sha256": _sha256(path)}
+				for file_name, path in paths.items()
 			},
 		}
-		for name, path in partial.items():
-			# The dump holds password hashes and the demo keys: for the site's own user only.
-			os.chmod(path, 0o600)
-			os.replace(path, os.path.join(folder, name))
-		_write_json(os.path.join(folder, MANIFEST), manifest)
+		_write_file(
+			os.path.join(folder, MANIFEST), json.dumps(manifest, indent=1, sort_keys=True, default=str)
+		)
+		_flush(folder)
+		# The switch: one rename. Until it happens the previous snapshot is the one in use.
+		_write_file(os.path.join(root, POINTER), f"{name}\n")
+		switched = True
 	finally:
-		for path in partial.values():
-			if os.path.exists(path):
-				os.remove(path)
+		if not switched and _raw_pointer(root) != name:
+			shutil.rmtree(folder, ignore_errors=True)
+	try:
+		_flush(root)
+	except OSError:
+		# The new generation is already the one in use; only how durably that is recorded is
+		# in doubt, and the next snapshot flushes the folder again.
+		frappe.logger("hostel360").warning("Demonstration snapshot: could not flush %s", root, exc_info=True)
+	_remove_unused(root, keep=folder, legacy=True)
 	return manifest
 
 
@@ -141,15 +259,7 @@ def restore_snapshot(manifest: dict) -> None:
 
 	if frappe.conf.db_type not in (None, "", "mariadb"):
 		raise SnapshotError(_("Demonstration snapshots need a MariaDB site."))
-	folder = snapshot_dir()
-	for name, info in (manifest.get("files") or {}).items():
-		path = os.path.join(folder, name)
-		if not os.path.isfile(path) or _sha256(path) != info.get("sha256"):
-			raise SnapshotError(
-				_(
-					"The demonstration snapshot file {0} is missing or damaged. Run h360-demo-site again."
-				).format(name)
-			)
+	folder = verify_snapshot(manifest)
 
 	# Release this connection's table locks first: loading the dump drops and creates every
 	# table, and would wait behind them.
@@ -160,6 +270,27 @@ def restore_snapshot(manifest: dict) -> None:
 
 	for folder_name, archive in FILE_ARCHIVES.items():
 		_restore_files(folder_name, os.path.join(folder, archive))
+
+
+def _raw_pointer(root: str) -> str | None:
+	"""``current`` as written, without judging it (used while cleaning up after an error)."""
+	try:
+		return _pointer_name(root)
+	except SnapshotError:
+		return None
+
+
+def _remove_unused(root: str, keep: str | None, legacy: bool) -> None:
+	"""Delete generations other than ``keep``, temporary files and, with ``legacy``, the files a
+	snapshot from an earlier release kept directly in the folder."""
+	for entry in os.scandir(root):
+		if entry.name.endswith(".partial") and entry.is_file(follow_symlinks=False):
+			os.remove(entry.path)
+		elif GENERATION.fullmatch(entry.name) and entry.is_dir(follow_symlinks=False):
+			if entry.path != keep:
+				shutil.rmtree(entry.path)
+		elif legacy and keep != root and entry.name in (MANIFEST, *SNAPSHOT_FILES):
+			os.remove(entry.path)
 
 
 def _archive_files(folder_name: str, target: str) -> None:
@@ -200,9 +331,27 @@ def _sha256(path: str) -> str:
 	return digest.hexdigest()
 
 
-def _write_json(path: str, value: dict) -> None:
+def _flush(path: str) -> None:
+	"""fsync a file or a folder, so a rename that follows cannot land before the data does."""
+	fd = os.open(path, os.O_RDONLY)
+	try:
+		os.fsync(fd)
+	finally:
+		os.close(fd)
+
+
+def _write_file(path: str, text: str) -> None:
+	"""Write ``path`` whole or not at all: a flushed temporary file renamed over it."""
 	temporary = f"{path}.partial"
-	with open(temporary, "w", encoding="utf-8") as f:
-		json.dump(value, f, indent=1, sort_keys=True, default=str)
-	os.chmod(temporary, 0o600)
-	os.replace(temporary, path)
+	fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+	try:
+		with os.fdopen(fd, "w", encoding="utf-8") as f:
+			f.write(text)
+			f.flush()
+			os.fsync(f.fileno())
+		os.chmod(temporary, 0o600)
+		os.replace(temporary, path)
+	except BaseException:
+		with contextlib.suppress(OSError):
+			os.remove(temporary)
+		raise

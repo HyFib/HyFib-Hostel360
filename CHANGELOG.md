@@ -43,6 +43,18 @@ All notable changes to HyFib Hostel360. The format follows
   with, at set-up and on every migrate.
 - Security staff signed in to an empty desk: Hostel360 is now on their apps screen and opens
   on the *Gate* workspace.
+- Demonstration site: only a new site can become a demonstration (`h360-demo-site` used to
+  accept any site without non-`UAT` students or non-demo staff, so a real guardian or payment
+  could be published); the site's origin is recorded, and a demonstration whose snapshot is
+  lost is never re-snapshotted from what visitors left on it.
+- Demonstration reset: background jobs no longer run while the snapshot loads (Frappe's workers
+  ignore maintenance mode); the site's jobs are refused, drained and, after three minutes,
+  stopped, and their document locks cleared. A reset or preparation that is interrupted leaves
+  the site as it found it.
+- Demonstration snapshot: each snapshot is a generation switched in with one rename, so a
+  snapshot that fails or is killed leaves the previous one whole, and a damaged one is refused
+  before the site is touched. A restore into code whose workspaces, dock or modules changed now
+  migrates (only DocType changes did before, so the desk changes above did not reach the demo).
 
 ## [1.0.0] — 2026-10-16
 

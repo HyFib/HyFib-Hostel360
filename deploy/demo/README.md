@@ -268,7 +268,8 @@ its buffer pool and gunicorn towards about 250 MB per worker as the demo is used
 | Cloudflare 502 / 504 | The tunnel runs but the WAF does not answer: `deploy/demo/compose.sh ps`, `logs waf` |
 | `421 Misdirected Request` | A host name other than `SITE_NAME` reached the WAF; the tunnel's `hostname` and `SITE_NAME` must match (both come from `demo.env`) |
 | `403` from the WAF | A CRS rule matched: `~/hostel360-demo/data/logs/waf/error.log` names it |
-| `demo-guard` exited 1 | The site is not in demo mode: run `deploy/demo/up.sh` (it runs `h360-demo-site`) |
+| `demo-guard` exited 1 | The site is not in demo mode: run `deploy/demo/up.sh` (it runs `h360-demo-site`). That only works on a site that is still a fresh install: once it holds anything else (a user, an upload, records), `h360-demo-site` refuses it and lists what it found; then see Start over |
+| `h360-demo-site` refuses the site | It is not a new site (the list says what it holds), or its golden snapshot is missing or damaged: put `sites/SITE/private/demo` back from a backup, or see Start over |
 | Tunnel unhealthy | `deploy/demo/compose.sh logs tunnel`; the credentials file in `config/runtime.env` must exist; `cloudflared tunnel info hostel360-demo` |
 | ClamAV not ready | freshclam is slow on a poor connection: `deploy/demo/compose.sh logs clamav`, then `up.sh --no-build` again |
 | `port … already in use` | Another project took 18080 or 18443: set `WAF_HTTP_PORT` / `WAF_HTTPS_PORT` in `demo.env` |

@@ -92,11 +92,20 @@ On a new site with Hostel360 installed, in this order:
    and accounts into `site_config.json`, signs everybody out and takes the golden snapshot;
 6. prints the sign-ins.
 
-It refuses a site that holds students whose register numbers do not start with `UAT`, or staff
-records outside `@demo.invalid`: an open demonstration must never be made from real data. Running
-it again is safe: it first restores the last snapshot (so nothing a visitor changed ends up in the
-new one), tops up whatever is missing, and takes a new snapshot. Exit code 2 means some demo
-records could not be created; they are listed.
+An open demonstration must never be made from real data, and that cannot be judged from the
+records themselves (a register number or an e-mail address only follows a convention). So only a
+**new site** is accepted the first time: one that holds nothing but what installing Hostel360
+creates (the fee heads, mess items, room facilities, message templates and academic year), no
+user but Administrator and Guest, no uploaded files and no other app. Anything else is refused
+with a list of what was found. The command then records `hostel360_demo_origin` with demo mode,
+and a later run trusts a site that carries both. A demonstration prepared by an earlier release
+(demo mode and a snapshot) is accepted once and recorded.
+
+Running it again is safe: with the site closed to visitors (maintenance mode, background jobs
+drained as in the reset below), it first restores the last snapshot (so nothing a visitor changed
+ends up in the new one), tops up whatever is missing, and takes a new snapshot. If it fails once
+the restore has begun, the site stays closed until a run of `h360-demo-site` or `h360-demo-reset`
+succeeds. Exit code 2 means some demo records could not be created; they are listed.
 
 ## 3. The nightly reset
 
@@ -104,26 +113,37 @@ records could not be created; they are listed.
 bench --site hostel360.hyfib.com h360-demo-reset
 ```
 
-1. Refuses unless the site is in demonstration mode and has a snapshot.
+1. Refuses unless the site is in demonstration mode and has a snapshot, and checks every file of
+   the snapshot against its manifest; a damaged snapshot leaves yesterday's demonstration running.
 2. Puts the site into maintenance mode and waits 65 seconds, so every web worker and the
    scheduler have seen it (they read `site_config.json` at most a minute late).
-3. Loads the snapshot's database with the site's own database user (every table is dropped and
-   created again) and replaces the uploaded files with the snapshot's.
-4. Writes the demo keys back into `site_config.json` from the snapshot.
-5. If the code changed since the snapshot (app versions, DocType definitions, patch lists), runs
+3. Drains the site's background jobs: Frappe's workers keep running jobs in maintenance mode, so
+   `hostel360_demo_restoring` makes them refuse this site's jobs (a `before_job` hook that writes
+   nothing), queued jobs are dropped, and running ones (a visitor's student import or mess bill
+   run) are waited for up to 3 minutes, then stopped. If one will not stop within another minute,
+   nothing is restored and the site is left as it was found (opened again, or still closed if an
+   earlier failed run had left it closed).
+4. Loads the snapshot's database with the site's own database user (every table is dropped and
+   created again) and replaces the uploaded files with the snapshot's; drops anything queued
+   meanwhile and clears every document lock (they belong to the data before the restore).
+5. Writes the demo keys back into `site_config.json` from the snapshot.
+6. If the code changed since the snapshot (app versions and every file a migrate applies: DocTypes,
+   workspaces, sidebars, the dock, number cards, reports, pages, modules, patches and hooks), runs
    `bench migrate` and, once the reset has finished, takes a new snapshot.
-6. Moves every date and time forward by the time since the snapshot: date-times by the exact
+7. Moves every date and time forward by the time since the snapshot: date-times by the exact
    interval, dates by calendar days, in all Hostel360 records and their comments, versions,
    notifications and to-dos. What was "this afternoon" or "due next week" stays so.
-7. Adds what belongs to the calendar rather than to "now": this week's and next week's menus,
+8. Adds what belongs to the calendar rather than to "now": this week's and next week's menus,
    last month's mess bills (computed and published like the mess office does) and Monthly
    Performance Report, this month's feedback.
-8. Signs everybody out and forgets sign-in counters, locks and provider breakers, then ends
+9. Signs everybody out and forgets sign-in counters, locks and provider breakers, then ends
    maintenance mode.
 
-It takes a little over a minute for the default data set. If it fails after the restore has
-started, the site stays in maintenance mode (a half-restored site is never served) and the error
-is in the bench logs; run the reset again. In the demo stack the `demo-reset` service runs it at
+It takes a little over a minute for the default data set. If it fails while loading, migrating,
+re-dating or refreshing the calendar, the site stays in maintenance mode (a half-restored site is
+never served) and the error is in the bench logs; run the reset again. If only the new snapshot
+after a migrate fails, the restored site is opened as usual, the previous golden snapshot stays
+in use, and the next reset migrates again. In the demo stack the `demo-reset` service runs it at
 02:30 IST.
 
 A menu belongs to a week and a mess bill to a month, so those are never moved; the academic year
@@ -138,12 +158,22 @@ is not moved either. Re-run `h360-demo-site` at the start of a new academic year
 | `hostel360_demo_otp` | `h360-demo-site` (kept if set) | The portal demonstration code, 4 to 8 digits; default `246810` |
 | `hostel360_demo_users` | `h360-demo-site` | The accounts locked against changes (section 5) |
 | `hostel360_demo_accounts` | `h360-demo-site` | What `/demo` and the sign-in helper list |
+| `hostel360_demo_origin` | `h360-demo-site` | How the site became a demonstration (`new site`, or `earlier release`); see section 2 |
 | `mute_emails` | `h360-demo-site` | Frappe's own switch: no e-mail leaves the site |
+| `hostel360_demo_snapshot_taken` | `h360-demo-site` | When the demonstration first had a golden snapshot; with it set, a lost snapshot is never replaced by one of the site as visitors left it |
+| `hostel360_demo_restoring` | `h360-demo-site`, `h360-demo-reset` | From closing the site until the snapshot is loaded (and after a failed load, until a run succeeds): together with `maintenance_mode`, the site's background jobs refuse to start |
 
-The golden snapshot is in `sites/<site>/private/demo/` (folder `0700`, files `0600`):
-`database.sql.gz`, `public-files.tar.gz`, `private-files.tar.gz` and `manifest.json` (when it was
-taken, the app versions and schema fingerprints, the demo keys, the sizes and SHA-256 of the
-files). It is outside `private/files`, so it is never served and never part of itself.
+The golden snapshot is in `sites/<site>/private/demo/` (folders `0700`, files `0600`). Each
+snapshot is a generation folder `g-<time>-<random>/` holding `database.sql.gz`,
+`public-files.tar.gz`, `private-files.tar.gz` and `manifest.json` (when it was taken, the app
+versions and fingerprints, the demo keys, the sizes and SHA-256 of the files), and the file
+`current` names the one in use. A new generation is complete and flushed to disk before `current`
+is switched to it with one rename, so a snapshot that fails or is killed leaves the previous one
+whole; older generations are removed after the switch. A `current` that names nothing usable is
+refused rather than taken for "no snapshot". A snapshot from an earlier release (the four files
+directly in `private/demo/`) is still restored, and replaced by the first new generation. After
+rolling the demo back to an image from before generations, remove `current` and the `g-*` folders
+by hand. The folder is outside `private/files`, so it is never served and never part of itself.
 
 ## 5. Safety guarantees
 
