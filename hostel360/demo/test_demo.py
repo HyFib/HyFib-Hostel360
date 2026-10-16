@@ -798,7 +798,8 @@ class TestSnapshotGenerations(SnapshotSandbox):
 		import stat
 
 		snapshot = self.snapshot
-		os.chmod(self.root, 0o755)  # noqa: S103 - a loose mode that take_snapshot must tighten
+		# Looser than the snapshot folder may be (group may read): take_snapshot must tighten it.
+		os.chmod(self.root, 0o740)
 		name = self.take()["generation"]
 		self.assertRegex(name, snapshot.GENERATION)
 		mode = lambda path: stat.S_IMODE(os.stat(path).st_mode)  # noqa: E731
