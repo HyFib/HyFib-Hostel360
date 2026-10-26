@@ -941,10 +941,10 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@lucide/vue@1.49.0":
-  version "1.49.0"
-  resolved "https://registry.yarnpkg.com/@lucide/vue/-/vue-1.49.0.tgz#90178ac71ba1180ef1218580b0e4a837295dc371"
-  integrity sha512-7xS5gYnLoIx0jlmlRE3Rb71fIHaNqhVBiKMpOlqrYt6nMPy3C/62HJHo5XNsV3HTK+9l3M0hXICrIA7S5v6y5Q==
+"@lucide/vue@1.55.0":
+  version "1.55.0"
+  resolved "https://registry.yarnpkg.com/@lucide/vue/-/vue-1.55.0.tgz#786ee8891b24cf2dbaa84fc4d2c11389fc146b19"
+  integrity sha512-3lpuTiVGIMbG7vEVhcDnHvIu+ZkjXka7eOp9tIA9iDPu6GHpfqwykVyAb+LM1uYYVgSI9Myo4HGzTvVnTS2CyA==
 
 "@napi-rs/lzma-linux-x64-gnu@1.5.1":
   version "1.5.1"
